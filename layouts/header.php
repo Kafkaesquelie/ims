@@ -1,4 +1,6 @@
-<?php $user = current_user();
+<?php
+session_start();
+$user = current_user();
  date_default_timezone_set('Asia/Manila'); // Set your timezone 
  ?>
    <!DOCTYPE html>
