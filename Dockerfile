@@ -24,6 +24,7 @@ RUN a2enmod rewrite
 # Enable Apache modules
 RUN a2enmod rewrite headers
 
+RUN docker-php-ext-install pdo pdo_mysql mysqli mbstring exif pcntl bcmath gd
 
 # Copy application files
 COPY . /var/www/html/
