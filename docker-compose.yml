@@ -10,8 +10,8 @@ services:
     environment:
       - DB_HOST=dpg-d3jmkoq4d50c73fb03og-a
       - DB_USER=inventory_user
-      - DB_PASS=jcBjunAPWqziat6iW4SY3mpCGJbcDjXZ
-      - DB_NAME=inv_system
+      - DB_PASS=ynmFwXQUUSOo7kMhHYJXaA2juWcIJxAo
+      - DB_NAME=inv_system_ps8n
     volumes:
       - ./uploads:/var/www/html/uploads
     networks:
