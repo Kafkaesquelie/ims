@@ -1,5 +1,5 @@
 # Use official PHP image with Apache
-FROM php:8.2-apache
+FROM php:8.1-apache
 
 # Set working directory
 WORKDIR /var/www/html
@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y \
 
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
+# Enable Apache modules
+RUN a2enmod rewrite headers
 
 # Copy application files
 COPY . /var/www/html/
