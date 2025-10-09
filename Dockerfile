@@ -7,11 +7,12 @@ WORKDIR /var/www/html
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mysqli mbstring exif pcntl bcmath gd
 
-  RUN apt-get update && apt-get install -y \
+ # Install system dependencies
+RUN apt-get update && apt-get install -y \
     git \
     curl \
     libpng-dev \
-    libonig-dev \
+    libonig-dev \   # <-- this is required for mbstring
     libxml2-dev \
     zip \
     unzip \
@@ -19,6 +20,7 @@ RUN docker-php-ext-install pdo pdo_mysql mysqli mbstring exif pcntl bcmath gd
     && docker-php-ext-install pdo pdo_mysql mysqli mbstring exif pcntl bcmath gd \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
