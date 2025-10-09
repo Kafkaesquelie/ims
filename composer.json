@@ -1,0 +1,15 @@
+{
+    "name": "admin/admin-lte",
+    "autoload": {
+        "psr-4": {
+            "Admin\\AdminLte\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "DevSphere",
+            "email": "gy1etan090@gmail.com"
+        }
+    ],
+    "require": {}
+}

@@ -1,0 +1,96 @@
+<?php
+require_once('includes/load.php');
+
+if (!$session->isUserLoggedIn(true)) {
+    redirect('index.php', false);
+}
+
+$current_user = current_user();
+$user_id = (int)$current_user['id'];
+$user_name = $current_user['name'];
+
+// Get user department name
+$user_department_id = $current_user['department']; 
+$dept = find_by_id('departments', $user_department_id);
+$user_department = $dept ? $dept['department'] : 'Unknown';
+
+// Check POST
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+
+    $qtys = $_POST['qty'] ?? [];
+    $remarks = remove_junk($db->escape($_POST['remarks'] ?? ''));
+
+    // Filter out items with zero quantity
+    $qtys = array_filter($qtys, fn($q) => (int)$q > 0);
+
+    if (empty($qtys)) {
+        $session->msg("d", "❌ No items selected.");
+        redirect('requests_form.php', false);
+    }
+
+    // Check for duplicate pending requests
+    foreach ($qtys as $item_id => $qty) {
+        $item_id = (int)$item_id;
+        $check = $db->query("SELECT r.id 
+                             FROM requests r 
+                             JOIN request_items ri ON r.id = ri.req_id
+                             WHERE r.requested_by = '{$user_id}' 
+                               AND ri.item_id = '{$item_id}' 
+                               AND r.status = 'Pending' LIMIT 1");
+        if ($db->num_rows($check) > 0) {
+            $item = find_by_id('items', $item_id);
+            $session->msg("d", "❌ You already have a pending request for item: {$item['name']}");
+            redirect('requests_form.php', false);
+        }
+    }
+
+    $db->query("START TRANSACTION");
+
+    // Insert into requests table
+    $query_request = "INSERT INTO requests (requested_by, department, date, status)
+                      VALUES ('{$user_id}', '{$user_department}', NOW(), 'Pending')";
+    if (!$db->query($query_request)) {
+        $db->query("ROLLBACK");
+        $session->msg("d", "❌ Failed to create request: " . $db->con->error);
+        redirect('requests_form.php', false);
+    }
+
+    $req_id = $db->insert_id();
+    $all_ok = true;
+
+    // Insert into request_items and update stock
+    foreach ($qtys as $item_id => $qty) {
+        $item_id = (int)$item_id;
+        $qty = (int)$qty;
+
+        $item = find_by_id('items', $item_id);
+        if (!$item || $qty > (int)$item['quantity']) {
+            $all_ok = false;
+            $session->msg("d", "❌ Invalid quantity for item: {$item['name']}");
+            break;
+        }
+
+        $query_item = "INSERT INTO request_items (req_id, item_id, qty,remarks) 
+                       VALUES ('{$req_id}', '{$item_id}', '{$qty}','{$remarks}')";
+        if (!$db->query($query_item)) {
+            $all_ok = false;
+            break;
+        }
+
+        if (!$db->query("UPDATE items SET quantity = quantity - {$qty} WHERE id = '{$item_id}'")) {
+            $all_ok = false;
+            break;
+        }
+    }
+
+    if ($all_ok) {
+        $db->query("COMMIT");
+        $session->msg("s", "✅ Request submitted successfully!");
+    } else {
+        $db->query("ROLLBACK");
+        $session->msg("d", "❌ Failed to save requested items. Request cancelled.");
+    }
+
+    redirect('requests_form.php', false);
+}
+?>
