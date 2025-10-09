@@ -12,6 +12,7 @@ services:
       - DB_USER=inventory_user
       - DB_PASS=ynmFwXQUUSOo7kMhHYJXaA2juWcIJxAo
       - DB_NAME=inv_system_ps8n
+      - DB_PORT=5432
     volumes:
       - ./uploads:/var/www/html/uploads
     networks:
