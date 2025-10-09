@@ -22,7 +22,7 @@ $units = find_all('units');
 $categories = find_all('categories');
 
 if (isset($_POST['update_item'])) {
-    $req_fields = ['name', 'categorie_id', 'unit_id', 'quantity', 'unit_cost'];
+    $req_fields = ['name', 'categorie_id', 'unit_name', 'quantity', 'unit_cost'];
     validate_fields($req_fields);
 
     if (empty($errors)) {

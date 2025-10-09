@@ -578,11 +578,11 @@ function get_items_paginated($limit = 10, $page = 1, $category = 'all') {
     global $db;
     $start = ($page - 1) * $limit;
     
-    $sql = "SELECT i.id, i.fund_cluster,i.name, i.stock_card, i.unit_id,u.name, i.quantity, i.unit_cost, i.date_added, i.last_edited,
+    $sql = "SELECT i.id, i.fund_cluster,i.name, i.stock_card, i.unit_id,  u.name AS unit_name, i.quantity, i.unit_cost, i.date_added, i.last_edited,
                    c.name AS category, m.file_name AS image
             FROM items i
             JOIN categories c ON i.categorie_id = c.id
-            JOIN units u ON i.unit_id = u.id
+             LEFT JOIN units u ON i.unit_id = u.id
             LEFT JOIN media m ON i.media_id = m.id";
     
     if($category !== 'all') {

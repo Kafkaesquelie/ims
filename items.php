@@ -785,7 +785,8 @@ if (!empty($msg) && is_array($msg)):
                     <div>
                       <strong><?= remove_junk($item['name']); ?></strong>
                       <div class="text-muted small mt-1">
-                        <i class="fas fa-ruler me-1"></i>UOM: <?= remove_junk($item['unit_id']); ?>
+                        <i class="fas fa-ruler me-1"></i>UOM: <?php echo remove_junk($item['unit_name']); ?>
+
                         <?php if($lowStock): ?>
                           <span class="low-stock-badge">Low Stock</span>
                         <?php endif; ?>
