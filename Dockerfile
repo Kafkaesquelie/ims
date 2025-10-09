@@ -9,19 +9,21 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     libpng-dev \
-    libonig-dev \   # <-- this is required for mbstring
+    libonig-dev \
     libxml2-dev \
     zip \
     unzip \
     default-mysql-client \
-    && docker-php-ext-install pdo pdo_mysql mysqli mbstring exif pcntl bcmath gd \
+    && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
+
 # Enable Apache modules
 RUN a2enmod rewrite headers
+
 
 # Copy application files
 COPY . /var/www/html/
