@@ -1,5 +1,6 @@
 <?php
   $page_title = 'Admin Home Page';
+    session_start();
   require_once('includes/load.php');
   if (!$session->isUserLoggedIn()) {
     header("Location: admin.php");
