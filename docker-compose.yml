@@ -8,9 +8,9 @@ services:
     depends_on:
       - db
     environment:
-      - DB_HOST=db
+      - DB_HOST=dpg-d3jk37s9c44c73bufbg0-a.render.com
       - DB_USER=inventory_user
-      - DB_PASS=inventory_password
+      - DB_PASS=jcBjunAPWqziat6iW4SY3mpCGJbcDjXZ
       - DB_NAME=inv_system
     volumes:
       - ./uploads:/var/www/html/uploads
