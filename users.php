@@ -3,12 +3,31 @@ $page_title = 'All Users';
 require_once('includes/load.php');
 page_require_level(2);
 
+
+// ✅ Handle AJAX request for offices
+if (isset($_GET['action']) && $_GET['action'] === 'get_offices' && isset($_GET['division_id'])) {
+    $division_id = (int)$_GET['division_id'];
+    $sql = "SELECT id, office_name FROM offices WHERE division_id = '{$division_id}' ORDER BY office_name ASC";
+    $result = $db->query($sql);
+
+    $offices = [];
+    while ($row = $db->fetch_assoc($result)) {
+        $offices[] = $row;
+    }
+
+    echo json_encode($offices);
+    exit; // important to stop further output
+}
+
 // Fetch all users
 $all_users = find_all_user();
 
 // Fetch departments and roles
 $departments = find_all('departments');
 $roles = find_all('user_groups');
+// Fetch divisions and offices
+$divisions = find_all('divisions');
+$offices = find_all('offices');
 
 // Handle Add User form submission
 if(isset($_POST['add_user'])){
@@ -32,8 +51,9 @@ if(isset($_POST['add_user'])){
             $user_level = (int)$group['group_level'];
             $password_hash = sha1($password);
 
-            $sql = "INSERT INTO users (name, username, password, department, position, user_level, status) VALUES ";
-            $sql .= "('{$name}', '{$username}', '{$password_hash}', '{$dep_id}', '{$pos}', '{$user_level}', '{$status}')";
+          $sql = "INSERT INTO users (name, username, password, department, division, office, position, user_level, status)
+        VALUES ('{$name}', '{$username}', '{$password_hash}', '{$dep_id}', '{$db->escape($_POST['division'])}', '{$db->escape($_POST['office'])}', '{$pos}', '{$user_level}', '{$status}')";
+
 
             if($db->query($sql)){
                 $session->msg('s','User added successfully.');
@@ -183,66 +203,88 @@ if (!empty($msg) && is_array($msg)):
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <form method="POST" action="" class="user-form">
-        <div class="modal-body">
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label for="name" class="form-label">Full Name</label>
-              <input type="text" name="name" id="name" class="form-control" required>
-            </div>
-            <div class="col-md-6 mb-3">
-              <label for="username" class="form-label">Username</label>
-              <input type="text" name="username" id="username" class="form-control" required>
-            </div>
-          </div>
-          
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label for="password" class="form-label">Password</label>
-              <input type="password" name="password" id="password" class="form-control" required>
-            </div>
-            <div class="col-md-6 mb-3">
-              <label for="position" class="form-label">Position/Office</label>
-              <input type="text" name="position" id="position" class="form-control" required>
-            </div>
-          </div>
-          
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label for="dep_id" class="form-label">Department</label>
-              <select name="dep_id" id="dep_id" class="form-select" required>
-                <option value="">Select Department</option>
-                <?php foreach($departments as $dep): ?>
-                  <option value="<?php echo (int)$dep['id']; ?>"><?php echo remove_junk($dep['department']); ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="col-md-6 mb-3">
-              <label for="role_id" class="form-label">Role</label>
-              <select name="role_id" id="role_id" class="form-select" required>
-                <option value="">Select Role</option>
-                <?php foreach($roles as $role): ?>
-                  <option value="<?php echo (int)$role['id']; ?>"><?php echo remove_junk($role['group_name']); ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-          </div>
-          
-          <div class="row">
-            <div class="col-md-12 mb-3">
-              <div class="form-check">
-                <input type="checkbox" class="form-check-input status-checkbox" name="status" id="status">
-                <label class="form-check-label" for="status">Active User</label>
-              </div>
-            </div>
-          </div>
+    <form method="POST" action="" class="user-form">
+  <div class="modal-body">
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label for="name" class="form-label">Full Name</label>
+        <input type="text" name="name" id="name" class="form-control" required>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label for="username" class="form-label">Username</label>
+        <input type="text" name="username" id="username" class="form-control" required>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label for="password" class="form-label">Password</label>
+        <input type="password" name="password" id="password" class="form-control" required>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label for="designation" class="form-label">Designation</label>
+        <input type="text" name="position" id="designation" class="form-control" required>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label for="division_id" class="form-label">Division</label>
+        <select name="division_id" id="division_id" class="form-select" required>
+          <option value="">Select Division</option>
+          <?php foreach($divisions as $div): ?>
+            <option value="<?php echo (int)$div['id']; ?>"><?php echo remove_junk($div['division_name']); ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label for="office_id" class="form-label">Office</label>
+        <select name="office_id" id="office_id" class="form-select" required>
+          <option value="">Select Office</option>
+          <?php foreach($offices as $off): ?>
+            <option value="<?php echo (int)$off['id']; ?>"><?php echo remove_junk($off['office_name']); ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label for="dep_id" class="form-label">Department</label>
+        <select name="dep_id" id="dep_id" class="form-select" required>
+          <option value="">Select Department</option>
+          <?php foreach($departments as $dep): ?>
+            <option value="<?php echo (int)$dep['id']; ?>"><?php echo remove_junk($dep['department']); ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label for="role_id" class="form-label">Role</label>
+        <select name="role_id" id="role_id" class="form-select" required>
+          <option value="">Select Role</option>
+          <?php foreach($roles as $role): ?>
+            <option value="<?php echo (int)$role['id']; ?>"><?php echo remove_junk($role['group_name']); ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-12 mb-3">
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input status-checkbox" name="status" id="status">
+          <label class="form-check-label" for="status">Active User</label>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="reset" class="btn btn-outline-secondary">Clear</button>
-          <button type="submit" name="add_user" class="btn btn-success">Add User</button>
-        </div>
-      </form>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    <button type="reset" class="btn btn-outline-secondary">Clear</button>
+    <button type="submit" name="add_user" class="btn btn-success">Add User</button>
+  </div>
+</form>
+
     </div>
   </div>
 </div>
@@ -339,6 +381,38 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const divisionSelect = document.getElementById("division_id");
+    const officeSelect = document.getElementById("office_id");
+
+    divisionSelect.addEventListener("change", function() {
+        const divisionId = this.value;
+        officeSelect.innerHTML = '<option value="">Loading...</option>';
+
+        if (divisionId) {
+            fetch(`users.php?action=get_offices&division_id=${divisionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    officeSelect.innerHTML = '<option value="">Select Office</option>';
+                    data.forEach(office => {
+                        const option = document.createElement('option');
+                        option.value = office.id;
+                        option.textContent = office.office_name;
+                        officeSelect.appendChild(option);
+                    });
+                })
+                .catch(() => {
+                    officeSelect.innerHTML = '<option value="">Error loading offices</option>';
+                });
+        } else {
+            officeSelect.innerHTML = '<option value="">Select Office</option>';
+        }
+    });
+});
+</script>
+
 
 <?php include_once('layouts/footer.php'); ?>
 

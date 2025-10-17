@@ -267,7 +267,7 @@ function find_all_user(){
     $sql .= "g.group_name, d.dpt AS dep_name ";
     $sql .= "FROM users u ";
     $sql .= "LEFT JOIN user_groups g ON u.user_level = g.id ";
-    $sql .= "LEFT JOIN departments d ON u.department = d.id ";
+    $sql .= "LEFT JOIN office d ON u.office = d.id ";
     $sql .= "ORDER BY u.name ASC";
     return find_by_sql($sql);
 }
@@ -384,35 +384,49 @@ function find_all_user(){
   /* Function for Display Recent item Added
   /*--------------------------------------------------------------*/
  function find_recent_item_added($limit){
-   global $db;
-   $sql   = " SELECT p.id,p.name,p.media_id,c.name AS categorie,p.quantity,p.date_added,";
-   $sql  .= "m.file_name AS image FROM items p";
-   $sql  .= " LEFT JOIN categories c ON c.id = p.categorie_id";
-   $sql  .= " LEFT JOIN media m ON m.id = p.media_id";
-   $sql  .= " ORDER BY p.id DESC LIMIT ".$db->escape((int)$limit);
-   return find_by_sql($sql);
- }
+    global $db;
+    $sql  = "SELECT 
+                p.id,
+                p.name,
+                p.media_id,
+                c.name AS categorie,
+                p.quantity,
+                p.date_added,
+                m.file_name AS image
+             FROM items p
+             LEFT JOIN categories c ON c.id = p.categorie_id
+             LEFT JOIN media m ON m.id = p.media_id
+             WHERE p.archived = 0
+             ORDER BY p.id DESC 
+             LIMIT ".$db->escape((int)$limit);
+
+    return find_by_sql($sql);
+}
+
  /*--------------------------------------------------------------*/
  /* Function for Find Need Restocking item
  /*--------------------------------------------------------------*/
 function find_lacking_items($threshold = 10){
     global $db;
 
-    $sql  = "SELECT i.id, 
-                    i.name, 
-                    i.quantity, 
-                    i.description, 
-                    i.stock_card, 
-                    IFNULL(SUM(ri.qty), 0) AS total_req
+    $sql  = "SELECT 
+                i.id, 
+                i.name, 
+                i.quantity, 
+                i.description, 
+                i.stock_card, 
+                IFNULL(SUM(ri.qty), 0) AS total_req
              FROM items i
              LEFT JOIN request_items ri ON ri.item_id = i.id
              LEFT JOIN requests r ON ri.req_id = r.id AND r.status = 'Approved'
-             WHERE i.quantity < ".$db->escape((int)$threshold)."
+             WHERE i.archived = 0 
+               AND i.quantity < ".$db->escape((int)$threshold)."
              GROUP BY i.id, i.name, i.quantity, i.stock_card
              ORDER BY i.quantity ASC";
 
     return $db->query($sql);
 }
+
 
 
 
@@ -422,7 +436,8 @@ function find_lacking_items($threshold = 10){
 function find_all_req() {
     global $db;
     $sql  = "SELECT 
-                r.id,r.ris_no,
+                r.id, 
+                r.ris_no,
                 r.requested_by, 
                 r.remarks,
                 COALESCE(u.image, e.image) AS image,
@@ -433,8 +448,9 @@ function find_all_req() {
                            e.last_name)
                 ) AS req_by,
                 COALESCE(u.position, e.position) AS position,
+                COALESCE(o.office_name, eo.office_name) AS office,
+                COALESCE(dv.division_name, edv.division_name) AS division,
                 r.date, 
-                COALESCE(d.dpt, e.office) AS dep_name,
                 r.status,
                 GROUP_CONCAT(i.name SEPARATOR ', ') AS item_name,
                 GROUP_CONCAT(c.name SEPARATOR ', ') AS cat_name,
@@ -443,16 +459,34 @@ function find_all_req() {
              FROM requests r
              LEFT JOIN users u ON r.requested_by = u.id
              LEFT JOIN employees e ON r.requested_by = e.id
-             LEFT JOIN departments d ON u.department = d.id
+
+             -- Join for offices (users and employees)
+             LEFT JOIN offices o ON u.office = o.id
+             LEFT JOIN offices eo ON e.office = eo.id
+
+             -- Join for divisions (users and employees)
+             LEFT JOIN divisions dv ON u.division = dv.id
+             LEFT JOIN divisions edv ON e.division = edv.id
+
              LEFT JOIN request_items ri ON ri.req_id = r.id
              LEFT JOIN items i ON ri.item_id = i.id
              LEFT JOIN categories c ON i.categorie_id = c.id  
+
              WHERE r.status != 'Completed'
+               AND r.id IN (
+                   SELECT DISTINCT ri2.req_id
+                   FROM request_items ri2
+                   JOIN items i2 ON ri2.item_id = i2.id
+                   WHERE i2.archived = 0
+               )
              GROUP BY r.id
              ORDER BY r.id DESC";
-    
+
     return $db->query($sql)->fetch_all(MYSQLI_ASSOC);
 }
+
+
+
 
 
 
@@ -485,20 +519,35 @@ function get_request_item_remarks($req_id) {
 }
 
 
-function find_request_items($req_id) {
+function find_req_items($req_id) {
     global $db;
     $req_id = (int)$req_id;
-    $sql = "SELECT ri.*, i.name AS item_name, stock_card, price, i.unit_id
+
+    $sql = "SELECT 
+                ri.*, 
+                i.name AS item_name, 
+                i.stock_card, 
+                ri.price, 
+                i.fund_cluster,
+                COALESCE(bu.name, u.name) AS unit_name
             FROM request_items ri
             LEFT JOIN items i ON ri.item_id = i.id
+            LEFT JOIN units u ON i.unit_id = u.id
+            LEFT JOIN base_units bu ON i.base_unit_id = bu.id
             WHERE ri.req_id = '{$req_id}'";
+
     $result = $db->query($sql);
     $items = [];
+
     while ($row = $result->fetch_assoc()) {
+        // If the request_items table already has a stored text unit, use it
+        $row['unit'] = !empty($row['unit']) ? $row['unit'] : $row['unit_name'];
         $items[] = $row;
     }
+
     return $items;
 }
+
 
   // Helper function: get concatenated item names
   function get_request_items_list($req_id) {
@@ -515,25 +564,31 @@ function find_request_items($req_id) {
       return implode(", ", $items_arr);
   }
 
- function find_all_req_logs() {
+function find_all_req_logs() {
     global $db;
     $sql = "
-        SELECT r.id, r.date, r.status,r.ris_no,
-               -- Unified fields for requestor
-               COALESCE(u.id, e.id) AS requestor_id,
-               COALESCE(u.name, CONCAT(e.first_name, ' ', e.last_name)) AS req_name,
-               COALESCE(u.image, e.image, 'default.png') AS prof_pic,
-               COALESCE(u.position, e.position) AS req_position,
-               COALESCE(d.dpt, e.office) AS req_department
+        SELECT 
+            r.id, 
+            r.date, 
+            r.status,
+            r.ris_no,
+            COALESCE(ou.office_name, eo.office_name) AS office_name,
+            COALESCE(u.id, e.id) AS requestor_id,
+            COALESCE(u.name, CONCAT(e.first_name, ' ', e.last_name)) AS req_name,
+            COALESCE(u.image, e.image, 'default.png') AS prof_pic,
+            COALESCE(u.position, e.position) AS req_position
         FROM requests r
         LEFT JOIN users u ON r.requested_by = u.id
-        LEFT JOIN departments d ON u.department = d.id
         LEFT JOIN employees e ON r.requested_by = e.id
-        WHERE r.status IN ('Completed','Archived')
+        LEFT JOIN offices ou ON u.office = ou.id   -- user's office
+        LEFT JOIN offices eo ON e.office = eo.id   -- employee's office
+        WHERE r.status IN ('Completed','Archived','Issued')
         ORDER BY r.date DESC
     ";
     return $db->query($sql)->fetch_all(MYSQLI_ASSOC);
 }
+
+
 
 
 
@@ -573,57 +628,44 @@ function find_highest_requested_items($limit = 10){
 
 /******************************/
 
-
 function get_items_paginated($limit = 10, $page = 1, $category = 'all') {
     global $db;
     $start = ($page - 1) * $limit;
-    
-    $sql = "SELECT i.id, i.fund_cluster,i.name, i.stock_card, i.unit_id,  u.name AS unit_name, i.quantity, i.unit_cost, i.date_added, i.last_edited,
-                   c.name AS category, m.file_name AS image
+
+    $sql = "SELECT 
+                i.id, 
+                i.fund_cluster,
+                i.name, 
+                i.stock_card, 
+                i.unit_id,  
+                u.name AS unit_name, 
+                COALESCE(s.stock, i.quantity) AS quantity, 
+                i.unit_cost, 
+                i.date_added, 
+                i.last_edited,
+                c.name AS category, 
+                m.file_name AS image
             FROM items i
             JOIN categories c ON i.categorie_id = c.id
-             LEFT JOIN units u ON i.unit_id = u.id
-            LEFT JOIN media m ON i.media_id = m.id";
-    
-    if($category !== 'all') {
-        $sql .= " WHERE c.name = '".$db->escape($category)."'";
+            LEFT JOIN units u ON i.unit_id = u.id
+            LEFT JOIN media m ON i.media_id = m.id
+            LEFT JOIN item_stocks_per_year s 
+                ON s.item_id = i.id 
+                AND s.school_year_id = (SELECT id FROM school_years WHERE is_current = 1 LIMIT 1)
+            WHERE i.archived = 0"; // 👈 hide archived items
+
+    if ($category !== 'all') {
+        $sql .= " AND c.name = '".$db->escape($category)."'";
     }
-    
+
     $sql .= " ORDER BY c.name, i.name
               LIMIT ".$db->escape((int)$limit)." 
               OFFSET ".$db->escape((int)$start);
-    
+
     return find_by_sql($sql);
 }
 
-/***************************************************/
-// Count total requests by month and optionally 
-/***************************************************/
 
-function count_requests_by_month_dept($month, $department_id = 0) {
-    global $db;
-
-    // Escape input
-    $month = $db->escape($month);
-    $department_id = (int)$department_id;
-
-    $where_dept = $department_id > 0 ? "AND d.id = {$department_id}" : "";
-
-    $sql = "
-        SELECT COUNT(r.id) AS total_requests
-        FROM requests r
-        JOIN users u ON r.requested_by = u.id
-        JOIN departments d ON u.department = d.id
-        WHERE DATE_FORMAT(r.date, '%Y-%m') = '{$month}' {$where_dept}
-    ";
-
-    $result = $db->query($sql);
-    if ($result && $db->num_rows($result) > 0) {
-        $row = $db->fetch_assoc($result);
-        return (int)$row['total_requests'];
-    }
-    return 0;
-}
 
 
 /***********************************************/
@@ -638,47 +680,6 @@ function count_users() {
     return (int)$row['total'];
 }
 
-// Get stock distribution by category (optionally filtered by month and department)
-function get_stock_distribution($month = null, $department_id = 0) {
-    global $db;
-    $where = [];
-
-    // Filter by month
-    if ($month) {
-        $where[] = "DATE_FORMAT(r.date, '%Y-%m') = '{$month}'";
-    }
-
-    // Filter by specific department ID
-    if ($department_id > 0) {
-        $where[] = "d.id = {$department_id}";
-    }
-
-    // Exclude SPMO department
-    $where[] = "d.department <> 'SPMO'";
-
-    // Combine conditions
-    $where_sql = count($where) > 0 ? "WHERE " . implode(' AND ', $where) : "";
-
-    $sql = "
-        SELECT c.name AS category, SUM(i.quantity) AS total_quantity
-        FROM request_items ri
-        JOIN requests r ON ri.req_id = r.id
-        JOIN items i ON ri.item_id = i.id
-        JOIN users u ON r.requested_by = u.id
-        JOIN departments d ON u.department = d.id
-        JOIN categories c ON i.categorie_id = c.id
-        {$where_sql}
-        GROUP BY c.id
-    ";
-
-    $result = $db->query($sql);
-    $distribution = [];
-    while ($row = $result->fetch_assoc()) {
-        $distribution[$row['category']] = (int)$row['total_quantity'];
-    }
-
-    return $distribution;
-}
 
 /**********************************************/
 //Funtion to get employees
@@ -759,11 +760,12 @@ function find_all_par_transactions() {
             t.remarks,
             CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
             e.position AS position,
-            e.office AS department,
+            o.office_name AS department,
             e.image
         FROM transactions t
         LEFT JOIN properties p ON t.item_id = p.id
         LEFT JOIN employees e ON t.employee_id = e.id
+        LEFT JOIN offices o ON e.office = o.id
         WHERE t.par_no IS NOT NULL
         ORDER BY t.transaction_date DESC
     ";
@@ -777,7 +779,7 @@ function find_all_ics_transactions() {
             t.id,
             t.ics_no,
             t.item_id,
-            s.property_no,
+            s.inv_item_no,
             s.item AS item_name,
             s.item_description,
             s.fund_cluster,
@@ -788,11 +790,12 @@ function find_all_ics_transactions() {
             t.remarks,
             CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
             e.position AS position,
-            e.office AS department,
+            o.office_name AS department,
             e.image
         FROM transactions t
         LEFT JOIN semi_exp_prop s ON t.item_id = s.id
         LEFT JOIN employees e ON t.employee_id = e.id
+        LEFT JOIN offices o ON e.office = o.id
         WHERE t.ics_no IS NOT NULL 
           AND t.ics_no != ''
         ORDER BY t.transaction_date DESC
@@ -800,6 +803,109 @@ function find_all_ics_transactions() {
     return find_by_sql($sql);
 }
 
+
+function count_pending_requests() {
+    global $db;
+    // Count only pending requests that include at least one active (non-archived) item
+    $sql = "
+        SELECT COUNT(DISTINCT r.id) AS total
+        FROM requests r
+        LEFT JOIN request_items ri ON r.id = ri.req_id
+        LEFT JOIN items i ON ri.item_id = i.id
+        WHERE r.status = 'Pending' 
+          AND (i.archived = 0 OR i.archived IS NULL)
+    ";
+    $result = $db->query($sql);
+    $data = $result->fetch_assoc();
+    return $data['total'];
+}
+
+function count_low_stock_items() {
+    global $db;
+    // Count only non-archived items with quantity <= 10
+    $sql = "
+        SELECT COUNT(*) AS total 
+        FROM items 
+        WHERE quantity <= 10 
+          AND archived = 0
+    ";
+    $result = $db->query($sql);
+    $data = $result->fetch_assoc();
+    return $data['total'];
+}
+
+
+function calculate_total_inventory_value() {
+    global $db;
+    $sql = "SELECT SUM(quantity * unit_cost) as total_value FROM items";
+    $result = $db->query($sql);
+    $data = $result->fetch_assoc();
+    return $data['total_value'] ? $data['total_value'] : 0;
+}
+
+
+function find_current_school_year_id() {
+    global $db;
+    $sql = "SELECT id FROM school_year WHERE is_current = 1 LIMIT 1";
+    $result = $db->query($sql);
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        return $row['id'];
+    }
+    return null;
+}
+
+function update_item_stock_per_year($item_id, $quantity) {
+    global $db;
+
+    // ✅ Get the current school year (you can adjust this based on your schema)
+    $school_year = find_current_school_year(); 
+    if (!$school_year) return;
+
+    $school_year_id = (int)$school_year['id'];
+
+    // ✅ Check if record already exists for this item + school year
+    $check_sql = "SELECT id FROM item_stocks_per_year 
+                  WHERE item_id = '{$item_id}' 
+                  AND school_year_id = '{$school_year_id}' 
+                  LIMIT 1";
+    $check_result = $db->query($check_sql);
+
+    if ($db->num_rows($check_result) > 0) {
+        // ✅ Update existing record
+        $db->query("UPDATE item_stocks_per_year 
+                    SET stock = '{$quantity}', 
+                        updated_at = NOW() 
+                    WHERE item_id = '{$item_id}' 
+                    AND school_year_id = '{$school_year_id}'");
+    } else {
+        // ✅ Insert new record
+        $db->query("INSERT INTO item_stocks_per_year (item_id, school_year_id, stock)
+                    VALUES ('{$item_id}', '{$school_year_id}', '{$quantity}')");
+    }
+}
+
+// helper to get current school year
+function find_current_school_year() {
+    global $db;
+    $sql = "SELECT * FROM school_years WHERE is_current = 1 LIMIT 1";
+    return $db->fetch_assoc($db->query($sql));
+}
+
+function find_conversion_by_item($item_id) {
+    global $db;
+    $sql = "SELECT * FROM unit_conversion WHERE item_id = '{$item_id}' LIMIT 1";
+    $result = $db->query($sql);
+    return $result && $db->num_rows($result) > 0 ? $db->fetch_assoc($result) : false;
+}
+
+
+function find_unit_name($unit_id) {
+    global $db;
+    $sql = "SELECT name FROM units WHERE id = '{$db->escape($unit_id)}' LIMIT 1";
+    $result = $db->fetch_assoc($db->query($sql));
+    return $result ? $result['name'] : '';
+}
 
 
 ?> 

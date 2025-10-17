@@ -15,7 +15,7 @@ $ppe_items = find_by_sql("
 
 // Fetch Semi-Expendable Properties (only available items)
 $semi_items = find_by_sql("
-    SELECT s.id, s.fund_cluster, s.inv_item_no, s.property_no, 
+    SELECT s.id, s.fund_cluster, s.inv_item_no, s.inv_item_no, 
            s.item, s.item_description, sc.semicategory_name, 
            s.unit, s.total_qty, s.qty_left, s.unit_cost, s.date_added
     FROM semi_exp_prop s
@@ -920,11 +920,11 @@ $employees = find_by_sql("
                                 
                                 <div class="col-md-6">
                                     <!-- PAR Date -->
-                                    <div class="mb-3">
+                                    <!-- <div class="mb-3">
                                         <label class="form-label fw-bold text-success">PAR Date</label>
                                         <input type="date" class="form-control" name="doc_date" id="par_doc_date" 
                                                 value="<?php echo date('Y-m-d'); ?>">
-                                    </div>
+                                    </div> -->
                                 </div>
                             </div>
                         </div>
@@ -1101,11 +1101,11 @@ $employees = find_by_sql("
                                 
                                 <div class="col-md-6">
                                     <!-- ICS Date -->
-                                    <div class="mb-3">
+                                    <!-- <div class="mb-3">
                                         <label class="form-label fw-bold text-success">ICS Date</label>
                                         <input type="date" class="form-control border-success" name="doc_date" id="ics_doc_date" 
                                                 value="<?php echo date('Y-m-d'); ?>">
-                                    </div>
+                                    </div> -->
                                 </div>
                             </div>
                         </div>
@@ -1309,7 +1309,7 @@ function getFullDocumentNumber(type, suffix) {
 function checkDuplicateDocumentNumber(type, suffix, callback) {
     const fullDocNumber = getFullDocumentNumber(type, suffix);
     
-    fetch('check_document_number.php', {
+    fetch('check_docu_no.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',

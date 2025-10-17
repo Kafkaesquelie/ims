@@ -1,25 +1,29 @@
 <?php
-  $page_title = 'Admin Home Page';
-    session_start();
-  require_once('includes/load.php');
-  if (!$session->isUserLoggedIn()) {
-    header("Location: admin.php");
-    exit();
-  }
+$page_title = 'Admin Home Page';
+require_once('includes/load.php');
+if (!$session->isUserLoggedIn()) {
+  header("Location: admin.php");
+  exit();
+}
 
-  // Checkin What level user has permission to view this page
-  page_require_level(1);
+// Checkin What level user has permission to view this page
+page_require_level(1);
 
-  $c_categorie  = count_by_id('categories');
-  $c_item       = count_by_id('items');
-  $c_req        = count_requests();
-  $c_smp       = count_by_id('semi_exp_prop');
-  $items_low    = find_lacking_items('10');
-  $recent_items = find_recent_item_added('5');
-  $items_req    = find_highest_requested_items('10');
+$c_categorie  = count_by_id('categories');
+$c_item = find_by_sql("SELECT COUNT(*) AS total FROM items WHERE archived = 0")[0];
+$c_req        = count_requests();
+$c_smp       = count_by_id('semi_exp_prop');
+$items_low    = find_lacking_items('10');
+$recent_items = find_recent_item_added('5');
+$items_req    = find_highest_requested_items('10');
 
-  $low_count = $items_low->num_rows;
-  $total_items_count = $c_item['total'];
+$pending_requests = count_pending_requests();
+$total_users = count_by_id('users');
+$low_stock_items = count_low_stock_items();
+// $recent_activities = find_recent_activities('5');
+
+$low_count = $items_low->num_rows;
+$total_items_count = $c_item['total'];
 ?>
 
 <?php include_once('layouts/header.php'); ?>  
@@ -33,6 +37,9 @@
     --primary-yellow: #ffc107;
     --dark-yellow: #e0a800;
     --light-yellow: #ffda6a;
+    --primary-red: #dc3545;
+    --primary-blue: #007bff;
+    --primary-purple: #6f42c1;
     --card-bg: #ffffff;
     --text-dark: #343a40;
     --text-light: #6c757d;
@@ -62,7 +69,7 @@
     font-size: 0.9rem;
 }
 
-/* Info Boxes - Green & Yellow Theme */
+/* Info Boxes - Multi-color Theme */
 .info-box {
     background: var(--card-bg);
     border-radius: 15px;
@@ -92,6 +99,7 @@
     color: white;
     transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    position: relative;
 }
 
 .info-box:hover .info-box-icon {
@@ -102,13 +110,13 @@
 .info-box-content {
     flex: 1;
     text-align: right;
+    position: relative;
 }
 
 .info-box-number {
     font-size: 2.2rem;
     font-weight: 800;
     margin-bottom: 0.2rem;
-    color: var(--dark-green);
 }
 
 .info-box-text {
@@ -117,6 +125,38 @@
     font-size: 0.9rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.info-box-description {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 0.3rem;
+}
+
+/* Notification Badge */
+.notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: linear-gradient(135deg, var(--primary-red), #c82333);
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
+    border: 2px solid white;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
 }
 
 /* Cards Styling */
@@ -197,6 +237,10 @@
     background: linear-gradient(135deg, var(--light-green), var(--primary-green)) !important;
 }
 
+.badge.bg-info {
+    background: linear-gradient(135deg, var(--primary-blue), #0056b3) !important;
+}
+
 /* Empty States */
 .text-center.p-4 {
     padding: 3rem !important;
@@ -226,6 +270,12 @@
     
     .info-box-number {
         font-size: 1.8rem;
+    }
+    
+    .notification-badge {
+        width: 20px;
+        height: 20px;
+        font-size: 0.7rem;
     }
 }
 
@@ -281,13 +331,38 @@
     background-color: rgba(40, 167, 69, 0.1);
 }
 
-/* Yellow accent elements */
+/* Color accents */
 .yellow-accent {
     color: var(--primary-yellow);
 }
 
 .green-accent {
     color: var(--primary-green);
+}
+
+.red-accent {
+    color: var(--primary-red);
+}
+
+.blue-accent {
+    color: var(--primary-blue);
+}
+
+.purple-accent {
+    color: var(--primary-purple);
+}
+
+/* Trend indicators */
+.trend-up {
+    color: var(--light-green);
+}
+
+.trend-down {
+    color: var(--primary-red);
+}
+
+.trend-neutral {
+    color: var(--text-light);
 }
 </style>
 
@@ -307,57 +382,85 @@
 
 <!-- Info Boxes -->
 <div class="row mb-4">
+    <!-- Pending Requests with Notification Badge -->
     <div class="col-12 col-sm-6 col-md-3 mb-3">
         <a href="requests.php" style="text-decoration: none;">
             <div class="info-box d-flex align-items-center">
-                <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-green), var(--dark-green));">
+                <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-red), #c82333);">
                     <i class="nav-icon fa-solid fa-pen-to-square"></i>
+                    <?php if ($pending_requests > 0): ?>
+                        <span class="notification-badge"><?php echo $pending_requests; ?></span>
+                    <?php endif; ?>
                 </span>
                 <div class="info-box-content">
-                    <div class="info-box-number"><?php echo $c_req; ?></div>
+                    <div class="info-box-number" style="color: #dc3545;"><?php echo $pending_requests; ?></div>
                     <span class="info-box-text">Pending Requests</span>
+                    <div class="info-box-description">
+                        <?php echo $pending_requests > 0 ? 'Requires attention' : 'All clear'; ?>
+                    </div>
                 </div>
             </div>
         </a>
     </div>
 
+    <!-- Low Stock Alert -->
     <div class="col-12 col-sm-6 col-md-3 mb-3">
         <a href="items.php" style="text-decoration: none;">
             <div class="info-box d-flex align-items-center">
-                <span class="info-box-icon" style="background: linear-gradient(135deg, var(--light-green), var(--primary-green));">
-                    <i class="nav-icon fa-solid fa-box-open"></i>
-                </span>
-                <div class="info-box-content">
-                    <div class="info-box-number"><?php echo $c_item['total']; ?></div>
-                    <span class="info-box-text">Inventory Items</span>
-                </div>
-            </div>
-        </a>
-    </div>
-
-    <div class="col-12 col-sm-6 col-md-3 mb-3">
-        <a href="smp.php" style="text-decoration: none;">
-            <div class="info-box d-flex align-items-center">
                 <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-yellow), var(--dark-yellow));">
-                    <i class="fa-solid fa-warehouse"></i>
+                    <i class="nav-icon fa-solid fa-triangle-exclamation"></i>
+                    <?php if ($low_stock_items > 0): ?>
+                        <span class="notification-badge" style="background: linear-gradient(135deg, var(--primary-yellow), var(--dark-yellow)); color: #000;"><?php echo $low_stock_items; ?></span>
+                    <?php endif; ?>
                 </span>
                 <div class="info-box-content">
-                    <div class="info-box-number"><?php echo $c_smp['total']; ?></div>
-                    <span class="info-box-text">Semi-Expendable Properties</span>
+                    <div class="info-box-number" style="color: #ffc107;"><?php echo $low_stock_items; ?></div>
+                    <span class="info-box-text">Low Stock Items</span>
+                    <div class="info-box-description">
+                        Needs restocking
+                    </div>
                 </div>
             </div>
         </a>
     </div>
 
+    <!-- Total Users -->
     <div class="col-12 col-sm-6 col-md-3 mb-3">
-        <a href="cat.php" style="text-decoration: none;">
+        <a href="#" style="text-decoration: none;">
             <div class="info-box d-flex align-items-center">
-                <span class="info-box-icon" style="background: linear-gradient(135deg, var(--accent-green), var(--light-green));">
-                    <i class="fa-solid fa-list"></i>
+                <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-blue), #0056b3);">
+                    <i class="fa-solid fa-users"></i>
                 </span>
                 <div class="info-box-content">
-                    <div class="info-box-number"><?php echo $c_categorie['total']; ?></div>
-                    <span class="info-box-text">Categories</span>
+                    <div class="info-box-number" style="color: #007bff;"><?php echo $total_users['total']; ?></div>
+                    <span class="info-box-text">System Users</span>
+                    <div class="info-box-description">
+                        Active accounts
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Total Inventory Value -->
+    <div class="col-12 col-sm-6 col-md-3 mb-3">
+        <a href="items.php" style="text-decoration: none;">
+            <div class="info-box d-flex align-items-center">
+                <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-purple), #5a3596);">
+                    <i class="fa-solid fa-sack-dollar"></i>
+                </span>
+                <div class="info-box-content">
+                    <div class="info-box-number" style="color: #6f42c1;">
+                        <?php 
+                        // Calculate total inventory value
+                        $total_value = calculate_total_inventory_value();
+                        echo '₱' . number_format($total_value, 2);
+                        ?>
+                    </div>
+                    <span class="info-box-text">Inventory Value</span>
+                    <div class="info-box-description">
+                        Total worth
+                    </div>
                 </div>
             </div>
         </a>
@@ -419,14 +522,14 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <div class="fw-bold"><?php echo remove_junk(first_character($items['name'])); ?></div>
+                                            <div class="fw-bold"><strong><?php echo remove_junk(first_character($items['name'])); ?></strong></div>
                                             <small class="text-muted"><?php echo $items['description']; ?></small>
                                         </td>
                                         <td>
-                                            <div class="fw-bold <?php echo (int)$items['quantity'] == 0 ? 'text-danger' : 'text-warning'; ?>">
+                                            <div class="fw-bold text-center <?php echo (int)$items['quantity'] == 0 ? 'text-danger' : 'text-warning'; ?>">
                                                 <?php echo (int)$items['quantity']; ?>
                                             </div>
-                                            <small class="text-muted">Popularity: <?php echo (int)$items['total_req']; ?></small>
+                                            <small class="text-muted text-center">Popularity: <?php echo (int)$items['total_req']; ?></small>
                                         </td>
                                         <td>
                                             <?php if ((int)$items['quantity'] == 0): ?>
@@ -489,7 +592,7 @@
                                                          alt="" style="width:45px; height:45px;">
                                                 <?php endif; ?>
                                                 <div>
-                                                    <div class="fw-bold"><?php echo remove_junk(first_character($items['name'])); ?></div>
+                                                    <div class="fw-bold"><strong><?php echo remove_junk(first_character($items['name'])); ?></strong></div>
                                                     <small class="text-success">
                                                         <?php echo remove_junk(first_character($items['categorie'])); ?>
                                                     </small>

@@ -338,93 +338,95 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
         background: var(--primary-green);
         border-radius: 10px;
     }
+
     .btn-received-outline {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    color: #28a745;
-    padding: 0.6rem 1.2rem;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 0.85rem;
-    border: 2px solid #28a745;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-    z-index: 1;
-}
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        color: #28a745;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        border: 2px solid #28a745;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+    }
 
-.btn-received-outline:before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #28a745, #20c997);
-    transition: all 0.4s ease;
-    z-index: -1;
-}
+    .btn-received-outline:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #28a745, #20c997);
+        transition: all 0.4s ease;
+        z-index: -1;
+    }
 
-.btn-received-outline:hover {
-    color: white;
-    text-decoration: none;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-}
+    .btn-received-outline:hover {
+        color: white;
+        text-decoration: none;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
 
-.btn-received-outline:hover:before {
-    left: 0;
-}
-.btn-view-elegant {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    color: #007bff;
-    padding: 0.6rem 1.3rem;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 0.85rem;
-    border: 2px solid #007bff;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-    z-index: 1;
-    letter-spacing: 0.5px;
-}
+    .btn-received-outline:hover:before {
+        left: 0;
+    }
 
-.btn-view-elegant:before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #007bff, #0056b3);
-    transition: all 0.4s ease;
-    z-index: -1;
-}
+    .btn-view-elegant {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        color: #007bff;
+        padding: 0.6rem 1.3rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        border: 2px solid #007bff;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+        letter-spacing: 0.5px;
+    }
 
-.btn-view-elegant:hover {
-    color: white;
-    text-decoration: none;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.3);
-    border-color: #007bff;
-}
+    .btn-view-elegant:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        transition: all 0.4s ease;
+        z-index: -1;
+    }
 
-.btn-view-elegant:hover:before {
-    left: 0;
-}
+    .btn-view-elegant:hover {
+        color: white;
+        text-decoration: none;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 123, 255, 0.3);
+        border-color: #007bff;
+    }
 
-.btn-view-elegant:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 10px rgba(0, 123, 255, 0.3);
-}
+    .btn-view-elegant:hover:before {
+        left: 0;
+    }
+
+    .btn-view-elegant:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 10px rgba(0, 123, 255, 0.3);
+    }
 </style>
 
 <!-- Dashboard Header -->
@@ -617,7 +619,7 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
                                                 $progress_width = 50;
                                                 $progress_text = 'Approved';
                                             } elseif ($status === 'issued' || $status === 'for confirmation') {
-                                                $progress_class = 'bg-info progress-bar-striped progress-bar-animated';
+                                                $progress_class = 'bg-warning progress-bar-striped progress-bar-animated';
                                                 $progress_width = 75;
                                                 $progress_text = 'Issued - Waiting Confirmation';
                                             } elseif ($status === 'completed') {
@@ -647,19 +649,19 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
 
                                         <td class="text-center">
                                             <?php if (strtolower($req['status']) == 'issued'): ?>
-                                                <a href="?received=<?php echo (int)$req['id']; ?>" 
-   class="btn-received-outline receive-btn"
-   title="Mark as Received">
-   <i class="fa-solid fa-hand-holding-box me-2"></i>
-   Received
-</a>
+                                                <a href="?received=<?php echo (int)$req['id']; ?>"
+                                                    class="btn-received-outline receive-btn"
+                                                    title="Mark as Received">
+                                                    <i class="fa-solid fa-hand-holding-box me-2"></i>
+                                                    Received
+                                                </a>
                                             <?php else: ?>
-                                              <a href="view_user_request.php?id=<?php echo (int)$req['id']; ?>" 
-   class="btn-view-elegant"
-   title="View Request Details">
-   <i class="fa fa-eye me-2"></i>
-   View 
-</a>
+                                                <a href="view_user_request.php?id=<?php echo (int)$req['id']; ?>"
+                                                    class="btn-view-elegant"
+                                                    title="View Request Details">
+                                                    <i class="fa fa-eye me-2"></i>
+                                                    View
+                                                </a>
                                             <?php endif; ?>
                                         </td>
 

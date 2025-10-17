@@ -3,545 +3,779 @@ $page_title = 'All Items';
 require_once('includes/load.php');
 page_require_level(1);
 
+// Fetch data for dropdowns
 $units = find_by_sql("SELECT id, name, symbol FROM units ORDER BY name ASC");
+$base_units = find_by_sql("SELECT id, name, symbol FROM base_units ORDER BY name ASC");
 $fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name ASC");
+$categories = find_all('categories');
+
+// Function to get unit name from either units or base_units table
+function get_unit_name($unit_id)
+{
+  global $db;
+  $id = (int)$unit_id;
+
+  if ($id === 0) return 'Unit';
+
+  // Try units table first
+  $result = $db->query("SELECT name FROM units WHERE id = {$id} LIMIT 1");
+  if ($result && $row = $result->fetch_assoc()) {
+    return $row['name'];
+  }
+
+  // Try base_units table
+  $result = $db->query("SELECT name FROM base_units WHERE id = {$id} LIMIT 1");
+  if ($result && $row = $result->fetch_assoc()) {
+    return $row['name'];
+  }
+
+  return 'Unit';
+}
+
+// FIXED: Properly get base unit from base_units table
+function calculate_display_quantity($item_id, $quantity)
+{
+  global $db;
+
+  // Fetch item info with base unit details
+  $sql = "
+    SELECT 
+      i.unit_id AS main_unit_id,
+      i.base_unit_id AS base_unit_id,
+      bu.name AS base_unit_name,
+      uc.conversion_rate
+    FROM items i
+    LEFT JOIN base_units bu ON bu.id = i.base_unit_id
+    LEFT JOIN unit_conversions uc ON uc.item_id = i.id
+    WHERE i.id = '{$item_id}'
+    LIMIT 1";
+  
+  $result = $db->query($sql);
+  if (!$result || $db->num_rows($result) === 0) {
+    // fallback: no item found
+    $item = find_by_id('items', $item_id);
+    $unit_name = get_unit_name($item['unit_id']);
+    return [
+      'display' => number_format($quantity, 2) . " {$unit_name}",
+      'main_quantity' => $quantity,
+      'base_quantity' => 0,
+      'main_unit' => $unit_name,
+      'base_unit' => '',
+      'conversion_rate' => 1,
+      'has_conversion' => false
+    ];
+  }
+
+  $item = $result->fetch_assoc();
+
+  $main_unit_id = (int)$item['main_unit_id'];
+  $base_unit_id = (int)$item['base_unit_id'];
+  $base_unit_name = $item['base_unit_name'] ?? '';
+  $rate = (float)($item['conversion_rate'] ?? 1);
+
+  // ✅ Get proper main unit name
+  $main_unit_name = get_unit_name($main_unit_id);
+
+  // ✅ If base unit is "Not Applicable" or same as main unit, show normal quantity
+  if ($base_unit_name === 'Not Applicable' || !$base_unit_id || $base_unit_id == $main_unit_id) {
+    return [
+      'display' => number_format($quantity, 2) . " {$main_unit_name}",
+      'main_quantity' => $quantity,
+      'base_quantity' => 0,
+      'main_unit' => $main_unit_name,
+      'base_unit' => '',
+      'conversion_rate' => 1,
+      'has_conversion' => false
+    ];
+  }
+
+  // ✅ For items with valid base units, just show the quantity with main unit
+  // The base unit info is available for display purposes
+  return [
+    'display' => number_format($quantity, 2) . " {$main_unit_name}",
+    'main_quantity' => $quantity,
+    'base_quantity' => 0,
+    'main_unit' => $main_unit_name,
+    'base_unit' => $base_unit_name,
+    'conversion_rate' => $rate,
+    'has_conversion' => true
+  ];
+}
 
 // Handle form submission for adding items
 if (isset($_POST['add_item'])) {
-    if (empty($errors)) {
-        $fund_cluster   = $db->escape($_POST['fund_cluster']);
-        $stock_card   = $db->escape($_POST['stock_card']);     
-        $name         = $db->escape($_POST['name']);
-        $quantity     = (int) $db->escape($_POST['quantity']);
-       $unit_id = (int) $db->escape($_POST['unit_id']);
+  if (empty($errors)) {
+    $fund_cluster   = $db->escape($_POST['fund_cluster']);
+    $stock_card     = $db->escape($_POST['stock_card']);
+    $name           = $db->escape($_POST['name']);
+    $quantity       = (float)$db->escape($_POST['quantity']);
+    $base_unit_id = (int)$_POST['base_unit_id'];
+    $unit_id        = (int)$db->escape($_POST['unit_id']);
+    $unit_cost      = $db->escape($_POST['unit_cost']);
+    $categorie_id   = (int)$db->escape($_POST['categorie_id']);
+    $desc           = $db->escape($_POST['description']);
+    $media_id       = 0;
 
-        $unit_cost    = $db->escape($_POST['unit_cost']);
-        $categorie_id = (int) $db->escape($_POST['categorie_id']);
-        $desc         = $db->escape($_POST['description']);
-        $media_id     = 0;
+    // New fields for unit conversion
+    $base_unit_id   = isset($_POST['base_unit_id']) ? (int)$db->escape($_POST['base_unit_id']) : 0;
+    $conversion_rate = isset($_POST['conversion_rate']) ? (float)$db->escape($_POST['conversion_rate']) : 1.0;
 
-        // Handle image upload
-        if (isset($_FILES['item_image']) && $_FILES['item_image']['name'] != "") {
-            $file_name = basename($_FILES['item_image']['name']);
-            $target_dir = "uploads/items/";
-            $target_file = $target_dir . $file_name;
-            $check = getimagesize($_FILES["item_image"]["tmp_name"]);
+    // ✅ Handle image upload
+    if (isset($_FILES['item_image']) && $_FILES['item_image']['name'] != "") {
+      $file_name = basename($_FILES['item_image']['name']);
+      $target_dir = "uploads/items/";
+      $target_file = $target_dir . $file_name;
+      $check = getimagesize($_FILES["item_image"]["tmp_name"]);
 
-            if ($check !== false) {
-                if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $target_file)) {
-                    $db->query("INSERT INTO media (file_name) VALUES ('{$file_name}')");
-                    $media_id = $db->insert_id();
-                } else {
-                    $session->msg('d', 'Failed to upload image.');
-                    redirect('items.php', false);
-                }
-            } else {
-                $session->msg('d', 'File is not an image.');
-                redirect('items.php', false);
-            }
+      if ($check !== false) {
+        if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $target_file)) {
+          $db->query("INSERT INTO media (file_name) VALUES ('{$file_name}')");
+          $media_id = $db->insert_id();
         } else {
-            // Use no_image.png if no file uploaded
-            $default_file = 'no_image.png';
-            $db->query("INSERT INTO media (file_name) VALUES ('{$default_file}')");
-            $media_id = $db->insert_id();
+          $session->msg('d', 'Failed to upload image.');
+          redirect('items.php', false);
         }
-
-        // Check for duplicate Name
-        $check_name_sql = "SELECT id FROM items WHERE name = '{$name}' LIMIT 1";
-        $check_name_result = $db->query($check_name_sql);
-
-        if ($db->num_rows($check_name_result) > 0) {
-            $_SESSION['form_data'] = $_POST;
-            $session->msg('d', "Item Name already exists.");
-            redirect('items.php', false);
-        }   
-        
-        // Check for duplicate Stock Card
-        $check_sql = "SELECT id FROM items WHERE stock_card = '{$stock_card}' LIMIT 1";
-        $check_result = $db->query($check_sql);
-
-        if ($db->num_rows($check_result) > 0) {
-            $_SESSION['form_data'] = $_POST;
-            $session->msg('d', "Stock Card <b>{$stock_card}</b> already exists.");
-            redirect('items.php', false);
-        }
-
-        // Insert item
-       $sql  = "INSERT INTO items (fund_cluster, stock_card, name, quantity, unit_id, unit_cost, categorie_id, description, media_id, date_added) VALUES ";
-$sql .= "('{$fund_cluster}', '{$stock_card}', '{$name}', '{$quantity}', '{$unit_id}', '{$unit_cost}', '{$categorie_id}', '{$desc}', '{$media_id}', NOW())";
-
-
-        if ($db->query($sql)) {
-            unset($_SESSION['form_data']);
-            $session->msg('s', "Item added successfully.");
-            redirect('items.php', false);
-        } else {
-            $_SESSION['form_data'] = $_POST;
-            $session->msg('d', 'Failed to add item!');
-            redirect('items.php', false);
-        }
-    } else {
-        $_SESSION['form_data'] = $_POST;
-        $session->msg("d", $errors);
+      } else {
+        $session->msg('d', 'File is not an image.');
         redirect('items.php', false);
+      }
+    } else {
+      // Use default image if no upload
+      $default_file = 'no_image.png';
+      $db->query("INSERT INTO media (file_name) VALUES ('{$default_file}')");
+      $media_id = $db->insert_id();
     }
+
+    // ✅ Check for duplicate name
+    $check_name_sql = "SELECT id FROM items WHERE name = '{$name}' LIMIT 1";
+    $check_name_result = $db->query($check_name_sql);
+    if ($db->num_rows($check_name_result) > 0) {
+      $_SESSION['form_data'] = $_POST;
+      $session->msg('d', "Item Name already exists.");
+      redirect('items.php', false);
+    }
+
+    // ✅ Check for duplicate Stock Card
+    $check_sql = "SELECT id FROM items WHERE stock_card = '{$stock_card}' LIMIT 1";
+    $check_result = $db->query($check_sql);
+    if ($db->num_rows($check_result) > 0) {
+      $_SESSION['form_data'] = $_POST;
+      $session->msg('d', "Stock Card <b>{$stock_card}</b> already exists.");
+      redirect('items.php', false);
+    }
+
+    // ✅ Insert item into items table
+    $sql = "INSERT INTO items (fund_cluster, stock_card, name, quantity, unit_id, base_unit_id, unit_cost, categorie_id, description, media_id, date_added)
+        VALUES ('{$fund_cluster}', '{$stock_card}', '{$name}', '{$quantity}', '{$unit_id}', '{$base_unit_id}', 
+                  '{$unit_cost}', '{$categorie_id}', '{$desc}', '{$media_id}', NOW())";
+
+    if ($db->query($sql)) {
+      $item_id = $db->insert_id();
+
+      // ✅ FIXED: Get current school year ID function
+      function get_current_school_year_id()
+      {
+        global $db;
+        // Try both possible formats
+        $res = $db->query("SELECT id FROM school_years WHERE is_current = 1 LIMIT 1");
+        if ($res && $db->num_rows($res) > 0) {
+          $row = $res->fetch_assoc();
+          return (int)$row['id'];
+        }
+
+        // If not found with is_current = 1, try is_current = 'active'
+        $res = $db->query("SELECT id FROM school_years WHERE is_current = 'active' LIMIT 1");
+        if ($res && $db->num_rows($res) > 0) {
+          $row = $res->fetch_assoc();
+          return (int)$row['id'];
+        }
+
+        return null;
+      }
+
+      $current_sy_id = get_current_school_year_id();
+
+      // ✅ FIXED: Initialize stock record for that year
+      if ($current_sy_id) {
+        $insert_stock_sql = "INSERT INTO item_stocks_per_year (item_id, school_year_id, stock, updated_at)
+                VALUES ('{$item_id}', '{$current_sy_id}', '{$quantity}', NOW())";
+
+        if (!$db->query($insert_stock_sql)) {
+          $session->msg('d', 'Item added but failed to initialize stock record: ' . $db->error());
+          redirect('items.php', false);
+        }
+      } else {
+        $session->msg('w', 'Item added but no active school year found for stock tracking.');
+      }
+
+      // ✅ FIXED: Insert conversion info ONLY if needed and valid
+      $base_unit_name = '';
+      foreach ($base_units as $bu) {
+        if ($bu['id'] == $base_unit_id) {
+          $base_unit_name = $bu['name'];
+          break;
+        }
+      }
+
+      // Only insert conversion if:
+      // 1. Base unit is selected AND not "Not Applicable" 
+      // 2. Base unit is different from regular unit
+      // 3. Conversion rate is valid (> 0)
+      if (
+        $base_unit_id &&
+        $base_unit_name !== 'Not Applicable' &&
+        $base_unit_id != $unit_id &&
+        $conversion_rate > 0
+      ) {
+
+        // Insert into unit_conversions table
+        $conversion_sql = "INSERT INTO unit_conversions (item_id, from_unit_id, to_unit_id, conversion_rate)
+                VALUES ('{$item_id}', '{$unit_id}', '{$base_unit_id}', '{$conversion_rate}')";
+
+        if (!$db->query($conversion_sql)) {
+          $session->msg('w', 'Item added but unit conversion failed: ' . $db->error());
+        }
+      }
+
+      unset($_SESSION['form_data']);
+      $session->msg('s', "Item added successfully.");
+      redirect('items.php', false);
+    } else {
+      $_SESSION['form_data'] = $_POST;
+      $session->msg('d', 'Failed to add item! ' . $db->error());
+      redirect('items.php', false);
+    }
+  }
 }
 
-// Handle Bulk Archive
-if(isset($_POST['bulk_archive_ids']) && !empty($_POST['bulk_archive_ids'])){
-    $ids = array_map('intval', $_POST['bulk_archive_ids']);
-    foreach($ids as $id){
-        $db->query("UPDATE items SET archived=1 WHERE id='{$id}' LIMIT 1");
-    }
-    $session->msg('s', 'Selected items archived successfully.');
-    redirect('items.php');
+// ✅ Handle Bulk Archive
+if (isset($_POST['bulk_archive_ids']) && !empty($_POST['bulk_archive_ids'])) {
+  $ids = array_map('intval', $_POST['bulk_archive_ids']);
+  foreach ($ids as $id) {
+    $db->query("UPDATE items SET archived=1 WHERE id='{$id}' LIMIT 1");
+  }
+  $session->msg('s', 'Selected items archived successfully.');
+  redirect('items.php');
 }
 
+// ✅ Pagination and category filter
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $category = isset($_GET['category']) ? $_GET['category'] : 'all';
 $items = get_items_paginated(10, $page, $category);
 
-$categories = find_all('categories'); 
-$form_data = isset($_SESSION['form_data']) ? $_SESSION['form_data'] : [];
-unset($_SESSION['form_data']);
+// Process items for display with proper quantity formatting
+// Avoid duplicates: ensure unique items by ID
+$seen_ids = [];
+foreach ($items as $key => &$item) {
+  if (in_array($item['id'], $seen_ids)) {
+    unset($items[$key]); // skip duplicate
+    continue;
+  }
+  $seen_ids[] = $item['id'];
+
+  // Default values
+  $item['unit_id'] = $item['unit_id'] ?? 0;
+  $item['base_unit_id'] = $item['base_unit_id'] ?? 0;
+  $item['quantity'] = $item['quantity'] ?? 0;
+
+  // Calculate display quantities using the FIXED function
+  $quantity_data = calculate_display_quantity($item['id'], $item['quantity']);
+
+  $item['display_quantity'] = $quantity_data['display'];
+  $item['has_conversion'] = $quantity_data['has_conversion'];
+  $item['main_quantity'] = $quantity_data['main_quantity'];
+  $item['base_quantity'] = $quantity_data['base_quantity'];
+  $item['main_unit'] = $quantity_data['main_unit'];
+  $item['base_unit'] = $quantity_data['base_unit'];
+  $item['conversion_rate'] = $quantity_data['conversion_rate'];
+
+  // Safe unit names
+  $item['unit_name'] = get_unit_name($item['unit_id']);
+  $item['base_unit_name'] = get_unit_name($item['base_unit_id']);
+}
+unset($item); // good practice when using reference in foreach
+
 ?>
+
 
 <?php include_once('layouts/header.php');
 
 $msg = $session->msg();
-if (!empty($msg) && is_array($msg)): 
-    $type = key($msg);
-    $text = $msg[$type];
+if (!empty($msg) && is_array($msg)):
+  $type = key($msg);
+  $text = $msg[$type];
 ?>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    Swal.fire({
-      icon: '<?php echo $type === "danger" ? "error" : $type; ?>',
-      title: '<?php echo ucfirst($type); ?>',
-      text: '<?php echo addslashes($text); ?>',
-      confirmButtonText: 'OK'
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      Swal.fire({
+        icon: '<?php echo $type === "danger" ? "error" : $type; ?>',
+        title: '<?php echo ucfirst($type); ?>',
+        text: '<?php echo addslashes($text); ?>',
+        confirmButtonText: 'OK'
+      });
     });
-  });
-</script>
+  </script>
 <?php endif; ?>
 
 <style>
-:root {
-  --primary: #28a745;
-  --primary-dark: #1e7e34;
-  --primary-light: #34ce57;
-  --secondary: #6c757d;
-  --warning: #ffc107;
-  --danger: #dc3545;
-  --light: #f8f9fa;
-  --dark: #343a40;
-  --border-radius: 12px;
-  --shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
-
-.card-header-custom {
-  background: white;
-  border-top: 5px solid var(--primary);
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.page-title {
-  font-family: 'Times New Roman', serif;
-  font-weight: 700;
-  margin: 0;
-  color: var(--dark);
-}
-
-.btn-primary-custom {
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 0.75rem 1.5rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn-primary-custom:hover {
-  background: linear-gradient(135deg, var(--primary-dark), #155724);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-}
-
-.btn-warning-custom {
-  background: var(--warning);
-  color: var(--dark);
-  border: none;
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn-warning-custom:hover {
-  background: #e0a800;
-  transform: translateY(-1px);
-  color: var(--dark);
-}
-
-.btn-danger-custom {
-  background: var(--danger);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn-danger-custom:hover {
-  background: #c82333;
-  transform: translateY(-1px);
-  color: white;
-}
-
-.table-custom {
-  border-radius: var(--border-radius);
-  overflow: hidden;
-  box-shadow: var(--shadow);
-  margin-bottom: 0;
-}
-
-.table-custom thead {
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  color: white;
-}
-
-.table-custom th {
-  border: none;
-  font-weight: 600;
-  padding: 1rem;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.table-custom td {
-  padding: 0.75rem;
-  vertical-align: middle;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.table-custom tbody tr {
-  transition: all 0.3s ease;
-}
-
-.table-custom tbody tr:hover {
-  background-color: rgba(40, 167, 69, 0.05);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.table-custom tbody tr.table-danger {
-  background-color: rgba(220, 53, 69, 0.1);
-}
-
-.table-custom tbody tr.table-danger:hover {
-  background-color: rgba(220, 53, 69, 0.15);
-}
-
-.badge-custom {
-  padding: 0.5rem 0.75rem;
-  border-radius: 50px;
-  font-weight: 600;
-  font-size: 0.8rem;
-}
-
-.badge-primary {
-  background: rgba(40, 167, 69, 0.15);
-  color: var(--primary-dark);
-}
-
-.badge-success {
-  background: rgba(40, 167, 69, 0.15);
-  color: var(--primary-dark);
-}
-
-.badge-warning {
-  background: rgba(255, 193, 7, 0.15);
-  color: #856404;
-}
-
-.actions-column {
-  width: 120px;
-  text-align: center;
-}
-
-.btn-group-custom {
-  display: flex;
-}
-
-.btn-group-custom .btn {
-  width: 100%;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--secondary);
-}
-
-.empty-state-icon {
-  font-size: 4rem;
-  color: #dee2e6;
-  margin-bottom: 1rem;
-}
-
-.empty-state h4 {
-  color: var(--secondary);
-  margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-  margin-bottom: 1.5rem;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.search-box {
-  position: relative;
-  flex: 1;
-  max-width: 300px;
-}
-
-.search-box input {
-  padding-left: 2.5rem;
-  border-radius: 25px;
-  border: 1px solid #dee2e6;
-}
-
-.search-box .search-icon {
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--secondary);
-}
-
-.stats-card {
-  background: white;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  border-left: 4px solid var(--primary);
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.stat-item {
-  text-align: center;
-  padding: 1rem;
-  background: white;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow);
-  border-top: 3px solid var(--primary);
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--primary);
-  margin-bottom: 0.5rem;
-}
-
-.stat-label {
-  color: var(--secondary);
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-/* Add Item Form Styles */
-.add-item-form {
-  background: white;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow);
-  margin-bottom: 2rem;
-  overflow: hidden;
-  display: none; /* Hidden by default */
-}
-
-.add-form-header {
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  color: white;
-  padding: 1.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.add-form-header h5 {
-  margin: 0;
-  font-weight: 600;
-}
-
-.form-section {
-  padding: 1.5rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.form-section:last-child {
-  border-bottom: none;
-}
-
-.section-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--primary);
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--primary-light);
-}
-
-/* Checkbox styling */
-.item-checkbox, #selectAll {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
-
-.bulk-actions-container {
-  background: rgba(40, 167, 69, 0.1);
-  border: 1px solid var(--primary-light);
-  border-radius: var(--border-radius);
-  padding: 1rem;
-  margin-bottom: 1rem;
-  display: none;
-}
-
-.bulk-actions-container.show {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
+  :root {
+    --primary: #28a745;
+    --primary-dark: #1e7e34;
+    --primary-light: #34ce57;
+    --secondary: #6c757d;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --light: #f8f9fa;
+    --dark: #343a40;
+    --border-radius: 12px;
+    --shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
-.bulk-selection-count {
-  font-weight: 600;
-  color: var(--primary-dark);
-}
-
-.item-image {
-  width: 50px;
-  height: 50px;
-  border-radius: 8px;
-  object-fit: cover;
-  border: 2px solid #e9ecef;
-  transition: all 0.3s ease;
-}
-
-.item-image:hover {
-  border-color: var(--primary);
-  transform: scale(1.05);
-}
-
-.low-stock-badge {
-  background: var(--danger);
-  color: white;
-  font-size: 0.7rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 12px;
-  margin-left: 0.5rem;
-}
-
-/* Animation for form show/hide */
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@media (max-width: 768px) {
   .card-header-custom {
-    padding: 1rem;
-  }
-  
-  .header-actions {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .search-box {
-    max-width: 100%;
-  }
-  
-
-  
-  .table-responsive {
+    background: white;
+    border-top: 5px solid var(--primary);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
   }
-  
-  .stats-grid {
-    grid-template-columns: 1fr;
+
+  .page-title {
+    font-family: 'Times New Roman', serif;
+    font-weight: 700;
+    margin: 0;
+    color: var(--dark);
   }
-  
-  .bulk-actions-container {
-    flex-direction: column;
+
+  .btn-primary-custom {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 400;
+    transition: all 0.3s ease;
+  }
+
+  .btn-primary-custom:hover {
+    background: linear-gradient(135deg, var(--primary-dark), #155724);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+  }
+
+  .btn-warning-custom {
+    background: var(--warning);
+    color: var(--dark);
+    border: none;
+    border-radius: 5px;
+    padding: 0.5rem 0.5rem;
+    font-weight: 400;
+    transition: all 0.3s ease;
+  }
+
+  .btn-warning-custom:hover {
+    background: #e0a800;
+    transform: translateY(-1px);
+    color: var(--dark);
+  }
+
+  .btn-danger-custom {
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 0.5rem 0.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+
+  .btn-danger-custom:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+    color: white;
+  }
+
+  .table-custom {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    margin-bottom: 0;
+  }
+
+  .table-custom thead {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+  }
+
+  .table-custom th {
+    border: none;
+    font-weight: 600;
+    padding: 1rem;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .table-custom td {
+    padding: 0.75rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .table-custom tbody tr {
+    transition: all 0.3s ease;
+  }
+
+  .table-custom tbody tr:hover {
+    background-color: rgba(40, 167, 69, 0.05);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .table-custom tbody tr.table-danger {
+    background-color: rgba(220, 53, 69, 0.1);
+  }
+
+  .table-custom tbody tr.table-danger:hover {
+    background-color: rgba(220, 53, 69, 0.15);
+  }
+
+  .badge-custom {
+    padding: 0.5rem 0.75rem;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.8rem;
+  }
+
+  .badge-primary {
+    background: rgba(40, 167, 69, 0.15);
+    color: var(--primary-dark);
+  }
+
+  .badge-success {
+    background: rgba(40, 167, 69, 0.15);
+    color: var(--primary-dark);
+  }
+
+  .badge-warning {
+    background: rgba(255, 193, 7, 0.15);
+    color: #856404;
+  }
+
+  .actions-column {
+    width: 120px;
     text-align: center;
   }
-  
-  .add-form-header {
-    flex-direction: column;
+
+  .btn-group-custom {
+    display: flex;
+  }
+
+  .btn-group-custom .btn {
+    width: 100%;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--secondary);
+  }
+
+  .empty-state-icon {
+    font-size: 4rem;
+    color: #dee2e6;
+    margin-bottom: 1rem;
+  }
+
+  .empty-state h4 {
+    color: var(--secondary);
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-state p {
+    margin-bottom: 1.5rem;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
     gap: 1rem;
-    text-align: center;
   }
-}
 
-.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-  background: var(--primary-light) !important;
-  color: white !important;
-  border: none !important;
-}
+  .search-box {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+  }
 
-.dataTables_wrapper .dataTables_length,
-.dataTables_wrapper .dataTables_filter {
-  margin-bottom: 1rem;
-}
+  .search-box input {
+    padding-left: 2.5rem;
+    border-radius: 25px;
+    border: 1px solid #dee2e6;
+  }
 
-.dataTables_wrapper .dataTables_filter input {
-  border-radius: 6px;
-  border: 1px solid #dee2e6;
-  padding: 0.375rem 0.75rem;
-}
+  .search-box .search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--secondary);
+  }
 
-.dataTables_wrapper .dataTables_length select {
-  border-radius: 6px;
-  border: 1px solid #dee2e6;
-}
+  .stats-card {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid var(--primary);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat-item {
+    text-align: center;
+    padding: 1rem;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    border-top: 3px solid var(--primary);
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-label {
+    color: var(--secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  /* Add Item Form Styles */
+  .add-item-form {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 2rem;
+    overflow: hidden;
+    display: none;
+    /* Hidden by default */
+  }
+
+  .add-form-header {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .add-form-header h5 {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .form-section {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  .form-section:last-child {
+    border-bottom: none;
+  }
+
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary-light);
+  }
+
+  /* Checkbox styling */
+  .item-checkbox,
+  #selectAll {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+  }
+
+  .bulk-actions-container {
+    background: rgba(40, 167, 69, 0.1);
+    border: 1px solid var(--primary-light);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: none;
+  }
+
+  .bulk-actions-container.show {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    animation: slideDown 0.3s ease;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .bulk-selection-count {
+    font-weight: 600;
+    color: var(--primary-dark);
+  }
+
+  .item-image {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+  }
+
+  .item-image:hover {
+    border-color: var(--primary);
+    transform: scale(1.05);
+  }
+
+  .low-stock-badge {
+    background: var(--danger);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+  }
+
+  /* Animation for form show/hide */
+  .fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .card-header-custom {
+      padding: 1rem;
+    }
+
+    .header-actions {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .search-box {
+      max-width: 100%;
+    }
+
+
+
+    .table-responsive {
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow);
+    }
+
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .bulk-actions-container {
+      flex-direction: column;
+      text-align: center;
+    }
+
+    .add-form-header {
+      flex-direction: column;
+      gap: 1rem;
+      text-align: center;
+    }
+  }
+
+  .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: var(--primary-light) !important;
+    color: white !important;
+    border: none !important;
+  }
+
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter {
+    margin-bottom: 1rem;
+  }
+
+  .dataTables_wrapper .dataTables_filter input {
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    padding: 0.375rem 0.75rem;
+  }
+
+  .dataTables_wrapper .dataTables_length select {
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+  }
+
+  /* Enhanced quantity display styles */
+  .quantity-breakdown {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 2px;
+  }
+
+  .conversion-info {
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    color: #0056b3;
+  }
+
+  .stock-details {
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 4px 8px;
+    margin-top: 4px;
+    border-left: 3px solid #28a745;
+  }
+
+  .low-stock-badge {
+    background: var(--danger);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+  }
 </style>
 
 <div class="container-fluid">
@@ -576,37 +810,36 @@ if (!empty($msg) && is_array($msg)):
       <div class="stat-label">Total Items</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value">₱<?php 
-        $total_value = 0;
-        foreach ($items as $item) {
-          $total_value += ($item['unit_cost'] * $item['quantity']);
-        }
-        echo number_format($total_value, 2);
-      ?></div>
+      <div class="stat-value">₱<?php
+                                $total_value = 0;
+                                foreach ($items as $item) {
+                                  $total_value += ($item['unit_cost'] * $item['quantity']);
+                                }
+                                echo number_format($total_value, 2);
+                                ?></div>
       <div class="stat-label">Total Inventory Value</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value"><?php 
-        $low_stock_count = 0;
-        foreach ($items as $item) {
-          if ((int)$item['quantity'] < 10) {
-            $low_stock_count++;
-          }
-        }
-        echo $low_stock_count;
-      ?></div>
+      <div class="stat-value"><?php
+                              $low_stock_count = 0;
+                              foreach ($items as $item) {
+                                if ((int)$item['quantity'] < 10) {
+                                  $low_stock_count++;
+                                }
+                              }
+                              echo $low_stock_count;
+                              ?></div>
       <div class="stat-label">Low Stock Items</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value"><?php 
-        $categories_count = array_unique(array_column($items, 'category'));
-        echo count($categories_count);
-      ?></div>
+      <div class="stat-value"><?php
+                              $categories_count = array_unique(array_column($items, 'category'));
+                              echo count($categories_count);
+                              ?></div>
       <div class="stat-label">Active Categories</div>
     </div>
   </div>
 
-  
   <!-- Add Item Form (Hidden by default) -->
   <div class="add-item-form" id="addItemForm">
     <div class="add-form-header">
@@ -615,38 +848,38 @@ if (!empty($msg) && is_array($msg)):
         <i class="fas fa-times me-1"></i> Cancel
       </button>
     </div>
-    
+
     <form method="POST" action="items.php" enctype="multipart/form-data" class="needs-validation" novalidate>
       <div class="form-section">
         <h6 class="section-title">Basic Information</h6>
         <div class="row">
           <div class="col-md-2 mb-3">
             <label for="fund_cluster" class="form-label fw-bold">Fund Cluster <span class="text-danger">*</span></label>
-            <input type="text" name="fund_cluster" id="fund_cluster" class="form-control" 
+            <input type="text" name="fund_cluster" id="fund_cluster" class="form-control"
               value="<?php echo isset($form_data['fund_cluster']) ? $form_data['fund_cluster'] : ''; ?>" required>
             <div class="invalid-feedback">
               Please provide a fund cluster.
             </div>
           </div>
-          
+
           <div class="col-md-4 mb-3">
             <label for="name" class="form-label fw-bold">Item Name <span class="text-danger">*</span></label>
-            <input type="text" name="name" id="name" class="form-control" 
+            <input type="text" name="name" id="name" class="form-control"
               value="<?php echo isset($form_data['name']) ? $form_data['name'] : ''; ?>" required>
             <div class="invalid-feedback">
               Please provide an item name.
             </div>
           </div>
-          
+
           <div class="col-md-3 mb-3">
             <label for="stock_card" class="form-label fw-bold">Stock No. <span class="text-danger">*</span></label>
-            <input type="text" name="stock_card" id="stock_card" class="form-control" 
+            <input type="text" name="stock_card" id="stock_card" class="form-control"
               value="<?php echo isset($form_data['stock_card']) ? $form_data['stock_card'] : ''; ?>" placeholder="e.g. 010" required>
             <div class="invalid-feedback">
               Please provide a stock number.
             </div>
           </div>
-          
+
           <div class="col-md-3 mb-3">
             <label for="categorie_id" class="form-label fw-bold">Category <span class="text-danger">*</span></label>
             <select name="categorie_id" id="categorie_id" class="form-control" required>
@@ -662,39 +895,48 @@ if (!empty($msg) && is_array($msg)):
               Please select a category.
             </div>
           </div>
-          
-          <div class="col-md-3 mb-3">
-  <label for="unit_id" class="form-label fw-bold">Unit of Measure <span class="text-danger">*</span></label>
-  <select name="unit_id" id="unit_id" class="form-select w-100 p-2" required>
-    <option value="">Select Unit</option>
-    <?php foreach ($units as $unit): ?>
-      <option value="<?php echo (int)$unit['id']; ?>"
-        <?php echo (isset($form_data['unit_id']) && $form_data['unit_id'] == $unit['id']) ? 'selected' : ''; ?>>
-        <?php echo remove_junk($unit['name']); ?>
-        <?php echo $unit['symbol'] ? " ({$unit['symbol']})" : ''; ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
-  <div class="invalid-feedback">
-    Please select a unit of measure.
-  </div>
-</div>
 
-          
+          <div class="col-md-2 mb-3">
+            <label for="unit_id">Unit</label>
+            <select name="unit_id" class="form-control" id="unit_id">
+              <?php foreach ($units as $unit): ?>
+                <option value="<?php echo $unit['id']; ?>"><?php echo ucfirst($unit['name']); ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
+          <div class="col-md-2 mb-3">
+            <label for="base_unit_id">Base Unit</label>
+            <select name="base_unit_id" class="form-control" id="base_unit_id">
+              <?php foreach ($base_units as $b_unit): ?>
+                <option value="<?php echo $b_unit['id']; ?>"
+                  <?php echo ($b_unit['name'] == 'Not Applicable') ? 'selected' : ''; ?>>
+                  <?php echo ucfirst($b_unit['name']); ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
+          <div class="col-md-2 mb-3">
+            <label for="conversion_rate">Conversion Rate</label>
+            <input type="number" step="0.000001" name="conversion_rate" id="conversion_rate" class="form-control"
+              placeholder="e.g., 10 (if 1 box = 10 pieces)" value="<?php echo isset($form_data['conversion_rate']) ? $form_data['conversion_rate'] : ''; ?>">
+            <small class="text-muted">Only needed if different from base unit</small>
+          </div>
+
           <div class="col-md-3 mb-3">
             <label for="quantity" class="form-label fw-bold">Quantity <span class="text-danger">*</span></label>
-            <input type="number" name="quantity" id="quantity" class="form-control" 
+            <input type="number" name="quantity" id="quantity" class="form-control"
               value="<?php echo isset($form_data['quantity']) ? $form_data['quantity'] : ''; ?>" min="0" required>
             <div class="invalid-feedback">
               Please provide a valid quantity.
             </div>
           </div>
-          
+
           <div class="col-md-3 mb-3">
             <label for="unit_cost" class="form-label fw-bold">Unit Cost <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text">₱</span>
-              <input type="number" step="0.01" name="unit_cost" id="unit_cost" class="form-control"  
+              <input type="number" step="0.01" name="unit_cost" id="unit_cost" class="form-control"
                 value="<?php echo isset($form_data['unit_cost']) ? $form_data['unit_cost'] : ''; ?>" min="0" required>
             </div>
             <div class="invalid-feedback">
@@ -709,10 +951,10 @@ if (!empty($msg) && is_array($msg)):
         <div class="row">
           <div class="col-md-8 mb-3">
             <label for="description" class="form-label fw-bold">Description</label>
-            <textarea name="description" id="description" class="form-control" rows="3"><?php 
-              echo isset($form_data['description']) ? $form_data['description'] : ''; ?></textarea>
+            <textarea name="description" id="description" class="form-control" rows="3"><?php
+                                                                                        echo isset($form_data['description']) ? $form_data['description'] : ''; ?></textarea>
           </div>
-          
+
           <div class="col-md-4 mb-3">
             <label for="item_image" class="form-label fw-bold">Item Image</label>
             <input type="file" name="item_image" id="item_image" class="form-control">
@@ -737,11 +979,11 @@ if (!empty($msg) && is_array($msg)):
   <div class="bulk-actions-container" id="bulkActions">
     <div class="bulk-selection-count" id="selectedCount">0 items selected</div>
     <div class="d-flex gap-2">
-      <button id="bulkEdit" class="btn btn-warning-custom" title="Edit Selected">
+      <button id="bulkEdit" class="btn btn-warning-custom mr-3" title="Edit Selected">
         <i class="fas fa-edit me-1"></i> Edit
       </button>
-      <button id="bulkArchive" class="btn btn-danger-custom" title="Archive Selected">
-                                 <i class="fa-solid fa-file-zipper"></i> Archive
+      <button id="bulkArchive" class="btn btn-danger-custom mr-3" title="Archive Selected">
+        <i class="fa-solid fa-file-zipper"></i> Archive
       </button>
       <button id="clearSelection" class="btn btn-secondary" title="Clear Selection">
         <i class="fas fa-times me-1"></i> Clear
@@ -749,116 +991,147 @@ if (!empty($msg) && is_array($msg)):
     </div>
   </div>
 
-  
 
-  <!-- Items Table -->
-  <div class="card-header-custom" id="itemsTableSection">
-    <?php if($items && count($items) > 0): ?>
-      <div class="table-responsive">
-        <table class="table table-custom" id="itemsTable">
-          <thead>
-            <tr>
-              <th class="text-center" width="50">
-                <input type="checkbox" id="selectAll">
-              </th>
-              <th width="250">Item Description</th>
-              <th class="text-center" width="120">Fund Cluster</th>
-              <th class="text-center" width="120">Stock No.</th>
-              <th class="text-center" width="80">Photo</th>
-              <th class="text-center" width="150">Category</th>
-              <th class="text-center" width="120">Unit Cost</th>        
-              <th class="text-center" width="100">In-Stock</th>           
-              <th class="text-center actions-column" width="120">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach($items as $item): 
-              $lowStock = ((int)$item['quantity'] < 10);
-              $rowClass = $lowStock ? 'table-danger' : '';
-            ?>
-              <tr class="<?= $rowClass; ?>" data-category="<?php echo remove_junk($item['category']); ?>">
-                <td class="text-center">
-                  <input type="checkbox" class="item-checkbox" data-id="<?= (int)$item['id']; ?>">
-                </td>
-                <td>
-                  <div class="d-flex align-items-start">
-                    <div>
-                      <strong><?= remove_junk($item['name']); ?></strong>
-                      <div class="text-muted small mt-1">
-                        <i class="fas fa-ruler me-1"></i>UOM: <?php echo remove_junk($item['unit_name']); ?>
-
-                        <?php if($lowStock): ?>
-                          <span class="low-stock-badge">Low Stock</span>
-                        <?php endif; ?>
-                      </div>
+ <!-- Items Table -->
+<div class="card-header-custom" id="itemsTableSection">
+  <?php if ($items && count($items) > 0): ?>
+    <div class="table-responsive">
+      <table class="table table-custom" id="itemsTable">
+        <thead>
+          <tr>
+            <th class="text-center" width="50"><input type="checkbox" id="selectAll"></th>
+            <th width="250">Item Description</th>
+            <th class="text-center" width="120">Fund Cluster</th>
+            <th class="text-center" width="120">Stock No.</th>
+            <th class="text-center" width="80">Photo</th>
+            <th class="text-center" width="150">Category</th>
+            <th class="text-center" width="120">Unit Cost</th>
+            <th class="text-center" width="150">Stock</th>
+            <th class="text-center actions-column" width="120">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($items as $item): 
+            // ✅ FIXED: Define all required variables with proper defaults
+            $item_quantity = $item['quantity'] ?? 0;
+            $item_unit_id = $item['unit_id'] ?? 0;
+            $item_base_unit_id = $item['base_unit_id'] ?? 0;
+            $item_category = $item['category'] ?? 'Uncategorized';
+            $item_image = $item['image'] ?? 'no_image.png';
+            $item_unit_name = $item['unit_name'] ?? 'Unit';
+            $lowStock = ((float)$item_quantity < 10);
+            
+            // ✅ FIXED: Calculate conversion data for this specific item
+            $quantity_data = calculate_display_quantity($item['id'], $item_quantity);
+            $display_quantity = $quantity_data['display'];
+            $has_conversion = $quantity_data['has_conversion'];
+            $main_quantity = $quantity_data['main_quantity'];
+            $base_quantity = $quantity_data['base_quantity'];
+            $main_unit = $quantity_data['main_unit'];
+            $base_unit = $quantity_data['base_unit'];
+            $conversion_rate = $quantity_data['conversion_rate'];
+          ?>
+            <tr class="<?= $lowStock ? 'table-danger' : ''; ?>" data-category="<?= remove_junk($item_category); ?>">
+              <td class="text-center">
+                <input type="checkbox" class="item-checkbox" data-id="<?= (int)$item['id']; ?>">
+              </td>
+              <td>
+                <div class="d-flex align-items-start">
+                  <div>
+                    <strong><?= remove_junk($item['name']); ?></strong>
+                    <div class="text-muted small mt-1">
+                      <i class="fas fa-ruler me-1"></i>UOM: <?= remove_junk($item_unit_name); ?>
+                      
+                      <?php if ($has_conversion): ?>
+                        <br>
+                        <small class="text-info conversion-info">
+                          <i class="fas fa-exchange-alt me-1"></i>
+                          1 <?= $main_unit; ?> = <?= $conversion_rate; ?> <?= $base_unit; ?>
+                        </small>
+                      <?php elseif (!empty($item['base_unit_name']) && $item['base_unit_name'] !== 'Not Applicable'): ?>
+                        <br>
+                        <small class="text-muted">
+                          Base Unit: <?= $item['base_unit_name'] ?? ''; ?>
+                        </small>
+                      <?php endif; ?>
+                      
+                      <?php if ($lowStock): ?>
+                        <span class="low-stock-badge">Low Stock</span>
+                      <?php endif; ?>
                     </div>
                   </div>
-                </td>
-                <td class="text-center">
-                  <?php 
-                    $fund_cluster = strtoupper($item['fund_cluster']); 
-                    $badgeClass = ($fund_cluster === 'GAA') ? 'badge-success' : 'badge-primary'; 
-                  ?>
-                  <span class="badge badge-custom <?= $badgeClass ?>">
-                    <?= htmlspecialchars($fund_cluster) ?>
+                </div>
+              </td>
+              <td class="text-center">
+                <?php
+                $fund_cluster = strtoupper($item['fund_cluster'] ?? '');
+                $badgeClass = ($fund_cluster === 'GAA') ? 'badge-success' : 'badge-primary';
+                ?>
+                <span class="badge badge-custom <?= $badgeClass ?>">
+                  <?= htmlspecialchars($fund_cluster) ?>
+                </span>
+              </td>
+              <td class="text-center">
+                <code><?= remove_junk($item['stock_card'] ?? ''); ?></code>
+              </td>
+              <td class="text-center">
+                <img class="item-image"
+                  src="uploads/items/<?= !empty($item_image) ? $item_image : 'no_image.png'; ?>"
+                  alt="<?= remove_junk($item['name']); ?>">
+              </td>
+              <td class="text-center">
+                <span class="badge badge-custom badge-primary">
+                  <?= remove_junk($item_category); ?>
+                </span>
+              </td>
+              <td class="text-center">
+                <strong class="text-success">₱<?= number_format($item['unit_cost'] ?? 0, 2); ?></strong>
+              </td>
+              <td class="text-center">
+                <div class="d-flex flex-column align-items-center">
+                  <!-- Main quantity display -->
+                  <span class="badge badge-custom <?= $lowStock ? 'badge-warning' : 'badge-primary'; ?> p-2" >
+                    <!-- Detailed breakdown for items with conversion -->
+                  <?php if ($has_conversion): ?>
+                      <small class="text-dark" style="font-size:14px">
+                        <strong><?= $main_quantity; ?></strong> <?= $main_unit; ?>  
+                        | 
+                        <strong><?= number_format($base_quantity); ?></strong> <?= $base_unit; ?> 
+                      </small>
+                  <?php endif; ?>
                   </span>
-                </td>
-                <td class="text-center">
-                  <code><?= remove_junk($item['stock_card']); ?></code>
-                </td>
-                <td class="text-center">
-                  <img class="item-image"
-                    src="uploads/items/<?= !empty($item['image']) ? $item['image'] : 'no_image.png'; ?>"
-                    alt="<?= remove_junk($item['name']); ?>">
-                </td>
-                <td class="text-center">
-                  <span class="badge badge-custom badge-primary">
-                    <?= remove_junk($item['category']); ?>
-                  </span>
-                </td>
-                <td class="text-center">
-                  <strong class="text-success">₱<?= number_format($item['unit_cost'], 2); ?></strong>
-                </td>
-                <td class="text-center">
-                  <div class="d-flex flex-column align-items-center">
-                    <span class="badge badge-custom <?= $lowStock ? 'badge-warning' : 'badge-primary'; ?> fs-6">
-                      <?= remove_junk($item['quantity']); ?>
-                    </span>
-                    <?php if($lowStock): ?>
-                      <small class="text-danger mt-1">Reorder needed</small>
-                    <?php endif; ?>
-                  </div>
-                </td>
-                <td class="text-center">
-                  <div class="btn-group btn-group-custom">
-                    <a href="edit_item.php?id=<?= (int)$item['id'];?>" class="btn btn-warning-custom" title="Edit">
-                      <i class="fas fa-edit"></i>
-                    </a>
-                    <a href="a_script.php?id=<?= (int)$item['id']; ?>" class="btn btn-danger-custom archive-btn" title="Archive" data-id="<?= (int)$item['id']; ?>">
-                                               <i class="fa-solid fa-file-zipper"></i> 
+                </div>
+              </td>
+              <td class="text-center">
+                <div class="btn-group btn-group-custom">
+                  <a href="edit_item.php?id=<?= (int)$item['id']; ?>" class="btn btn-warning-custom" title="Edit">
+                    <i class="fas fa-edit"></i>
+                  </a>
+                  <a href="a_script.php?id=<?= (int)$item['id']; ?>" class="btn btn-danger-custom archive-btn" title="Archive" data-id="<?= (int)$item['id']; ?>">
+                    <i class="fa-solid fa-file-zipper"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php else: ?>
+    <!-- Empty State -->
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <i class="fas fa-box-open"></i>
+      </div>
+      <h4>No Inventory Items Found</h4>
+      <p>Get started by adding your first inventory item.</p>
+      <button type="button" id="showAddFormEmptyBtn" class="btn btn-primary-custom">
+        <i class="fas fa-plus me-2"></i> Add First Item
+      </button>
+    </div>
+  <?php endif; ?>
+</div>
 
-                    </a>
-                  </div>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php else: ?>
-      <!-- Empty State -->
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          <i class="fas fa-box-open"></i>
-        </div>
-        <h4>No Inventory Items Found</h4>
-        <p>Get started by adding your first inventory item.</p>
-        <button type="button" id="showAddFormEmptyBtn" class="btn btn-primary-custom">
-          <i class="fas fa-plus me-2"></i> Add First Item
-        </button>
-      </div>
-    <?php endif; ?>
-  </div>
 </div>
 
 <?php include_once('layouts/footer.php'); ?>
@@ -867,36 +1140,36 @@ if (!empty($msg) && is_array($msg)):
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
 <script>
-$(document).ready(function () {
+  $(document).ready(function() {
     var table = $('#itemsTable').DataTable({
-        pageLength: 5,
-        lengthMenu: [5, 10, 25, 50],
-        ordering: true,
-        searching: false,
-        autoWidth: false,
-        fixedColumns: true
+      pageLength: 5,
+      lengthMenu: [5, 10, 25, 50],
+      ordering: true,
+      searching: false,
+      autoWidth: false,
+      fixedColumns: true
     });
     $('#searchInput').on('keyup', function() {
       table.search(this.value).draw();
     }); // 🔍 Custom search box function
-    
+
 
     // Show add item form
     function showAddForm() {
-        $('#addItemForm').fadeIn(300).addClass('fade-in');
-        $('#itemsTableSection').hide();
-        $('html, body').animate({
-            scrollTop: $('#addItemForm').offset().top - 20
-        }, 300);
+      $('#addItemForm').fadeIn(300).addClass('fade-in');
+      $('#itemsTableSection').hide();
+      $('html, body').animate({
+        scrollTop: $('#addItemForm').offset().top - 20
+      }, 300);
     }
 
     // Hide add item form
     function hideAddForm() {
-        $('#addItemForm').fadeOut(300);
-        $('#itemsTableSection').fadeIn(300);
-        $('html, body').animate({
-            scrollTop: $('#itemsTableSection').offset().top - 20
-        }, 300);
+      $('#addItemForm').fadeOut(300);
+      $('#itemsTableSection').fadeIn(300);
+      $('html, body').animate({
+        scrollTop: $('#itemsTableSection').offset().top - 20
+      }, 300);
     }
 
     // Event listeners for showing form
@@ -907,41 +1180,41 @@ $(document).ready(function () {
 
     // Form validation
     (function() {
-        'use strict';
-        window.addEventListener('load', function() {
-            var forms = document.getElementsByClassName('needs-validation');
-            var validation = Array.prototype.filter.call(forms, function(form) {
-                form.addEventListener('submit', function(event) {
-                    if (form.checkValidity() === false) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                    form.classList.add('was-validated');
-                }, false);
-            });
-        }, false);
+      'use strict';
+      window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+          form.addEventListener('submit', function(event) {
+            if (form.checkValidity() === false) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+          }, false);
+        });
+      }, false);
     })();
 
     // Bulk selection functionality
     function updateBulkActions() {
-        const selectedCount = $('.item-checkbox:checked').length;
-        const bulkActions = $('#bulkActions');
-        const selectedCountElement = $('#selectedCount');
-        
-        selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
-        
-        if (selectedCount > 0) {
-            bulkActions.addClass('show');
-        } else {
-            bulkActions.removeClass('show');
-        }
+      const selectedCount = $('.item-checkbox:checked').length;
+      const bulkActions = $('#bulkActions');
+      const selectedCountElement = $('#selectedCount');
+
+      selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
+
+      if (selectedCount > 0) {
+        bulkActions.addClass('show');
+      } else {
+        bulkActions.removeClass('show');
+      }
     }
 
     // Select All functionality
     $('#selectAll').on('change', function() {
-        const checked = $(this).is(':checked');
-        table.rows().nodes().to$().find('.item-checkbox').prop('checked', checked);
-        updateBulkActions();
+      const checked = $(this).is(':checked');
+      table.rows().nodes().to$().find('.item-checkbox').prop('checked', checked);
+      updateBulkActions();
     });
 
     // Individual checkbox change
@@ -949,94 +1222,94 @@ $(document).ready(function () {
 
     // Clear selection
     $('#clearSelection').on('click', function() {
-        table.rows().nodes().to$().find('.item-checkbox').prop('checked', false);
-        $('#selectAll').prop('checked', false);
-        updateBulkActions();
+      table.rows().nodes().to$().find('.item-checkbox').prop('checked', false);
+      $('#selectAll').prop('checked', false);
+      updateBulkActions();
     });
 
     // Bulk Edit
     $('#bulkEdit').on('click', function() {
-        const ids = table.$('.item-checkbox:checked').map(function(){
-            return $(this).data('id');
-        }).get();
+      const ids = table.$('.item-checkbox:checked').map(function() {
+        return $(this).data('id');
+      }).get();
 
-        if(ids.length > 0){
-            window.location.href = "bulk_edit_items.php?ids=" + ids.join(',');
-        } else {
-            Swal.fire('No items selected', 'Please select items to edit.', 'info');
-        }
+      if (ids.length > 0) {
+        window.location.href = "bulk_edit_items.php?ids=" + ids.join(',');
+      } else {
+        Swal.fire('No items selected', 'Please select items to edit.', 'info');
+      }
     });
 
     // Bulk Archive
     $('#bulkArchive').on('click', function() {
-        const ids = table.$('.item-checkbox:checked').map(function(){
-            return $(this).data('id');
-        }).get();
+      const ids = table.$('.item-checkbox:checked').map(function() {
+        return $(this).data('id');
+      }).get();
 
-        if(ids.length === 0){
-            Swal.fire('No items selected', 'Please select items to archive.', 'info');
-            return;
+      if (ids.length === 0) {
+        Swal.fire('No items selected', 'Please select items to archive.', 'info');
+        return;
+      }
+
+      Swal.fire({
+        title: 'Archive Items?',
+        text: `You are about to archive ${ids.length} item(s). This action can be undone later.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, archive them!',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          const form = $('<form method="POST" action="items.php"></form>');
+          ids.forEach(id => {
+            form.append(`<input type="hidden" name="bulk_archive_ids[]" value="${id}">`);
+          });
+          $('body').append(form);
+          form.submit();
         }
-
-        Swal.fire({
-            title: 'Archive Items?',
-            text: `You are about to archive ${ids.length} item(s). This action can be undone later.`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, archive them!',
-            cancelButtonText: 'Cancel'
-        }).then((result) => {
-            if(result.isConfirmed){
-                const form = $('<form method="POST" action="items.php"></form>');
-                ids.forEach(id => {
-                    form.append(`<input type="hidden" name="bulk_archive_ids[]" value="${id}">`);
-                });
-                $('body').append(form);
-                form.submit();
-            }
-        });
+      });
     });
 
     // Individual archive confirmation
     document.querySelectorAll('.archive-btn').forEach(function(button) {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            const url = this.getAttribute('href');
-            const id = this.getAttribute('data-id');
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        const url = this.getAttribute('href');
+        const id = this.getAttribute('data-id');
 
-            Swal.fire({
-                title: 'Archive Item?',
-                text: "This item will be moved to archives. You can restore it later if needed.",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Yes, archive it!',
-                cancelButtonText: 'Cancel'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = url;
-                }
-            });
+        Swal.fire({
+          title: 'Archive Item?',
+          text: "This item will be moved to archives. You can restore it later if needed.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#6c757d',
+          confirmButtonText: 'Yes, archive it!',
+          cancelButtonText: 'Cancel'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.href = url;
+          }
         });
+      });
     });
 
     // Add row hover effects
     const tableRows = document.querySelectorAll('#itemsTable tbody tr');
     tableRows.forEach(row => {
-        row.addEventListener('click', function(e) {
-            if (!e.target.closest('.btn-group-custom') && !e.target.closest('.item-checkbox')) {
-                const checkbox = this.querySelector('.item-checkbox');
-                if (checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    updateBulkActions();
-                }
-            }
-        });
+      row.addEventListener('click', function(e) {
+        if (!e.target.closest('.btn-group-custom') && !e.target.closest('.item-checkbox')) {
+          const checkbox = this.querySelector('.item-checkbox');
+          if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            updateBulkActions();
+          }
+        }
+      });
     });
-});
+  });
 </script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
@@ -1044,7 +1317,7 @@ $(document).ready(function () {
     const table = document.getElementById("itemsTable");
     const rows = table.getElementsByTagName("tr");
 
-    searchInput.addEventListener("keyup", function () {
+    searchInput.addEventListener("keyup", function() {
       const filter = this.value.toLowerCase();
 
       // Loop through table rows (skip header)
@@ -1065,5 +1338,35 @@ $(document).ready(function () {
         rows[i].style.display = match ? "" : "none";
       }
     });
+  });
+</script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const baseUnit = document.getElementById('base_unit_id');
+    const convRate = document.getElementById('conversion_rate');
+    const unitSelect = document.getElementById('unit_id');
+
+    function toggleConversionRate() {
+      const baseUnitName = baseUnit.options[baseUnit.selectedIndex].text;
+      const baseUnitValue = baseUnit.value;
+      const unitValue = unitSelect.value;
+
+      // Disable conversion rate if:
+      // 1. Base unit is "Not Applicable" OR
+      // 2. Base unit is same as regular unit
+      if (baseUnitName === 'Not Applicable' || baseUnitValue === unitValue) {
+        convRate.value = '';
+        convRate.disabled = true;
+        convRate.placeholder = 'Not needed';
+      } else {
+        convRate.disabled = false;
+        convRate.placeholder = 'e.g., 10 (if 1 box = 10 pieces)';
+      }
+    }
+
+    baseUnit.addEventListener('change', toggleConversionRate);
+    unitSelect.addEventListener('change', toggleConversionRate);
+    toggleConversionRate(); // run on load
   });
 </script>

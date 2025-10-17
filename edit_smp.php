@@ -19,7 +19,6 @@ if (!$item) {
 // ✅ Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_item'])) {
     $fund_cluster     = remove_junk($db->escape($_POST['fund_cluster']));
-    $property_no      = trim($_POST['property_no']) !== '' ? "'" . $db->escape($_POST['property_no']) . "'" : "NULL";
     $inv_item_no      = trim($_POST['inv_item_no']) !== '' ? "'" . $db->escape($_POST['inv_item_no']) . "'" : "NULL";
     $item = remove_junk($db->escape($_POST['item']));
     $item_description = remove_junk($db->escape($_POST['item_description']));
@@ -32,7 +31,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_item'])) {
     $query  = "UPDATE semi_exp_prop SET 
         fund_cluster='{$fund_cluster}',
         inv_item_no={$inv_item_no},
-        property_no={$property_no},
         item='{$item}',
         item_description='{$item_description}',
         unit='{$unit}',

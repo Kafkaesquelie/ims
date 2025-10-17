@@ -3,41 +3,44 @@ $page_title = 'Edit Item';
 require_once('includes/load.php');
 page_require_level(1); // Only admins
 
-// Check if id is provided
+// ✅ Check if id is provided
 if (!isset($_GET['id']) || empty($_GET['id'])) {
     $session->msg('d', 'Missing item ID.');
     redirect('items.php');
 }
 $item_id = (int)$_GET['id'];
 
-// Fetch item by ID
+// ✅ Fetch item by ID
 $item = find_by_id('items', $item_id);
 if (!$item) {
     $session->msg('d', 'Item not found.');
     redirect('items.php');
 }
 
+// ✅ Dropdown data
+$base_units = find_all('base_units');
 $units = find_all('units');
-// Fetch all categories for select dropdown
 $categories = find_all('categories');
 
 if (isset($_POST['update_item'])) {
-    $req_fields = ['name', 'categorie_id', 'unit_name', 'quantity', 'unit_cost'];
+    $req_fields = ['name', 'categorie_id', 'unit_id', 'quantity', 'unit_cost'];
     validate_fields($req_fields);
 
     if (empty($errors)) {
         $name         = remove_junk($db->escape($_POST['name']));
-        $fund_cluster     = remove_junk($db->escape($_POST['fund_cluster']));
+        $fund_cluster = remove_junk($db->escape($_POST['fund_cluster']));
         $stock_card   = remove_junk($db->escape($_POST['stock_card']));
         $categorie_id = (int)$db->escape($_POST['categorie_id']);
-        $unit_id = (int)$db->escape($_POST['unit_id']);
+        $unit_id      = (int)$db->escape($_POST['unit_id']);
         $quantity     = (int)$db->escape($_POST['quantity']);
         $unit_cost    = (float)$db->escape($_POST['unit_cost']);
+        $base_unit_id = (int)$db->escape($_POST['base_unit_id']);
+        $conversion_rate = isset($_POST['conversion_rate']) ? (float)$db->escape($_POST['conversion_rate']) : 1;
 
-        // Default: keep existing media_id
+        $user = current_user();
         $media_id = $item['media_id'];
 
-        // Handle image upload
+        // ✅ Handle image upload
         if (isset($_FILES['image']) && $_FILES['image']['name'] != "") {
             $file_name = basename($_FILES['image']['name']);
             $target_dir = "uploads/items/";
@@ -58,28 +61,86 @@ if (isset($_POST['update_item'])) {
             }
         }
 
-        // Update the item
+        $old_quantity = (int)$item['quantity'];
+
+        // ✅ Update item details
         $sql = "UPDATE items SET 
                     name = '{$name}',
                     fund_cluster = '{$fund_cluster}',
                     stock_card = '{$stock_card}',
                     categorie_id = '{$categorie_id}',
                     unit_id = '{$unit_id}',
+                    base_unit_id = '{$base_unit_id}',
                     quantity = '{$quantity}',
                     unit_cost = '{$unit_cost}',
-                    media_id = '{$media_id}'
+                    media_id = '{$media_id}',
+                    last_edited = NOW()
                 WHERE id = '{$item_id}' LIMIT 1";
 
         if ($db->query($sql)) {
+
+            // ✅ Get current school year
+            function get_current_school_year_id() {
+                global $db;
+                $res = $db->query("SELECT id FROM school_years WHERE is_current = 1 LIMIT 1");
+                if ($res && $db->num_rows($res) > 0) {
+                    $row = $res->fetch_assoc();
+                    return (int)$row['id'];
+                }
+                return null;
+            }
+            $current_sy_id = get_current_school_year_id();
+            $changed_by = $user['name'];
+
+            // ✅ Update or insert into unit_conversions (always)
+            if ($base_unit_id && $conversion_rate > 0 && $base_unit_id != $unit_id) {
+                $check_conv = $db->query("SELECT id FROM unit_conversions 
+                                          WHERE item_id = '{$item_id}' 
+                                          AND from_unit_id = '{$unit_id}' 
+                                          AND to_unit_id = '{$base_unit_id}' LIMIT 1");
+                if ($db->num_rows($check_conv) > 0) {
+                    $db->query("UPDATE unit_conversions 
+                                SET conversion_rate = '{$conversion_rate}' 
+                                WHERE item_id = '{$item_id}' 
+                                AND from_unit_id = '{$unit_id}' 
+                                AND to_unit_id = '{$base_unit_id}'");
+                } else {
+                    $db->query("INSERT INTO unit_conversions (item_id, from_unit_id, to_unit_id, conversion_rate) 
+                                VALUES ('{$item_id}', '{$unit_id}', '{$base_unit_id}', '{$conversion_rate}')");
+                }
+            }
+
+            // ✅ Log stock history if quantity changed
+            if ($old_quantity != $quantity) {
+                $change_type = $quantity > $old_quantity ? 'stock_in' : 'adjustment';
+                $remarks = "Quantity changed from {$old_quantity} to {$quantity}.";
+                $db->query("INSERT INTO stock_history 
+                            (item_id, previous_qty, new_qty, change_type, changed_by, remarks, date_changed) 
+                            VALUES 
+                            ('{$item_id}', '{$old_quantity}', '{$quantity}', '{$change_type}', '{$changed_by}', '{$remarks}', NOW())");
+            }
+
+            // ✅ Sync yearly stock
+            if ($current_sy_id) {
+                $check = $db->query("SELECT id FROM item_stocks_per_year 
+                                     WHERE item_id='{$item_id}' AND school_year_id='{$current_sy_id}' LIMIT 1");
+                if ($db->num_rows($check) > 0) {
+                    $db->query("UPDATE item_stocks_per_year 
+                                SET stock='{$quantity}', updated_at=NOW() 
+                                WHERE item_id='{$item_id}' AND school_year_id='{$current_sy_id}'");
+                } else {
+                    $db->query("INSERT INTO item_stocks_per_year (item_id, school_year_id, stock, updated_at) 
+                                VALUES ('{$item_id}', '{$current_sy_id}', '{$quantity}', NOW())");
+                }
+            }
+
             $session->msg('s', 'Item updated successfully!');
             redirect('items.php', false);
-        } else {
-            $session->msg('d', 'Failed to update item.');
-            redirect('edit_item.php?id=' . $item_id, false);
         }
     }
 }
 ?>
+
 
 <?php include_once('layouts/header.php');  ?>
 
@@ -475,7 +536,7 @@ if (isset($_POST['update_item'])) {
                                 <div class="row">
                                     <div class="col-12 mb-3">
                                         <label class="form-label-custom">Item Name</label>
-                                        <input type="text" class="form-control-custom" name="name"
+                                        <input type="text" class="form-control-custom w-100" name="name"
                                             value="<?php echo remove_junk($item['name']); ?>"
                                             placeholder="Enter item name" required>
                                     </div>
@@ -483,13 +544,13 @@ if (isset($_POST['update_item'])) {
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Fund Cluster</label>
-                                        <input type="text" class="form-control-custom" name="fund_cluster"
+                                        <input type="text" class="form-control-custom w-100" name="fund_cluster"
                                             value="<?php echo remove_junk($item['fund_cluster']); ?>"
                                             placeholder="Enter fund cluster">
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Stock Number</label>
-                                        <input type="text" class="form-control-custom" name="stock_card"
+                                        <input type="text" class="form-control-custom w-100" name="stock_card"
                                             value="<?php echo remove_junk($item['stock_card']); ?>"
                                             placeholder="Enter stock number">
                                     </div>
@@ -500,7 +561,7 @@ if (isset($_POST['update_item'])) {
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Category</label><br>
-                                        <select class="form-select-custom" name="categorie_id" required>
+                                        <select class="form-select-custom w-100" name="categorie_id" required>
                                             <?php foreach ($categories as $cat): ?>
                                                 <option value="<?php echo (int)$cat['id']; ?>"
                                                     <?php if ($item['categorie_id'] == $cat['id']) echo 'selected'; ?>>
@@ -525,6 +586,29 @@ if (isset($_POST['update_item'])) {
 
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
+                                        <label class="form-label-custom">Base Unit</label>
+                                        <select class="form-select-custom p-2 w-100" name="base_unit_id" required>
+                                            <?php foreach ($base_units as $bunit): ?>
+                                                <option value="<?php echo (int)$bunit['id']; ?>"
+                                                    <?php if ($item['base_unit_id'] == $bunit['id']) echo 'selected'; ?>>
+                                                    <?php echo remove_junk($bunit['name']); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <small class="text-muted">Select <strong>Not Applicable</strong> if no conversion is needed.</small>
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label-custom">Conversion Rate</label>
+                                        <input type="number" step="0.0001" min="0" class="form-control-custom w-100"
+                                            name="conversion_rate" placeholder="e.g., 12 (items per box)">
+                                        <small class="text-muted">Enter how many base units are in one unit (leave 1 if not applicable).</small>
+                                    </div>
+                                </div>
+
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Quantity</label>
 
                                         <?php
@@ -541,7 +625,7 @@ if (isset($_POST['update_item'])) {
                                         </span>
 
                                         <div class="input-group">
-                                            <input type="number" class="form-control-custom" name="quantity"
+                                            <input type="number" class="form-control-custom w-100" name="quantity"
                                                 value="<?php echo remove_junk($item['quantity']); ?>"
                                                 min="0" required>
 

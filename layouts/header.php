@@ -339,7 +339,7 @@ $user = current_user();
                          <li class="nav-item">
                             <a href="issued_properties.php" class="nav-link">
                                 <i class="fa-solid fa-right-left"></i>
-                                <p>Return Issued Item                               
+                                <p> Return & Re-issue                         
                                 </p>
                             </a>
                         </li>
@@ -354,7 +354,7 @@ $user = current_user();
                         <li class="nav-item">
                             <a href="stock_card.php" class="nav-link">
                                 <i class="nav-icon fas fa-clipboard-list"></i>
-                                <p>Stock Card</p>
+                                <p>Stock & Property Card</p>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -387,13 +387,13 @@ $user = current_user();
                         <li class="nav-item">
                             <a href="smp.php" class="nav-link">
                                 <i class="nav-icon fa-solid fa-screwdriver-wrench"></i>
-                                <p>Semi-Exp Property</p>
+                                <p>Semi-Exp Properties</p>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a href="ppe.php" class="nav-link">
                                 <i class="nav-icon fa-solid fa-building"></i>
-                                <p>Property Plant & Equipment</p>
+                                <p> Equipments</p>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -402,18 +402,19 @@ $user = current_user();
                                 <p>Categories</p>
                             </a>
                         </li>
+                        
+
+                        <li class="nav-header">ADMINISTRATION</li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <i class="nav-icon fas fa-chart-line"></i>
+                                <p>Reports & Analytics</p>
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a href="refs.php" class="nav-link">
                                 <i class="nav-icon fas fa-tags"></i>
                                 <p>References</p>
-                            </a>
-                        </li>
-
-                        <li class="nav-header">ADMINISTRATION</li>
-                        <li class="nav-item">
-                            <a href="reps.php" class="nav-link">
-                                <i class="nav-icon fas fa-chart-line"></i>
-                                <p>Reports & Analytics</p>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -481,7 +482,7 @@ $user = current_user();
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="ICS.PHP" class="nav-link">
+                            <a href="ics.php" class="nav-link">
                                 <i class="nav-icon fa-solid fa-box-archive"></i>
                                 <p>Inventory Custodian Slip</p>
                             </a>
@@ -550,7 +551,6 @@ $user = current_user();
                 });
             }
 
-            // Add active class to current page menu item
             const currentPage = window.location.pathname.split('/').pop();
             const menuLinks = document.querySelectorAll('.nav-link[href]');
             

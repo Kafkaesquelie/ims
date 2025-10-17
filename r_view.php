@@ -3,29 +3,6 @@ $page_title = 'View Request';
 require_once('includes/load.php');
 page_require_level(1);
 
-// ✅ Handle inline RIS update via AJAX
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id'], $_POST['ris_no'])) {
-    $id = (int)$_POST['id'];
-    $input_ris = remove_junk($db->escape($_POST['ris_no']));
-
-    // Ensure format YYYY-MM-XXXX
-    if (!preg_match('/^\d{4}-\d{2}-\d{4}$/', $input_ris)) {
-        // Auto-prepend year-month if user just typed '0001' etc.
-        $ris_no = date("Y-m") . '-' . str_pad($input_ris, 4, '0', STR_PAD_LEFT);
-    } else {
-        $ris_no = $input_ris;
-    }
-
-    $sql = "UPDATE requests SET ris_no = '{$ris_no}' WHERE id = '{$id}'";
-    if ($db->query($sql)) {
-        echo "success";
-    } else {
-        echo "error: " . $db->con->error;
-    }
-    exit;
-}
-
-
 $request_id = (int)$_GET['id'];
 
 // Fetch request info
@@ -36,133 +13,491 @@ if (!$request) {
 }
 
 // Get requestor name
-// Try users table first
 $user = find_by_id('users', $request['requested_by']);
 if ($user) {
     $requestor_name = $user['name'];
+    $requestor_position = $user['position'] ?? '';
 } else {
-    // Check employees table
     $employee = find_by_id('employees', $request['requested_by']);
     if ($employee) {
         $first = remove_junk($employee['first_name']);
         $middle = remove_junk($employee['middle_name']);
         $last = remove_junk($employee['last_name']);
-        // Concatenate all parts, ignore empty middle name
         $requestor_name = trim("$first $middle $last");
+        $requestor_position = $employee['position'] ?? '';
     } else {
         $requestor_name = 'Unknown';
+        $requestor_position = '';
     }
 }
 
 // Fetch requested items
-$items = find_request_items($request_id); 
+$items = find_by_sql("
+    SELECT 
+        ri.item_id,
+        ri.qty,
+        ri.unit,
+        ri.remarks,
+        i.name as item_name,
+        i.stock_card,
+        i.fund_cluster
+    FROM request_items ri
+    LEFT JOIN items i ON ri.item_id = i.id
+    WHERE ri.req_id = '{$request_id}'
+");
 
-// Define number of copies
-$copies = 3;
+// Get unique fund clusters
+$fund_clusters = array_unique(array_column($items, 'fund_cluster'));
+$fund_cluster_display = !empty($fund_clusters) ? implode(', ', array_filter($fund_clusters)) : '__________';
 
 // Current logged-in user
 $current_user = current_user();
 $current_user_name = $current_user ? remove_junk($current_user['name']) : "System User";
+$current_user_position = $current_user['position'] ?? 'Administrator';
 
-// Generate RIS format if empty
-$ris_no_display = !empty($request['ris_no'])
-    ? $request['ris_no']
-    : date("Y-m") . '-0000';
+// Generate RIS format
+$ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") . '-0000';
 
 ?>
 
 <?php include_once('layouts/header.php'); ?>
 
 <style>
+/* Main Styling - Green Theme */
+:root {
+    --primary-green: #1e7e34;
+    --secondary-green: #28a745;
+    --light-green: #d4edda;
+    --dark-green: #155724;
+    --accent-green: #34ce57;
+    --border-color: #c3e6cb;
+    --light-bg: #f8fff9;
+}
+
+.ris-form {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(30, 126, 52, 0.15);
+    overflow: hidden;
+    margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+}
+
+.ris-header {
+    background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+    color: white;
+    padding: 1.5rem 2rem;
+    border-bottom: 4px solid var(--accent-green);
+}
+
+.ris-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+    text-align: center;
+    letter-spacing: 1px;
+}
+
+.ris-subtitle {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    text-align: center;
+    margin: 0.5rem 0 0 0;
+}
+
+.ris-body {
+    padding: 2rem;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--light-bg);
+    border-radius: 8px;
+    border-left: 4px solid var(--accent-green);
+    border: 1px solid var(--border-color);
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-label {
+    font-weight: 600;
+    color: var(--dark-green);
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-value {
+    font-weight: 500;
+    font-size: 1rem;
+    color: var(--dark-green);
+}
+
+.ris-display {
+    background: var(--primary-green);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    display: inline-block;
+    box-shadow: 0 2px 4px rgba(30, 126, 52, 0.3);
+}
+
+.fund-cluster-display {
+    background: var(--secondary-green);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-weight: 600;
+    display: inline-block;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+/* Table Styling */
+.items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(30, 126, 52, 0.1);
+    border: 1px solid var(--border-color);
+}
+
+.items-table thead {
+    background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+    color: white;
+}
+
+.items-table th {
+    padding: 1rem 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+}
+
+.items-table td {
+    padding: 1rem 0.75rem;
+    text-align: center;
+    border-bottom: 1px solid var(--light-green);
+    vertical-align: middle;
+}
+
+.items-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.items-table tbody tr:hover {
+    background-color: var(--light-bg);
+}
+
+.items-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.stock-check {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.stock-yes {
+    color: var(--primary-green);
+}
+
+.stock-no {
+    color: #dc3545;
+}
+
+/* Signatures Section */
+.signatures-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 2px dashed var(--border-color);
+}
+
+.signature-box {
+    text-align: center;
+    padding: 1rem;
+    background: var(--light-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.signature-label {
+    font-weight: 600;
+    color: var(--dark-green);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.signature-line {
+    border-bottom: 2px solid var(--border-color);
+    padding: 2rem 0 1rem 0;
+    margin-bottom: 0.5rem;
+    min-height: 60px;
+}
+
+.signature-name {
+    font-weight: 700;
+    color: var(--dark-green);
+    font-size: 0.95rem;
+}
+
+.signature-position {
+    font-size: 0.8rem;
+    color: var(--primary-green);
+    margin-top: 0.25rem;
+}
+
+/* Action Buttons */
+.action-buttons {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 1000;
+}
+
+.action-btn {
+    padding: 12px 24px;
+    border-radius: 50px;
+    font-weight: 600;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(30, 126, 52, 0.3);
+    transition: all 0.3s ease;
+    border: none;
+    min-width: 140px;
+    justify-content: center;
+    font-size: 0.9rem;
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(30, 126, 52, 0.4);
+    text-decoration: none;
+}
+
+.btn-back {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-back:hover {
+    background: #5a6268;
+}
+
+.btn-approve {
+    background: var(--primary-green);
+    color: white;
+}
+
+.btn-approve:hover {
+    background: var(--dark-green);
+}
+
+.btn-print {
+    background: var(--secondary-green);
+    color: white;
+}
+
+.btn-print:hover {
+    background: var(--primary-green);
+}
+
+/* Print Styles */
 @media print {
-    /* Hide everything first */
     body * {
         visibility: hidden;
     }
-
-    /* Show only the print area */
-    .print-area, .print-area * {
+    
+    .ris-form, .ris-form * {
         visibility: visible;
     }
-
-    /* Hide floating buttons, header, footer */
-    .fab-container,
-    header,
-    footer {
+    
+    .action-buttons, header, footer, .breadcrumb {
         display: none !important;
     }
-
-    .print-area {
-        position: static;
+    
+    .ris-form {
+        box-shadow: none;
         margin: 0;
         padding: 0;
-        width: 100%;
+        border: 1px solid #000;
     }
-
-    .form-container {
-        page-break-inside: avoid;
-        margin-bottom: 5px;
-        padding: 5px 8px;
-        font-size: 10px;
+    
+    .ris-body {
+        padding: 1rem;
     }
-
-    table {
-        font-size: 10px;
+    
+    .items-table {
+        font-size: 11px;
+        border: 1px solid #000;
     }
-
-    h4 {
-        font-size: 12px;
+    
+    .signatures-grid {
+        margin-top: 1rem;
+        padding-top: 1rem;
     }
-
+    
+    .info-grid {
+        background: white !important;
+        border: 1px solid #000 !important;
+    }
+    
+    .signature-box {
+        background: white !important;
+        border: 1px solid #000 !important;
+    }
+    
     @page {
         size: legal portrait;
-        margin: 0.3in; /* reduce margins to fit all copies */
+        margin: 0.5in;
     }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .info-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .signatures-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .action-buttons {
+        bottom: 20px;
+        right: 20px;
+        left: 20px;
+        flex-direction: row;
+        justify-content: center;
+    }
+    
+    .action-btn {
+        min-width: auto;
+        padding: 10px 20px;
+        font-size: 0.8rem;
+    }
+    
+    .items-table {
+        font-size: 0.8rem;
+    }
+    
+    .items-table th,
+    .items-table td {
+        padding: 0.5rem 0.25rem;
+    }
+    
+    .ris-header {
+        padding: 1rem 1.5rem;
+    }
+    
+    .ris-title {
+        font-size: 1.4rem;
+    }
+}
+
+/* Additional Green Accents */
+.ris-form::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-green), var(--accent-green), var(--secondary-green));
+}
+
+.breadcrumb {
+    background: var(--light-bg);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+}
+
+.breadcrumb-item.active {
+    color: var(--primary-green);
+    font-weight: 600;
+}
+
+.breadcrumb-item a {
+    color: var(--secondary-green);
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: var(--dark-green);
+    text-decoration: underline;
 }
 </style>
 
-
 <div class="container-fluid my-4">
     <div class="row">
-        <div class="col-md-12">
-            <div class="print-area">             
-                <div class="form-container border p-2 mb-2 shadow-sm 
-                    <?php echo isset($_SESSION['dark_mode']) && $_SESSION['dark_mode'] ? 'bg-dark text-light' : 'bg-white text-dark'; ?>">
+        <div class="col-12">
+           
 
-                    <h4 class="text-center mb-1">REQUISITION AND ISSUE SLIP</h4>
-
-                    <div class="d-flex justify-content-between mb-1">
-                        <div><strong>Entity Name:</strong> BENGUET STATE UNIVERSITY - BOKOD CAMPUS</div>
-                        <div><strong>Fund Cluster:</strong> __________</div>
+            <!-- RIS Form -->
+            <div class="ris-form position-relative">
+                <div class="ris-header">
+                    <h1 class="ris-title">REQUISITION AND ISSUE SLIP</h1>
+                    <p class="ris-subtitle">BENGUET STATE UNIVERSITY - BOKOD CAMPUS</p>
+                </div>
+                
+                <div class="ris-body">
+                    <!-- Information Grid -->
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Entity Name</span>
+                            <span class="info-value">BENGUET STATE UNIVERSITY - BOKOD CAMPUS</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Fund Cluster</span>
+                            <span class="fund-cluster-display"><?= $fund_cluster_display ?></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Responsibility Center Code</span>
+                            <span class="info-value">BOKOD</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">RIS Number</span>
+                            <span class="ris-display"><?= $ris_no_display ?></span>
+                        </div>
                     </div>
-                    <div class="d-flex justify-content-between mb-1">
-                        <div><strong>Responsibility Center Code:</strong> __________</div>
-                      <div style="display:inline-flex; align-items:center; gap:3px;">
-    <span><?= date("Y-m") ?>-</span>
-    <input 
-        type="text" 
-        id="risSeqInput" 
-        maxlength="4" 
-        value="<?= substr($ris_no_display, -4) ?>" 
-        onblur="updateRIS(<?= $request_id ?>, this.value)" 
-        style="width:50px; border:none; border-bottom:1px solid #000; text-align:center; outline:none;"
-    />
-</div>
 
-
-
-                    </div>
-
+                    <!-- Items Table -->
                     <div class="table-responsive">
-                        <table class="table table-sm text-center align-middle table-bordered">
-                            <thead class="table-secondary">
+                        <table class="items-table">
+                            <thead>
                                 <tr>
                                     <th>Stock No.</th>
                                     <th>Unit</th>
-                                    <th>Description</th>
+                                    <th>Item Description</th>
                                     <th>Quantity</th>
-                                    <th colspan="2">Stock Available?</th>
-                                    <th>Issue Qty</th>
+                                    <th colspan="2">Stock Available</th>
+                                    <th>Issue Quantity</th>
                                     <th>Remarks</th>
                                 </tr>
                                 <tr>
@@ -178,49 +513,74 @@ $ris_no_display = !empty($request['ris_no'])
                             </thead>
                             <tbody>
                                 <?php foreach ($items as $item): 
-                                    $stock_available = isset($item['stock']) ? ($item['qty'] <= $item['stock']) : true;
+                                    $item_stock = find_by_id('items', $item['item_id']);
+                                    $stock_available = $item_stock ? ($item['qty'] <= $item_stock['quantity']) : false;
                                 ?>
                                 <tr>
-                                    <td>0<?php echo (int)$item['stock_card']; ?></td>
-                                    <td><?php echo remove_junk($item['UOM']); ?></td>
-                                    <td><?php echo remove_junk($item['item_name']); ?></td>
-                                    <td><?php echo (int)$item['qty']; ?></td>
-                                    <td><?php echo $stock_available ? '✔' : ''; ?></td>
-                                    <td><?php echo !$stock_available ? '✔' : ''; ?></td>
-                                    <td><?php echo (int)$item['qty']; ?></td>
-                                    <td><?php echo remove_junk($item['remarks']); ?></td>
+                                    <td><strong>0<?= (int)$item['stock_card'] ?></strong></td>
+                                    <td><?= remove_junk($item['unit']) ?></td>
+                                    <td><?= remove_junk($item['item_name']) ?></td>
+                                    <td><strong><?= (float)$item['qty'] ?></strong></td>
+                                    <td>
+                                        <?php if ($stock_available): ?>
+                                            <span class="stock-check stock-yes">✔</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!$stock_available): ?>
+                                            <span class="stock-check stock-no">✘</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><strong><?= (float)$item['qty'] ?></strong></td>
+                                    <td><small><?= remove_junk($item['remarks']) ?: '-' ?></small></td>
                                 </tr>
                                 <?php endforeach; ?>
-                                <?php for ($i = 0; $i <3 ; $i++): ?>
+                                
+                                <!-- Empty rows for additional items -->
+                                <?php for ($i = 0; $i < 3; $i++): ?>
                                 <tr>
-                                    <td>&nbsp;</td><td></td><td></td><td></td>
-                                    <td></td><td></td><td></td><td></td>
+                                    <td>&nbsp;</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
                                 </tr>
                                 <?php endfor; ?>
                             </tbody>
                         </table>
                     </div>
 
-                    <div class="row text-center mt-2">
-                        <div class="col">
-                            <p>Requested by:</p>
-                            <hr>
-                            <p><b><?php echo remove_junk($requestor_name); ?></b></p>
+                    <!-- Signatures Section -->
+                    <div class="signatures-grid">
+                        <div class="signature-box">
+                            <div class="signature-label">Requested by:</div>
+                            <div class="signature-line"></div>
+                            <div class="signature-name"><?= remove_junk($requestor_name) ?></div>
+                            <div class="signature-position"><?= remove_junk($requestor_position) ?></div>
                         </div>
-                        <div class="col">
-                            <p>Approved by:</p>
-                            <hr>
-                            <p><b><?php echo $current_user_name; ?></b></p>
+                        
+                        <div class="signature-box">
+                            <div class="signature-label">Approved by:</div>
+                            <div class="signature-line"></div>
+                            <div class="signature-name"><?= $current_user_name ?></div>
+                            <div class="signature-position"><?= $current_user_position ?></div>
                         </div>
-                        <div class="col">
-                            <p>Issued by:</p>
-                            <hr>
-                            <p><b><?php echo $current_user_name; ?></b></p>
+                        
+                        <div class="signature-box">
+                            <div class="signature-label">Issued by:</div>
+                            <div class="signature-line"></div>
+                            <div class="signature-name"><?= $current_user_name ?></div>
+                            <div class="signature-position"><?= $current_user_position ?></div>
                         </div>
-                        <div class="col">
-                            <p>Received by:</p>
-                            <hr>
-                            <p>___________________</p>
+                        
+                        <div class="signature-box">
+                            <div class="signature-label">Received by:</div>
+                            <div class="signature-line"></div>
+                            <div class="signature-name">___________________</div>
+                            <div class="signature-position">Signature over Printed Name</div>
                         </div>
                     </div>
                 </div>
@@ -229,119 +589,40 @@ $ris_no_display = !empty($request['ris_no'])
     </div>
 </div>
 
-
-          <!-- Floating Action Buttons -->
-<div class="fab-container">
-    <a href="requests.php" class="btn btn-secondary fab-btn">
+<!-- Action Buttons -->
+<div class="action-buttons">
+    <a href="requests.php" class="action-btn btn-back">
         <i class="fas fa-arrow-left"></i> Back
     </a>
+
+    
     <?php if(strtolower($request['status']) !== 'approved'): ?>
-    <a href="approve_req.php?id=<?php echo (int)$request['id']; ?>" 
-       class="btn btn-success approve-btn fab-btn">
-       <i class="fas fa-check"></i> Approve
+    <a href="approve_req.php?id=<?= (int)$request['id'] ?>" class="action-btn btn-approve approve-btn">
+        <i class="fas fa-check"></i> Approve
     </a>
     <?php endif; ?>
-      <button class="btn btn-success" style=" border-radius: 50px" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button>
 </div>
-
-<style>
-/* Floating Action Buttons container */
-.fab-container {
-    position: fixed;
-    bottom: 60px;
-    right: 20px;
-    display: flex;
-    flex-direction: row;   /* now side by side */
-    gap: 10px;
-    z-index: 1050;
-    flex-wrap: wrap;       /* if too narrow, buttons wrap */
-}
-
-/* Styling for each button */
-.fab-btn {
-    padding: 12px 20px;
-    border-radius: 50px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease-in-out;
-    white-space: nowrap; /* keep text from breaking */
-}
-
-.fab-btn:hover {
-    transform: scale(1.05);
-}
-#risSeqInput {
-    border: none;
-    border-bottom: 1px solid #000;
-    outline: none;
-    width: 50px;
-    text-align: center;
-    background: transparent;
-}
-#risSeqInput:focus {
-    border-bottom: 1px solid #007bff;
-}
-
-</style>
-
-
-        </div>
-    </div>
-</div>
-
-
-<script>
-function updateRIS(requestId, newSeq) {
-    // Ensure only digits and pad to 4 characters
-    newSeq = newSeq.replace(/\D/g, '').padStart(4, '0');
-    const yearMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-    const fullRIS = `${yearMonth}-${newSeq}`;
-
-    fetch('r_view.php?id=' + requestId, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `id=${requestId}&ris_no=${encodeURIComponent(fullRIS)}`
-    })
-    .then(res => res.text())
-    .then(data => console.log('RIS Updated:', data))
-    .catch(err => console.error('Error updating RIS:', err));
-}
-</script>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Approval confirmation
     document.querySelectorAll('.approve-btn').forEach(function(button) {
         button.addEventListener('click', function(e) {
             e.preventDefault();
             const url = this.getAttribute('href');
             
-            // Get current RIS number from the editable span
-            const risSpan = document.querySelector('[contenteditable][onblur^="updateRIS"]');
-            const risValue = risSpan ? risSpan.innerText.trim() : '';
-
-            // Check if RIS number is complete (format: YYYY-MM-XXXX)
-            const risPattern = /^\d{4}-\d{2}-\d{4}$/;
-
-            if (!risPattern.test(risValue)) {
-                Swal.fire({
-                    title: 'Incomplete RIS Number',
-                    text: 'Please complete the RIS number in the format YYYY-MM-XXXX before approving.',
-                    icon: 'error',
-                    confirmButtonColor: '#d33',
-                    confirmButtonText: 'OK'
-                });
-                return; // stop approval
-            }
-
-            // Confirm approval
             Swal.fire({
-                title: 'Are you sure?',
-                text: "This request will be approved.",
-                icon: 'warning',
+                title: 'Approve This Request?',
+                text: 'This action will approve the request and cannot be undone.',
+                icon: 'question',
                 showCancelButton: true,
-                confirmButtonColor: '#28a745',
+                confirmButtonColor: '#1e7e34',
                 cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Yes, Approve!'
+                confirmButtonText: 'Yes, Approve Request',
+                cancelButtonText: 'Cancel',
+                background: '#fff',
+                backdrop: 'rgba(30, 126, 52, 0.1)'
             }).then((result) => {
                 if (result.isConfirmed) {
                     window.location.href = url;
@@ -352,8 +633,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-
-
-
-
-<?php include_once('layouts/footer.php'); ?>  
+<?php include_once('layouts/footer.php'); ?>

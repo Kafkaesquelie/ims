@@ -72,10 +72,6 @@ switch ($referer) {
     }
     break;
 
-
-
-
-
     default:
         $session->msg("d", "Unknown archive source.");
         redirect($_SERVER['HTTP_REFERER'], false);

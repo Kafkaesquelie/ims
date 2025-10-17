@@ -24,13 +24,14 @@ $issued_items = find_by_sql("
         r.ris_no,
         i.stock_card,
         i.name AS item_name,
-        i.UOM AS unit,
+        un.symbol AS unit,
         ri.qty AS qty_issued,
         i.unit_cost,
         (ri.qty * i.unit_cost) AS amount,
         i.fund_cluster
     FROM request_items ri
     JOIN requests r ON ri.req_id = r.id
+    JOIN units un ON i.unit_id = un.id
     JOIN items i ON ri.item_id = i.id
     WHERE r.status = 'Approved'
       AND i.stock_card IS NOT NULL

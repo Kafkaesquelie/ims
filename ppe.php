@@ -57,7 +57,7 @@ $properties_by_type = [
 
 foreach ($all_properties as $property) {
   $category_name = strtolower($property['category_name'] ?? '');
-  
+
   if (strpos($category_name, 'plant') !== false) {
     $properties_by_type['plant'][] = $property;
   } elseif (strpos($category_name, 'equipment') !== false) {
@@ -74,7 +74,8 @@ $equipment_count = count($properties_by_type['equipment']);
 $total_count = count($all_properties);
 
 // Calculate total values for each type
-function calculate_total_value($items) {
+function calculate_total_value($items)
+{
   $total = 0;
   foreach ($items as $item) {
     $total += ($item['unit_cost'] * $item['qty']);
@@ -178,7 +179,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
     width: 100%;
     display: flex;
     margin-bottom: 1.5rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
   .nav-tabs-custom .nav-item {
@@ -247,8 +248,15 @@ $total_value = $property_value + $plant_value + $equipment_value;
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   /* Table Styles */
@@ -381,7 +389,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
 
   .stat-item:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
   }
 
   .stat-value {
@@ -566,7 +574,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
     width: 300px;
     z-index: 1000;
     font-size: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   /* Responsive Design */
@@ -574,31 +582,31 @@ $total_value = $property_value + $plant_value + $equipment_value;
     .nav-tabs-custom {
       flex-direction: column;
     }
-    
+
     .nav-tabs-custom .nav-item {
       flex: none;
     }
-    
+
     .nav-tabs-custom .nav-link {
       padding: 1rem 0.5rem;
       font-size: 0.9rem;
     }
-    
+
     .tab-badge {
       font-size: 0.7rem;
       padding: 0.2rem 0.4rem;
       min-width: 25px;
     }
-    
+
     .stats-grid {
       grid-template-columns: 1fr;
     }
-    
+
     .header-actions {
       flex-direction: column;
       gap: 0.5rem;
     }
-    
+
     .search-box {
       max-width: 100%;
     }
@@ -621,11 +629,9 @@ $total_value = $property_value + $plant_value + $equipment_value;
       <div class="header-actions">
         <div class="search-box">
           <i class="fas fa-search search-icon"></i>
-          <input type="text" class="form-control" placeholder="Search properties..." id="searchInput">
+          <input type="text" class="form-control" placeholder="Search..." id="searchInput">
         </div>
-        <button type="button" id="showAddFormBtn" class="btn btn-primary-custom">
-          <i class="fas fa-plus me-2"></i> Add Property
-        </button>
+
       </div>
     </div>
   </div>
@@ -662,12 +668,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
         <span class="tab-badge"><?php echo $property_count; ?></span>
       </button>
     </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="plant-tab" data-bs-toggle="tab" data-bs-target="#plant" type="button" role="tab">
-        <i class="fas fa-seedling me-2"></i>Plant
-        <span class="tab-badge"><?php echo $plant_count; ?></span>
-      </button>
-    </li>
+
     <li class="nav-item" role="presentation">
       <button class="nav-link" id="equipment-tab" data-bs-toggle="tab" data-bs-target="#equipment" type="button" role="tab">
         <i class="fas fa-tools me-2"></i>Equipment
@@ -678,9 +679,94 @@ $total_value = $property_value + $plant_value + $equipment_value;
 
   <!-- Tab Content -->
   <div class="tab-content" id="ppeTabsContent">
-    
-    <!-- Properties Tab -->
+
+
+    <!-- Property Tab -->
     <div class="tab-pane fade show active tab-property" id="property" role="tabpanel">
+      <?php if ($equipment_count > 0): ?>
+        <div class="table-responsive">
+          <table class="table table-custom" id="equipmentTable">
+            <thead>
+              <tr>
+                <th class="text-center">#</th>
+                <th>Classification</th>
+                <th>Description</th>
+                <th>Nature of Occupancy</th>
+                <th class="custom-desc">Location</th>
+                <th class="text-center">Date Constructed</th>
+                <th class="text-center">Reference</th>
+                <th class="text-center">Acquisition Cost</th>
+                <th class="text-center">Market/Appraisal</th>
+                <th class="text-center">Date of Appraisal</th>
+                <th class="text-center actions-column">Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($properties_by_type['equipment'] as $index => $property): ?>
+                <?php
+                $total_value = $property['unit_cost'] * $property['qty'];
+                $date_acquired = !empty($property['date_acquired'])
+                  ? date('M d, Y', strtotime($property['date_acquired']))
+                  : '-';
+                ?>
+                <tr>
+                  <td class="text-center">
+                    <span class="badge badge-custom badge-primary"><?= $index + 1 ?></span>
+                  </td>
+                  <td><?= remove_junk($property['fund_cluster']); ?></td>
+                  <td><strong><?= remove_junk($property['property_no']); ?></strong></td>
+                  <td><?= remove_junk($property['article']); ?><br>
+                    <small class="text-muted"> <?= remove_junk($property['unit']); ?></small>
+                  </td>
+                  <td class="custom-desc" title="<?= htmlspecialchars(remove_junk($property['description'])); ?>">
+                    <?php
+                    $desc = remove_junk($property['description']);
+                    echo strlen($desc) > 50 ? substr($desc, 0, 50) . '...' : $desc;
+                    ?>
+                  </td>
+                  <td class="text-center"><strong>₱<?= number_format($property['unit_cost'], 2); ?></strong></td>
+                  <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($property['qty']); ?></span></td>
+                  <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td>
+                  <td class="text-center"><?= $date_acquired; ?></td>
+                  <td class="text-center">
+                    <div class="btn-group btn-group-custom">
+                      <a href="edit_ppe.php?id=<?= (int)$property['id']; ?>"
+                        class="btn btn-warning-custom" title="Edit">
+                        <i class="fas fa-edit"></i>
+                      </a>
+                      <a href="archive_property.php?id=<?= (int)$property['id']; ?>"
+                        class="btn btn-danger-custom archive-btn"
+                        data-id="<?= (int)$property['id']; ?>"
+                        title="Archive">
+                        <i class="fa-solid fa-file-zipper"></i>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php else: ?>
+        <div class="empty-state">
+          <i class="fas fa-tools empty-state-icon"></i>
+          <h4>No Equipment Found</h4>
+          <p>Get started by adding your first equipment</p>
+          <button type="button" class="btn btn-primary-custom show-add-form">
+            <i class="fas fa-plus me-2"></i> Add Equipment
+          </button>
+        </div>
+      <?php endif; ?>
+    </div>
+  </div>
+
+
+  
+    <!-- Equipments Tab -->
+    <div class="tab-pane fade tab-equipments" id="equipment" role="tabpanel">
+      <button type="button" id="showAddFormBtn" class="btn btn-primary-custom">
+        <i class="fas fa-plus me-2"></i> Add Equipment
+      </button>
       <?php if ($property_count > 0): ?>
         <div class="table-responsive">
           <table class="table table-custom" id="propertyTable">
@@ -756,160 +842,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
       <?php endif; ?>
     </div>
 
-    <!-- Plant Tab -->
-    <div class="tab-pane fade tab-plant" id="plant" role="tabpanel">
-      <?php if ($plant_count > 0): ?>
-        <div class="table-responsive">
-          <table class="table table-custom" id="plantTable">
-            <thead>
-              <tr>
-                <th class="text-center">#</th>
-                <th>Fund Cluster</th>
-                <th>Property No.</th>
-                <th>Article</th>
-                <th class="custom-desc">Description</th>
-                <th class="text-center">Unit Cost</th>
-                <th class="text-center">Qty</th>
-                <th class="text-center">Total Value</th>
-                <th class="text-center">Date Acquired</th>
-                <th class="text-center actions-column">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($properties_by_type['plant'] as $index => $property): ?>
-                <?php
-                $total_value = $property['unit_cost'] * $property['qty'];
-                $date_acquired = !empty($property['date_acquired'])
-                  ? date('M d, Y', strtotime($property['date_acquired']))
-                  : '-';
-                ?>
-                <tr>
-                  <td class="text-center">
-                    <span class="badge badge-custom badge-primary"><?= $index + 1 ?></span>
-                  </td>
-                  <td><?= remove_junk($property['fund_cluster']); ?></td>
-                  <td><strong><?= remove_junk($property['property_no']); ?></strong></td>
-                  <td><?= remove_junk($property['article']); ?><br>
-                    <small class="text-muted"> <?= remove_junk($property['unit']); ?></small>
-                  </td>
-                  <td class="custom-desc" title="<?= htmlspecialchars(remove_junk($property['description'])); ?>">
-                    <?php
-                    $desc = remove_junk($property['description']);
-                    echo strlen($desc) > 50 ? substr($desc, 0, 50) . '...' : $desc;
-                    ?>
-                  </td>
-                  <td class="text-center"><strong>₱<?= number_format($property['unit_cost'], 2); ?></strong></td>
-                  <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($property['qty']); ?></span></td>
-                  <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td>
-                  <td class="text-center"><?= $date_acquired; ?></td>
-                  <td class="text-center">
-                    <div class="btn-group btn-group-custom">
-                      <a href="edit_ppe.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-warning-custom" title="Edit">
-                        <i class="fas fa-edit"></i>
-                      </a>
-                      <a href="archive_property.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-danger-custom archive-btn"
-                        data-id="<?= (int)$property['id']; ?>"
-                        title="Archive">
-                        <i class="fa-solid fa-file-zipper"></i>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php else: ?>
-        <div class="empty-state">
-          <i class="fas fa-seedling empty-state-icon"></i>
-          <h4>No Plant Items Found</h4>
-          <p>Get started by adding your first plant item</p>
-          <button type="button" class="btn btn-primary-custom show-add-form">
-            <i class="fas fa-plus me-2"></i> Add Plant Item
-          </button>
-        </div>
-      <?php endif; ?>
-    </div>
 
-    <!-- Equipment Tab -->
-    <div class="tab-pane fade tab-equipment" id="equipment" role="tabpanel">
-      <?php if ($equipment_count > 0): ?>
-        <div class="table-responsive">
-          <table class="table table-custom" id="equipmentTable">
-            <thead>
-              <tr>
-                <th class="text-center">#</th>
-                <th>Fund Cluster</th>
-                <th>Property No.</th>
-                <th>Article</th>
-                <th class="custom-desc">Description</th>
-                <th class="text-center">Unit Cost</th>
-                <th class="text-center">Qty</th>
-                <th class="text-center">Total Value</th>
-                <th class="text-center">Date Acquired</th>
-                <th class="text-center actions-column">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($properties_by_type['equipment'] as $index => $property): ?>
-                <?php
-                $total_value = $property['unit_cost'] * $property['qty'];
-                $date_acquired = !empty($property['date_acquired'])
-                  ? date('M d, Y', strtotime($property['date_acquired']))
-                  : '-';
-                ?>
-                <tr>
-                  <td class="text-center">
-                    <span class="badge badge-custom badge-primary"><?= $index + 1 ?></span>
-                  </td>
-                  <td><?= remove_junk($property['fund_cluster']); ?></td>
-                  <td><strong><?= remove_junk($property['property_no']); ?></strong></td>
-                  <td><?= remove_junk($property['article']); ?><br>
-                    <small class="text-muted"> <?= remove_junk($property['unit']); ?></small>
-                  </td>
-                  <td class="custom-desc" title="<?= htmlspecialchars(remove_junk($property['description'])); ?>">
-                    <?php
-                    $desc = remove_junk($property['description']);
-                    echo strlen($desc) > 50 ? substr($desc, 0, 50) . '...' : $desc;
-                    ?>
-                  </td>
-                  <td class="text-center"><strong>₱<?= number_format($property['unit_cost'], 2); ?></strong></td>
-                  <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($property['qty']); ?></span></td>
-                  <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td>
-                  <td class="text-center"><?= $date_acquired; ?></td>
-                  <td class="text-center">
-                    <div class="btn-group btn-group-custom">
-                      <a href="edit_ppe.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-warning-custom" title="Edit">
-                        <i class="fas fa-edit"></i>
-                      </a>
-                      <a href="archive_property.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-danger-custom archive-btn"
-                        data-id="<?= (int)$property['id']; ?>"
-                        title="Archive">
-                        <i class="fa-solid fa-file-zipper"></i>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php else: ?>
-        <div class="empty-state">
-          <i class="fas fa-tools empty-state-icon"></i>
-          <h4>No Equipment Found</h4>
-          <p>Get started by adding your first equipment</p>
-          <button type="button" class="btn btn-primary-custom show-add-form">
-            <i class="fas fa-plus me-2"></i> Add Equipment
-          </button>
-        </div>
-      <?php endif; ?>
-    </div>
-  </div>
 
   <!-- Add Property Form (Hidden by default) -->
   <div class="add-property-form" id="addPropertyForm">
@@ -1066,6 +999,9 @@ $total_value = $property_value + $plant_value + $equipment_value;
       </div>
     </form>
   </div>
+
+
+
 </div>
 
 <!-- SweetAlert for flash messages -->
@@ -1121,11 +1057,11 @@ $total_value = $property_value + $plant_value + $equipment_value;
     // Global search functionality
     $('#searchInput').on('keyup', function() {
       var searchTerm = this.value;
-      
+
       // Search in active tab's table
       var activeTab = $('.nav-tabs .nav-link.active').attr('id');
-      
-      switch(activeTab) {
+
+      switch (activeTab) {
         case 'property-tab':
           propertyTable.search(searchTerm).draw();
           break;
@@ -1168,7 +1104,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
     });
 
     // Tab change event - reset search
-    $('#ppeTabs button').on('shown.bs.tab', function (e) {
+    $('#ppeTabs button').on('shown.bs.tab', function(e) {
       $('#searchInput').val('').trigger('keyup');
     });
 

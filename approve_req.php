@@ -8,7 +8,7 @@ if (isset($_GET['id'])) {
 
     // Update the request status to 'Approved' and fill date_approved with the current timestamp
     $sql = "UPDATE requests 
-            SET status = 'Approved', date_approved = NOW() 
+            SET status = 'Approved', date_completed = NOW() 
             WHERE id = '{$request_id}'";
 
     if ($db->query($sql)) {

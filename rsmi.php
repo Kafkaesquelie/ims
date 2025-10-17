@@ -34,7 +34,7 @@ $issued_items = find_by_sql("
         r.ris_no,
         i.stock_card,
         i.name AS item_name,
-        i.UOM AS unit,
+        ri.unit AS unit_name,
         ri.qty AS qty_issued,
         i.unit_cost,
         (ri.qty * i.unit_cost) AS amount,
@@ -42,7 +42,7 @@ $issued_items = find_by_sql("
     FROM request_items ri
     JOIN requests r ON ri.req_id = r.id
     JOIN items i ON ri.item_id = i.id
-    WHERE r.status = 'Approved'
+    WHERE r.status NOT IN ('Pending', 'Approved')
       AND i.stock_card IS NOT NULL
       AND i.stock_card != ''
       $where_date
@@ -278,7 +278,7 @@ $serial_no_prefix = $year . '-' . $month . '-';
                                 <td class="text-center"></td>
                                 <td class="text-center"><?= $item['stock_card']; ?></td>
                                 <td><?= $item['item_name']; ?></td>
-                                <td class="text-center"><?= $item['unit']; ?></td>
+                                <td class="text-center"><?= $item['unit_name']; ?></td>
                                 <td class="text-center"><?= $item['qty_issued']; ?></td>
                                 <td class="text-right">₱<?= number_format($item['unit_cost'], 2); ?></td>
                                 <td class="text-right">₱<?= number_format($item['amount'], 2); ?></td>

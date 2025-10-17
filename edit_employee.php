@@ -15,8 +15,10 @@ if (isset($_GET['id'])) {
     redirect('emps.php');
 }
 
-// ✅ Fetch departments
+// ✅ Fetch dropdown data
 $departments = find_all('departments');
+$divisions = find_all('divisions'); // Add this table if not existing
+$offices = find_all('offices');     // Add this table if not existing
 
 // ✅ Update profile image
 if (isset($_POST['submit_image'])) {
@@ -43,7 +45,7 @@ if (isset($_POST['submit_image'])) {
 
 // ✅ Update employee info
 if (isset($_POST['update_employee'])) {
-    $req_fields = array('first_name','last_name','position','office','status');
+    $req_fields = array('first_name','last_name','position','department','division','office','status');
     validate_fields($req_fields);
 
     if (empty($errors)) {
@@ -51,7 +53,9 @@ if (isset($_POST['update_employee'])) {
         $first_name  = remove_junk($db->escape($_POST['first_name']));
         $last_name   = remove_junk($db->escape($_POST['last_name']));
         $middle_name = remove_junk($db->escape($_POST['middle_name']));
-        $position    = remove_junk($db->escape($_POST['position']));
+        $designation = remove_junk($db->escape($_POST['position']));
+        $department  = remove_junk($db->escape($_POST['department']));
+        $division    = remove_junk($db->escape($_POST['division']));
         $office      = remove_junk($db->escape($_POST['office']));
         $status      = remove_junk($db->escape($_POST['status']));
 
@@ -59,7 +63,9 @@ if (isset($_POST['update_employee'])) {
                     first_name='{$first_name}', 
                     last_name='{$last_name}', 
                     middle_name='{$middle_name}', 
-                    position='{$position}', 
+                    position='{$designation}', 
+                    department='{$department}',
+                    division='{$division}', 
                     office='{$office}', 
                     status='{$status}', 
                     updated_at=NOW()
@@ -131,24 +137,51 @@ if (isset($_POST['update_employee'])) {
               </div>
 
               <div class="row mt-3">
-                 <div class="col-md-4">
+                <div class="col-md-4">
                   <label>User ID</label>
                   <input type="number" name="user_id" class="form-control" 
-                         value="<?php echo remove_junk($edit_emp['user_id']); ?>" >
+                         value="<?php echo remove_junk($edit_emp['user_id']); ?>">
                 </div>
                 <div class="col-md-4">
-                  <label>Position</label>
+                  <label>Designation</label>
                   <input type="text" name="position" class="form-control" 
                          value="<?php echo remove_junk($edit_emp['position']); ?>" required>
                 </div>
                 <div class="col-md-4">
-                  <label>Department / Office</label>
-                  <select name="office" class="form-control" required>
+                  <label>Department</label>
+                  <select name="department" class="form-control" required>
                     <option value="">-- Select Department --</option>
                     <?php foreach ($departments as $dept): ?>
                       <option value="<?php echo $dept['dpt']; ?>" 
-                        <?php if ($edit_emp['office'] == $dept['dpt']) echo 'selected'; ?>>
+                        <?php if ($edit_emp['department'] == $dept['dpt']) echo 'selected'; ?>>
                         <?php echo $dept['dpt']; ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row mt-3">
+                <div class="col-md-6">
+                  <label>Division</label>
+                  <select name="division" class="form-control" id="divisionSelect" required>
+                    <option value=""> Select Division </option>
+                    <?php foreach ($divisions as $div): ?>
+                      <option value="<?php echo $div['id']; ?>" 
+                        <?php if ($edit_emp['division'] == $div['division_name']) echo 'selected'; ?>>
+                        <?php echo $div['division_name']; ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label>Office</label>
+                  <select name="office" class="form-control" id="officeSelect" required>
+                    <option value=""> Select Office </option>
+                    <?php foreach ($offices as $off): ?>
+                      <option value="<?php echo $off['id']; ?>" 
+                        <?php if ($edit_emp['office'] == $off['office_name']) echo 'selected'; ?>>
+                        <?php echo $off['office_name']; ?>
                       </option>
                     <?php endforeach; ?>
                   </select>
@@ -178,4 +211,25 @@ if (isset($_POST['update_employee'])) {
     </div>
   </div>
 </div>
-<?php include_once('layouts/footer.php'); ?>
+
+<script>
+  document.getElementById('divisionSelect').addEventListener('change', function() {
+    let divisionId = this.value;
+    let officeSelect = document.getElementById('officeSelect');
+    officeSelect.innerHTML = '<option>Loading...</option>';
+
+    fetch(`emps.php?action=get_offices&division_id=${divisionId}`)
+        .then(res => res.json())
+        .then(data => {
+            officeSelect.innerHTML = '<option value="">Select Office</option>';
+            data.forEach(office => {
+                let opt = document.createElement('option');
+                opt.value = office.id;
+                opt.textContent = office.office_name;
+                officeSelect.appendChild(opt);
+            });
+        });
+});
+
+</script>
+<?php include_once('layouts/footer.php'); ?> 

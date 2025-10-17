@@ -1,5 +1,5 @@
 <?php
-$page_title = 'View Request (History)';
+$page_title = 'View Request';
 require_once('includes/load.php');
 page_require_level(1);
 
@@ -28,6 +28,7 @@ $is_dark = isset($_SESSION['dark_mode']) && $_SESSION['dark_mode'];
 ?>
 <?php include_once('layouts/header.php'); ?>
 
+
 <div class="container-fluid my-4">
   <div class="row">
     <div class="col-md-10 mx-auto">
@@ -39,7 +40,7 @@ $is_dark = isset($_SESSION['dark_mode']) && $_SESSION['dark_mode'];
           <h4 class="text-center mb-3">REQUISITION AND ISSUE SLIP</h4>
           <div class="d-flex justify-content-between mb-2">
             <div><strong>Entity Name:</strong> BENGUET STATE UNIVERSITY - BOKOD CAMPUS</div>
-            <div><strong>Fund Cluster:</strong> __________</div>
+            <div><strong>Fund Cluster:</strong>__________ </div>
           </div>
           <div class="d-flex justify-content-between mb-3">
             <div><strong>Responsibility Center Code:</strong> __________</div>
@@ -59,12 +60,13 @@ $is_dark = isset($_SESSION['dark_mode']) && $_SESSION['dark_mode'];
                   <th>Issue Qty</th>
                   <th>Remarks</th>
                 </tr>
+              
               </thead>
               <tbody>
                 <?php foreach ($items as $item): ?>
                 <tr>
                   <td>0<?php echo (int)$item['stock_card']; ?></td>
-                  <td><?php echo remove_junk($item['UOM']); ?></td>
+                  <td><?php echo remove_junk($item['unit_name']); ?></td>
                   <td><?php echo remove_junk($item['item_name']); ?></td>
                   <td><?php echo (int)$item['qty']; ?></td>
                   <td><?php echo (int)$item['qty']; ?></td>

@@ -10,7 +10,7 @@
 // Get the full Render Postgres URL
 $database_url = "postgresql://inventory_user:ynmFwXQUUSOo7kMhHYJXaA2juWcIJxAo@dpg-d3jmkoq4d50c73fb03og-a.singapore-postgres.render.com/inv_system_ps8n";
 
-// Parse the URL into components
+// // Parse the URL into components
 $db = parse_url($database_url);
 
 define('DB_HOST', $db['host']);           // dpg-d3jmkoq4d50c73fb03og-a.singapore-postgres.render.com

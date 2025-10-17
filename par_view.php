@@ -3,7 +3,6 @@ $page_title = 'View PAR';
 require_once('includes/load.php');
 page_require_level(1);
 
-
 $current_user = current_user();
 $par_id = (int)$_GET['id'];
 
@@ -40,275 +39,227 @@ $par = !empty($par) ? $par[0] : null;
 
 if (!$par) {
     $session->msg("d", "PAR record not found.");
-    redirect('transactions.php');
+    redirect('logs.php');
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Property Acknowledgment Receipt - <?php echo $par['par_no']; ?></title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .par-form {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            border: 1px solid #ddd;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 15px;
-            line-height: 1.2;
-        }
-        .header h1, .header h2, .header h3, .header h4, .header h5, .header h6 {
-            margin: 0;
-            padding: 0;
-            line-height: 1.2;
-        }
-        .header h6 { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
-        .header h5 { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
-        .header h4 { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
-        .receipt-title {
-            text-align: center;
-            margin-bottom: 20px;
-            font-family: "Times New Roman", Times, serif;
-            font-size: 18px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-            margin-bottom: 30px;
-        }
-        table, th, td {
-            border: 1px solid black;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-            vertical-align: top;
-        }
-        th {
-            background-color: #f0f0f0;
-            font-weight: bold;
-            text-align: center;
-        }
-        .quantity-col { width: 8%; }
-        .unit-col { width: 12%; }
-        .description-col { width: 30%; }
-        .property-col { width: 15%; }
-        .date-col { width: 15%; }
-        .amount-col { width: 15%; }
-        .signature-section {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 40px;
-        }
-        .signature-box {
-            width: 45%;
-        }
-        .signature-line {
-            border-top: 1px solid black;
-            margin-top: 60px;
-            padding-top: 5px;
-            text-align: center;
-            font-weight: bold;
-        }
-        .signature-label {
-            font-size: 11px;
-            margin-top: 5px;
-            text-align: center;
-        }
-        .position-office {
-            font-size: 11px;
-            margin-top: 5px;
-            text-align: center;
-        }
-        .date-line {
-            margin-top: 10px;
-            font-size: 11px;
-            text-align: center;
-        }
-        .empty-row {
-            height: 25px;
-        }
-        .fund-cluster {
-            margin-bottom: 20px;
-        }
-        .fund-cluster span {
-            margin-right: 20px;
-        }
-        .print-section {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .btn-print {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn-back {
-            margin-left: 10px;
-            padding: 10px 20px;
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property Acknowledgment Receipt - <?php echo $par['par_no']; ?></title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<style>
+body {
+    font-family: 'Times New Roman', Times, serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f8f9fa;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 25px;
+}
+
+/* 🟩 Form Container */
+.par-form {
+    max-width: 800px;
+    background: white;
+    padding: 30px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    border: 1px solid #ddd;
+}
+
+/* 🟦 Header */
+.header {
+    text-align: center;
+    margin-bottom: 20px;
+    line-height: 1.2;
+}
+.header h6, .header h5, .header h4 {
+    margin: 0;
+    padding: 0;
+}
+
+/* 🟩 Title */
+.receipt-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    text-transform: uppercase;
+    background-color: #8bde99ff;
+    color: #000;
+    padding: 5px;
+    margin-bottom: 20px;
+}
+
+/* 🟩 Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 25px;
+}
+th, td {
+    border: 1px solid black;
+    padding: 6px;
+    vertical-align: top;
+}
+th {
+    background-color: #f0f0f0;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* 🟩 Signature */
+.empty-row { height: 25px; }
+
+/* 🟩 Buttons beside form */
+.button-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: sticky;
+    top: 30px;
+    height: fit-content;
+}
+
+/* Circular buttons */
+.btn-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+/* Colors */
+.btn-print { background-color: #007bff; }
+.btn-word  { background-color: #28a745; }
+.btn-back  { background-color: #6c757d; }
+
+/* Hover */
+.btn-circle:hover { transform: scale(1.1); }
+
+/* Hide buttons when printing */
+@media print {
+    .button-panel { display: none; }
+    body { background: white; }
+    .par-form { box-shadow: none; border: none; }
+}
+</style>
 </head>
+
 <body>
-    <div class="par-form">
-        <!-- Header Section -->
-        <div class="header">
-            <h6>Republic of the Philippines</h6>
-            <h5>Benguet State University</h5>
-            <h4>BOKOD CAMPUS</h4>
-            <h4>SUPPLY AND PROPERTY MANAGEMENT OFFICE</h4>
-        </div>
 
-        <!-- Receipt Title -->
-        <div class="receipt-title">
-            PROPERTY ACKNOWLEDGMENT RECEIPT
-        </div>
+<!-- 🟩 Vertical Button Panel (Left of Form) -->
+<div class="button-panel">
+    <button onclick="window.print()" class="btn-circle btn-print" title="Print">
+        <i class="fa-solid fa-print"></i>
+    </button>
 
-        <!-- Fund Cluster and PAR No -->
-        <div class="fund-cluster">
-            <span>Fund Cluster: <strong><?php echo $par['fund_cluster']; ?></strong></span>
-            <span style="float:right;">PAR No.: <strong><?php echo $par['par_no']; ?></strong></span>
-        </div>
+    <button class="btn-circle btn-word" onclick="saveAsWord()" title="Save as Word">
+        <i class="fa-solid fa-file-word"></i>
+    </button>
 
-        <!-- Main Table -->
-        <table>
-            <thead>
-                <tr>
-                    <th class="quantity-col">Quantity</th>
-                    <th class="unit-col">Unit</th>
-                    <th class="description-col">Description</th>
-                    <th class="property-col">Property Number</th>
-                    <th class="date-col">Date Acquired</th>
-                    <th class="amount-col">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- First row with data -->
-                <tr>
-                    <td style="text-align: center;"><?php echo $par['quantity']; ?></td>
-                    <td style="text-align: center;"><?php echo $par['unit']; ?></td>
-                    <td><?php echo $par['item_name'] . ' - ' . $par['description']; ?></td>
-                    <td style="text-align: center;"><?php echo $par['property_no']; ?></td>
-                    <td style="text-align: center;"><?php echo date('M d, Y', strtotime($par['date_acquired'])); ?></td>
-                    <td style="text-align: right;">₱<?php echo number_format($par['unit_cost'] * $par['quantity'], 2); ?></td>
-                </tr>
-                <!-- Second row with "nothing follows" -->
-                <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                </tr>
-                <!-- Empty rows -->
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-            </tbody>
-          <tr>
-    <td colspan="3" style="padding:15px;">
-        <div class="mb-2 text-left">Recieved by:</div>
-        <div style="border-bottom:1px solid #000; width:200px; margin:auto; text-align:center;">
-            <?php echo strtoupper($par['employee_name']); ?>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px;">
-            <span style="flex: 1; text-align: center;">Signature over Printed Name of End User</span>
-        </div>
+    <a href="logs.php" class="btn-circle btn-back" title="Back">
+        <i class="fa-solid fa-arrow-left"></i>
+    </a>
+</div>
 
-        <div style="display: flex; justify-content: center; margin-top: 2px; font-size: 12px;">
-            <span style="border-bottom:1px solid #000; width:150px; text-align: center; padding: 0 5px;">
-                <?php echo $par['position']; ?>
-            </span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px;">
-            <span style="flex: 1; text-align: center;">Position/Office</span>
-        </div>
-        <div style="display: flex; justify-content: center; margin-top: 10px; font-size: 12px;">
-            <span style="border-bottom:1px solid #000; width:120px; text-align: center; padding: 0 5px;">
-                <?php echo date('M d, Y', strtotime($par['transaction_date'])); ?>
-            </span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px;">
-             <span style="flex: 1; text-align: center;">Date</span>
-        </div>  
-    </td>
-    <td colspan="3" style="padding:15px;">
-        <div class="mb-2 text-left">Issued by:</div>
-        <div style="border-bottom:1px solid #000; width:200px; margin:auto; text-align:center;">
-            <?= $current_user['name']; ?>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px;">
-            <span style="flex: 1; text-align: center;">Signature over Printed Name of Supply and/or Property Custodian</span>
-        </div>
-        <div style="display: flex; justify-content: center; margin-top: 2px; font-size: 12px;">
-            <span style="border-bottom:1px solid #000; width:150px; text-align: center; padding: 0 5px;">
-                <?= $current_user['position'] ?? 'Position'; ?>
-            </span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px;">
-            <span style="flex: 1; text-align: center;">Position/Office</span>
-        </div>
-        <div style="display: flex; justify-content: center; margin-top: 10px; font-size: 12px;">
-            <span style="border-bottom:1px solid #000; width:120px; text-align: center; padding: 0 5px;">
-                <?php echo date('M d, Y', strtotime($par['transaction_date'])); ?>
-            </span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px;">
-             <span style="flex: 1; text-align: center;">Date</span>
-        </div>  
-    </td>
-</tr>
-        </table>
-
-   
-
-    <!-- Print and Back Buttons -->
-    <div class="print-section">
-        <button onclick="window.print()" class="btn-print">Print PAR</button>
-        <a href="logs.php" class="btn-back">Back to Transactions</a>
+<!-- 🟩 Form -->
+<div class="par-form" id="par-content">
+    <div class="header">
+        <h6>Republic of the Philippines</h6>
+        <h5 style="color:#0bbc29ff;">Benguet State University</h5>
+        <h4 style="color:#0bbc29ff;">BOKOD CAMPUS</h4>
+        <h4>SUPPLY AND PROPERTY MANAGEMENT OFFICE</h4>
+        <h5>Ambangeg, Daklan, Bokod, Benguet</h5>
     </div>
+
+    <div class="receipt-title">Property Acknowledgment Receipt</div>
+
+    <div style="margin-bottom: 10px;">
+        <strong>Fund Cluster:</strong> <?php echo $par['fund_cluster']; ?>
+        <span style="float:right;"><strong>PAR No.:</strong> <?php echo $par['par_no']; ?></span>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Description</th>
+                <th>Property No.</th>
+                <th>Date Acquired</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td align="center"><?php echo $par['quantity']; ?></td>
+                <td align="center"><?php echo $par['unit']; ?></td>
+                <td><?php echo $par['item_name'] . ' - ' . $par['description']; ?></td>
+                <td align="center"><?php echo $par['property_no']; ?></td>
+                <td align="center"><?php echo date('M d, Y', strtotime($par['date_acquired'])); ?></td>
+                <td align="right">₱<?php echo number_format($par['unit_cost'] * $par['quantity'], 2); ?></td>
+            </tr>
+            <?php for ($i=0; $i<12; $i++): ?>
+                <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+            <?php endfor; ?>
+        </tbody>
+
+        <!-- Signatures -->
+        <tr>
+            <td colspan="3" style="padding:10px;">
+                <strong>Received by:</strong><br><br>
+                <div style="border-bottom:1px solid #000; width:200px; margin:auto;"><?php echo strtoupper($par['employee_name']); ?></div>
+                <div style="text-align:center; font-size:11px;">Signature over Printed Name</div>
+                <div style="border-bottom:1px solid #000; width:150px; margin:auto;"><?php echo $par['position']; ?></div>
+                <div style="text-align:center; font-size:11px;">Position/Office</div>
+                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div style="text-align:center; font-size:11px;">Date</div>
+            </td>
+            <td colspan="3" style="padding:10px;">
+                <strong>Issued by:</strong><br><br>
+                <div style="border-bottom:1px solid #000; width:200px; margin:auto;"><?php echo strtoupper($current_user['name']); ?></div>
+                <div style="text-align:center; font-size:11px;">Signature over Printed Name</div>
+                <div style="border-bottom:1px solid #000; width:150px; margin:auto;"><?php echo $current_user['position'] ?? 'Position'; ?></div>
+                <div style="text-align:center; font-size:11px;">Position/Office</div>
+                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div style="text-align:center; font-size:11px;">Date</div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function saveAsWord() {
+    const content = document.getElementById('par-content').innerHTML;
+    const wordContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office'
+              xmlns:w='urn:schemas-microsoft-com:office:word'
+              xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>PAR_<?php echo $par['par_no']; ?></title></head>
+        <body>${content}</body>
+        </html>`;
+    const blob = new Blob(['\ufeff', wordContent], { type: 'application/msword' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'PAR_<?php echo $par['par_no']; ?>.doc';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
+
 </body>
 </html>

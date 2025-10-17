@@ -8,6 +8,8 @@ $current_user = current_user();
 $current_user_name = $current_user['name'];
 $current_user_position = $current_user['position'];
 
+
+
 // Get filter values from POST
 $category_filter = isset($_POST['categorie_id']) && $_POST['categorie_id'] != '' ? $_POST['categorie_id'] : null;
 $date_filter = isset($_POST['date_added']) && $_POST['date_added'] != '' ? $_POST['date_added'] : null;
@@ -20,16 +22,22 @@ $approved_by = isset($_POST['approved_by']) ? $_POST['approved_by'] : '';
 $verified_by = isset($_POST['verified_by']) ? $_POST['verified_by'] : '';
 
 // Query with filters
-$sql = "SELECT * FROM items WHERE 1=1";
+$sql = "
+  SELECT i.*, u.symbol AS unit_name
+  FROM items i
+  LEFT JOIN units u ON i.unit_id = u.id
+  WHERE 1=1"; // ✅ Start WHERE clause
+
 if ($category_filter) {
-    $sql .= " AND categorie_id = '".$db->escape($category_filter)."'";
+    $sql .= " AND i.categorie_id = '" . $db->escape($category_filter) . "'";
 }
 if ($date_filter) {
-    $sql .= " AND DATE(date_added) <= '".$db->escape($date_filter)."'";
+    $sql .= " AND DATE(i.date_added) <= '" . $db->escape($date_filter) . "'";
 }
 if ($fund_cluster_filter) {
-    $sql .= " AND fund_cluster = '".$db->escape($fund_cluster_filter)."'";
+    $sql .= " AND i.fund_cluster = '" . $db->escape($fund_cluster_filter) . "'";
 }
+
 
 $items = find_by_sql($sql);
 
@@ -64,6 +72,7 @@ $fund_cluster_name = $fund_cluster_filter;
 ?>
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>REPORT ON THE PHYSICAL COUNT OF INVENTORIES</title>
     <style>
@@ -71,23 +80,23 @@ $fund_cluster_name = $fund_cluster_filter;
             size: landscape;
             margin: 15mm;
         }
-        
-        body { 
-            font-family: Arial, sans-serif; 
+
+        body {
+            font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
             color: #000;
-            font-size: 12px;
+            font-size: 14px;
             width: 297mm;
             min-height: 210mm;
         }
-        
+
         .header {
             text-align: center;
             margin-bottom: 15px;
             padding-top: 10px;
         }
-        
+
         .main-title {
             font-family: 'Times New Roman', serif;
             font-size: 16px;
@@ -95,13 +104,13 @@ $fund_cluster_name = $fund_cluster_filter;
             text-transform: uppercase;
             margin-bottom: 5px;
         }
-        
+
         .sub-title {
             font-family: 'Times New Roman', serif;
             font-size: 15px;
             margin-bottom: 10px;
         }
-        
+
         .underline {
             border-bottom: 1px solid #000;
             display: inline-block;
@@ -110,12 +119,13 @@ $fund_cluster_name = $fund_cluster_filter;
             height: 16px;
             vertical-align: bottom;
         }
-          tfoot td {
+
+        tfoot td {
             padding: 6px;
             font-size: 10px;
             vertical-align: top;
             height: 100px;
-            
+
         }
 
         .tfoot-label {
@@ -124,7 +134,7 @@ $fund_cluster_name = $fund_cluster_filter;
             padding-left: 5px;
             font-size: 9px;
         }
-        
+
         .inventory-table {
             width: 100%;
             border-collapse: collapse;
@@ -132,44 +142,70 @@ $fund_cluster_name = $fund_cluster_filter;
             font-size: 9px;
             table-layout: fixed;
         }
-        
+
         .inventory-table th,
         .inventory-table td {
             border: 1px solid #000;
-            padding: 4px;
-            text-align: left;
+            padding: px;
+            text-align: center;
             word-wrap: break-word;
-            height: 30px;
+            height: 15px;
         }
-        
+
         .inventory-table th {
             background-color: #f0f0f0;
             font-weight: bold;
             text-align: center;
         }
-        
+
         /* Specific column widths for landscape */
-        .col-article { width: 7%; }
-        .col-description { width: 18%; }
-        .col-stock { width: 10%; }
-        .col-uom { width: 8%; }
-        .col-value { width: 8%; }
-        .col-balance { width: 10%; }
-        .col-onhand { width: 10%; }
-        .col-shortage { width: 10%; }
-        .col-remarks { width: 19%; }
-        
+        .col-article {
+            width: 8%;
+        }
+
+        .col-description {
+            width: 20%;
+        }
+
+        .col-stock {
+            width: 10%;
+        }
+
+        .col-uom {
+            width: 8%;
+        }
+
+        .col-value {
+            width: 8%;
+        }
+
+        .col-balance {
+            width: 10%;
+        }
+
+        .col-onhand {
+            width: 10%;
+        }
+
+        .col-shortage {
+            width: 10%;
+        }
+
+        .col-remarks {
+            width: 15%;
+        }
+
         .certifications-section {
             margin-top: 20px;
             page-break-inside: avoid;
         }
-        
+
         .certifications-table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
         }
-        
+
         .certifications-table td {
             border: 1px solid #000;
             padding: 5px;
@@ -178,7 +214,7 @@ $fund_cluster_name = $fund_cluster_filter;
             width: 33.33%;
             height: 80px;
         }
-        
+
         .signature-line {
             border-top: 1px solid #000;
             margin-top: 1px;
@@ -186,13 +222,13 @@ $fund_cluster_name = $fund_cluster_filter;
             margin-left: auto;
             margin-right: auto;
         }
-        
+
         .signature-caption {
             font-size: 8px;
             margin-top: 3px;
             line-height: 1.1;
         }
-        
+
         @media print {
             body {
                 padding: 0;
@@ -200,34 +236,38 @@ $fund_cluster_name = $fund_cluster_filter;
                 width: 297mm;
                 height: 210mm;
             }
+
             .inventory-table {
                 page-break-inside: auto;
             }
+
             tr {
                 page-break-inside: avoid;
                 page-break-after: auto;
             }
+
             .certifications-section {
                 page-break-inside: avoid;
             }
         }
-        
+
         @media screen {
             body {
                 border: 1px solid #ccc;
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
                 margin: 20px auto;
                 padding: 20px;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="header">
         <div class="main-title">REPORT ON THE PHYSICAL COUNT OF INVENTORIES</div>
         <div class="sub-title">
             <span class="underline"><?php echo $category_name; ?></span><br>
-            (Type of Inventory)
+            (Type of Inventory Item)
         </div>
         <div class="sub-title">
             As at <span class="underline"><?php echo date('F j, Y', strtotime($date_filter)); ?></span>
@@ -235,12 +275,12 @@ $fund_cluster_name = $fund_cluster_filter;
     </div>
 
     <div style="margin-bottom: 10px; line-height: 1.4; font-size: 12px;">
-        <strong>Fund Cluster:</strong> 
+        <strong>Fund Cluster:</strong>
         <span class="underline" style="min-width: 120px; margin-left: 5px;margin-bottom:2px;"><?php echo $fund_cluster_name; ?></span><br>
-        <strong>For which</strong> 
-        <span class="underline" style="min-width: 130px; margin-left: 5px;"><?php echo $current_user_name; ?></span>, 
-        <span class="underline" style="min-width: 120px; margin-left: 5px;"><?php echo $current_user_position; ?></span>, 
-        BSU-BOKOD CAMPUS is accountable, having assumed such accountability on 
+        <strong>For which</strong>
+        <span class="underline" style="min-width: 130px; margin-left: 5px;"><?php echo $current_user_name; ?></span>,
+        <span class="underline" style="min-width: 120px; margin-left: 5px;"><?php echo $current_user_position; ?></span>,
+        BSU-BOKOD CAMPUS is accountable, having assumed such accountability on
         <span class="underline" style="min-width: 100px; margin-left: 5px;"><?php echo date('F j, Y', strtotime($assumption_date)); ?></span>
     </div>
 
@@ -254,79 +294,87 @@ $fund_cluster_name = $fund_cluster_filter;
                 <th class="col-value">Unit Value</th>
                 <th class="col-balance">Balance Per Card (Quantity)</th>
                 <th class="col-onhand">On Hand Per Count (Quantity)</th>
-                <th class="col-shortage">Shortage/Overage Quantity</th>
+                <th colspan="2" class="col-shortage">Shortage/Overage Quantity</th>
                 <th class="col-remarks">Remarks</th>
+            </tr>
+            <tr>
+                <th colspan="7"></th>
+                <th>Quantity</th>
+                <th>Value</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($items as $item): ?>
-            <tr>
-                <td><?php echo $item['id']; ?></td>
-                <td><?php echo $item['name']; ?></td>
-                <td><?php echo $item['stock_card']; ?></td>
-                <td><?php echo $item['UOM']; ?></td>
-                <td><?php echo $item['unit_cost']; ?></td>
-                <td><?php echo $item['quantity']; ?></td>
-                <td><?php echo $item['quantity']; ?></td>
-                <td><?php echo $item['quantity']; ?></td>
-                <td></td>
-            </tr>
+                <tr>
+                    <td><?php echo $item['id']; ?></td>
+                    <td><?php echo $item['name']; ?></td>
+                    <td><?php echo $item['stock_card']; ?></td>
+                    <td><?php echo $item['unit_name']; ?></td>
+                    <td><?php echo $item['unit_cost']; ?></td>
+                    <td><?php echo $item['quantity']; ?></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
             <?php endforeach; ?>
-            
+
             <!-- Add empty rows -->
-            <?php for ($i = 0; $i < 5; $i++): ?>
-            <tr>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-                <td>&nbsp;</td>
-            </tr>
+            <?php for ($i = 0; $i < 10; $i++): ?>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
             <?php endfor; ?>
         </tbody>
-      <tfoot>
-    <tr>
-        <!-- First signatory -->
-        <td colspan="3" class="tfoot-label" style="border-right:none;">
-            Certified Correct by:<br><br>
-            <div style="text-align: center;">
-                <strong><?php echo $certified_correct_name; ?></strong>
-                <div class="signature-line" style="margin: 5px auto;"></div>
-                <div class="signature-caption" style="text-align: center;margin-bottom:5px">
-                    Signature over Printed Name of Inventory Committee Chair and Members
-                </div>
-            </div>
-        </td>
+        <tfoot>
+            <tr>
+                <!-- First signatory -->
+                <td colspan="4" class="tfoot-label" style="border-right:none;">
+                    Certified Correct by:<br><br>
+                    <div style="text-align: center;">
+                        <strong><?php echo $certified_correct_name; ?></strong>
+                        <div class="signature-line" style="margin: 5px auto;"></div>
+                        <div class="signature-caption" style="text-align: center;margin-bottom:5px">
+                            Signature over Printed Name of Inventory Committee Chair and Members
+                        </div>
+                    </div>
+                </td>
 
-        <!-- Second signatory -->
-        <td colspan="3" class="tfoot-label" style="border-right:none;">
-            Approved by:<br><br>
-            <div style="text-align: center;">
-                <strong><?php echo $approved_by_name; ?></strong>
-                <div class="signature-line" style="margin: 5px auto;"></div>
-                <div class="signature-caption" style="text-align: center; margin-bottom:5px">
-                    Signature over Printed Name of Head of Agency/Entity or Authorized Representative
-                </div>
-            </div>
-        </td>
+                <!-- Second signatory -->
+                <td colspan="3" class="tfoot-label" style="border-right:none;">
+                    Approved by:<br><br>
+                    <div style="text-align: center;">
+                        <strong><?php echo $approved_by_name; ?></strong>
+                        <div class="signature-line" style="margin: 5px auto;"></div>
+                        <div class="signature-caption" style="text-align: center; margin-bottom:5px">
+                            Signature over Printed Name of Head of Agency/Entity or Authorized Representative
+                        </div>
+                    </div>
+                </td>
 
-        <!-- Third signatory -->
-        <td colspan="3" class="tfoot-label">
-            Verified by:<br><br>
-            <div style="text-align: center;">
-                <strong><?php echo $verified_by_name; ?></strong>
-                <div class="signature-line" style="margin: 5px auto;"></div>
-                <div class="signature-caption" style="text-align: center;margin-bottom:5px">
-                    Signature over Printed Name of COA Representative
-                </div>
-            </div>
-        </td>
-    </tr>
-</tfoot>
+                <!-- Third signatory -->
+                <td colspan="4" class="tfoot-label">
+                    Verified by:<br><br>
+                    <div style="text-align: center;">
+                        <strong><?php echo $verified_by_name; ?></strong>
+                        <div class="signature-line" style="margin: 5px auto;"></div>
+                        <div class="signature-caption" style="text-align: center;margin-bottom:5px">
+                            Signature over Printed Name of COA Representative
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </tfoot>
 
 
     </table>
@@ -339,4 +387,5 @@ $fund_cluster_name = $fund_cluster_filter;
         }
     </script>
 </body>
+
 </html>

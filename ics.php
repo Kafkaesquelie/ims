@@ -47,11 +47,11 @@ $transactions = find_by_sql("
             <?php if($transactions): ?>
               <?php foreach($transactions as $trans): ?>
                 <tr>
-                  <td><?php echo remove_junk($trans['ICS_No']); ?></td>
-                  <td><?php echo remove_junk($trans['description']); ?></td>
+                  <td><strong><?php echo remove_junk($trans['ICS_No']); ?></strong></td>
+                  <td><?php echo remove_junk($trans['item_description']); ?></td>
                   <td><?php echo remove_junk($trans['quantity']); ?></td>
                   <td><?php echo remove_junk($trans['unit']); ?></td>
-                  <td><?php echo remove_junk($trans['useful_life']); ?></td>
+                  <td></td>
                   <td>
                   <a href="ics_view.php?par=<?php echo urlencode($row['ICS_No']); ?>" class="btn btn-sm btn-primary"> <i class="fa-solid fa-eye"></i> View</a>
                   <a href="print_forms.php?par=<?php echo urlencode($row['ICS_No']); ?>" class="btn btn-sm btn-success" target="_blank" title="print"><i class="fa-solid fa-print"></i></a>
