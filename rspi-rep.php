@@ -52,298 +52,463 @@ $rspi_serial_prefix = date("Y-m-");
 $serial_number = $rspi_serial_prefix . $serial_suffix;
 ?>
 
-
 <?php include_once('layouts/header.php'); ?>
 
 <style>
-    .container { max-width: 800px; margin: 0 auto; padding: 20px; box-sizing: border-box; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h1 { font-size: 16px; text-transform: uppercase; margin: 0; font-weight: bold; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th, td { border: 1px solid #000; padding: 5px; font-size: 14px; }
-    th { text-align: center; font-weight: bold; }
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    .text-left { text-align: left; }
-    
-    .inline-select {
-        background-color: #f5f5f6ff;
-        border-bottom: 1px solid #000000ff;
-        padding: 8px;
-        font-size: 13px;
-        min-width: 180px;
-        max-width: 200px;
-        width: 100%;
-        box-sizing: border-box;
-        text-align: center;
-    }
+:root {
+    --primary: #28a745;
+    --primary-dark: #1e7e34;
+    --primary-light: #34ce57;
+    --secondary: #6c757d;
+    --success: #28a745;
+    --info: #17a2b8;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --light: #f8f9fa;
+    --dark: #343a40;
+    --border-radius: 12px;
+    --shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+}
 
-    .serial-input {
-        background-color: #f5f5f6ff;
-        border-bottom: 1px solid #000000ff;
-        padding: 8px;
-        font-size: 13px;
-        min-width: 180px;
-        max-width: 200px;
-        width: 100%;
-        box-sizing: border-box;
-        text-align: center;
-        border: none;
-        outline: none;
-    }
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 2rem;
+}
 
-    .serial-container {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
+.card-header-custom {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    padding: 1.5rem;
+    border: none;
+}
 
-    .serial-prefix {
-        background-color: #f5f5f6ff;
-        padding: 8px;
-        font-size: 13px;
-        font-weight: bold;
-        color: #495057;
-    }
+.card-header-custom h5 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.5rem;
+    text-align: center;
+}
 
-    .serial-suffix {
-        background-color: #f5f5f6ff;
-        border-bottom: 1px solid #000000ff;
-        padding: 8px;
-        font-size: 13px;
-        width: 80px;
-        text-align: center;
-        border: none;
-        outline: none;
-    }
+/* Tabs Navigation - Original Design */
+.nav-tabs-custom {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 2px solid #e9ecef;
+    padding: 0;
+    margin: 0 0 2rem 0;
+}
 
-    .form-group {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 15px;
-    }
+.nav-tab-item {
+    flex: 1;
+    min-width: 200px;
+    text-align: center;
+}
 
-    .form-group label {
-        margin-bottom: 0;
-        white-space: nowrap;
-        font-weight: bold;
-        min-width: 120px;
-    }
+.nav-tab-link {
+    display: block;
+    padding: 1rem 1.5rem;
+    background-color: #f8f9fa;
+    color: var(--secondary);
+    text-decoration: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    position: relative;
+    overflow: hidden;
+}
 
-    /* RSPI Specific Styles */
-    .rspi-header {
-        text-align: center;
-        margin-bottom: 20px;
-    }
+.nav-tab-link:hover {
+    background-color: #e9ecef;
+    color: var(--success-dark);
+}
 
-    .rspi-title {
-        font-size: 18px;
-        font-weight: bold;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-    }
+.nav-tab-link.active {
+    background-color: white;
+    color: var(--success);
+    border-bottom: 3px solid var(--success);
+    border-top: 3px solid var(--success);
+}
 
-    .rspi-subtitle {
-        font-size: 14px;
-        margin-bottom: 5px;
-    }
+.tab-icon {
+    margin-right: 8px;
+    font-size: 1.1rem;
+    color: var(--primary); /* Green icons */
+}
 
-    .rspi-section {
-        margin-bottom: 15px;
-    }
+/* Filter Section */
+.filter-section {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--primary);
+}
 
-    .rspi-info-table {
-        width: 100%;
-        border: none;
-        margin-bottom: 20px;
-    }
+.filter-section h5 {
+    color: var(--primary-dark);
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+    border-bottom: 2px solid var(--primary-light);
+    padding-bottom: 0.5rem;
+}
 
-    .rspi-info-table td {
-        border: none;
-        padding: 2px 5px;
-        vertical-align: top;
-    }
+.filter-section h5 i {
+    color: var(--primary); /* Green icon in section header */
+}
 
-    .rspi-property-table {
-        width: 100%;
-        border: 1px solid #000;
-    }
+/* FIXED: Filter Row Layout */
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
 
-    .rspi-property-table th,
-    .rspi-property-table td {
-        border: 1px solid #000;
-        padding: 5px;
-        text-align: center;
-    }
+.filter-group {
+    flex: 1;
+    min-width: 320px; /* Slightly increased minimum width */
+    margin-bottom: 1rem;
+}
 
-    .rspi-signature-section {
-        margin-top: 30px;
-    }
+.filter-group label {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 0.95rem;
+    width: 100%;
+    white-space: nowrap;
+    overflow: visible;
+}
 
-    .rspi-signature-box {
-        display: inline-block;
-        width: 45%;
-        vertical-align: top;
-        margin-right: 5%;
-    }
+.filter-group label i {
+    color: var(--primary); /* Green icons in labels */
+    margin-right: 0.5rem;
+}
 
-    .rspi-signature-line {
-        border-bottom: 1px solid #000;
-        margin-bottom: 5px;
-        height: 20px;
-    }
+/* FIXED: Dropdown Height and Styling */
+.form-control {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.85rem 1rem; /* Increased padding for more height */
+    transition: var(--transition);
+    font-size: 0.95rem;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 50px; /* Minimum height for better visibility */
+    line-height: 1.5;
+}
 
-    .rspi-signature-label {
-        font-size: 12px;
-        text-align: center;
-    }
+.form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
 
-    /* Filter Section */
-    .filter-section {
-        background: #f8f9fa;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        border: 1px solid #dee2e6;
-    }
+/* Specific styling for select dropdowns */
+select.form-control {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+    padding-right: 2.5rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
 
-    .filter-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 20px;
-        margin-bottom: 15px;
-    }
+/* Ensure dropdown options are properly visible */
+select.form-control option {
+    padding: 12px 15px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    min-height: 40px;
+}
 
+/* Serial Number Input */
+.serial-container {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%;
+    min-height: 50px; /* Match height with other inputs */
+}
+
+.serial-prefix {
+    background: var(--primary);
+    color: white;
+    padding: 0.85rem 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.serial-suffix {
+    border: none;
+    padding: 0.85rem 1rem;
+    font-size: 0.9rem;
+    width: 80px;
+    text-align: center;
+    background: white;
+    flex-shrink: 0;
+    height: 100%;
+    min-height: 50px;
+}
+
+.serial-suffix:focus {
+    outline: none;
+    background: #fff;
+}
+
+/* Buttons */
+.btn {
+    border-radius: 8px;
+    padding: 0.85rem 1.5rem; /* Slightly increased padding */
+    font-weight: 600;
+    transition: var(--transition);
+    border: none;
+    min-height: 50px; /* Consistent height with inputs */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn i {
+    margin-right: 0.5rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-dark), #155724);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+}
+
+.btn-secondary {
+    background: var(--secondary);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, var(--success), #1e7e34);
+    color: white;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    min-height: 60px; /* Slightly taller for main action button */
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #1e7e34, #155724);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+}
+
+/* Preview Section */
+.preview-section {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow);
+    border: 1px solid #e9ecef;
+}
+
+.preview-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--primary-light);
+}
+
+.preview-header h4 {
+    color: var(--primary-dark);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.preview-header h4 i {
+    color: var(--primary); /* Green icon */
+}
+
+.preview-header p {
+    color: var(--secondary);
+    margin-bottom: 0;
+    font-size: 0.95rem;
+}
+
+/* Table Styles */
+.table-responsive {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.table {
+    margin-bottom: 0;
+    border: 1px solid #dee2e6;
+}
+
+.table thead {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+}
+
+.table th {
+    border: none;
+    padding: 1rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.table td {
+    padding: 0.75rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #dee2e6;
+    font-size: 0.8rem;
+}
+
+.table tbody tr {
+    transition: var(--transition);
+}
+
+.table tbody tr:hover {
+    background-color: rgba(40, 167, 69, 0.05);
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-left {
+    text-align: left;
+}
+
+/* Print Controls */
+.no-print {
+    display: block;
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
     .filter-group {
-        flex: 1;
-        min-width: 200px;
+        min-width: 100%; /* Full width on mobile */
+    }
+    
+    .nav-tab-item {
+        min-width: 100%;
+    }
+    
+    .nav-tab-link {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.8rem;
+    }
+    
+    .btn-success {
+        width: 100%;
+        margin-bottom: 1rem;
     }
 
     .filter-group label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: bold;
-        color: #495057;
+        white-space: normal;
     }
-
-    /* Preview Section */
-    .preview-section {
-        background: white;
-        border: 2px solid #e9ecef;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
+    
+    .form-control {
+        min-height: 45px; /* Slightly smaller on mobile */
+        padding: 0.75rem 1rem;
     }
+}
 
-    .preview-header {
-        text-align: center;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #dee2e6;
-    }
+/* Animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
-    /* Print Styles */
-    @media print {
-        .no-print {
-            display: none !important;
-        }
-        body {
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 100%;
-            padding: 0;
-        }
-    }
+.fade-in {
+    animation: fadeIn 0.5s ease;
+}
 
-    /* Column widths */
-    .rspi-property-table th:nth-child(1),
-    .rspi-property-table td:nth-child(1) { width: 20%; }
-    .rspi-property-table th:nth-child(2),
-    .rspi-property-table td:nth-child(2) { width: 35%; }
-    .rspi-property-table th:nth-child(3),
-    .rspi-property-table td:nth-child(3) { width: 10%; }
-    .rspi-property-table th:nth-child(4),
-    .rspi-property-table td:nth-child(4) { width: 10%; }
-    .rspi-property-table th:nth-child(5),
-    .rspi-property-table td:nth-child(5) { width: 15%; }
-    .rspi-property-table th:nth-child(6),
-    .rspi-property-table td:nth-child(6) { width: 15%; }
+/* Badge Styles */
+.badge {
+    padding: 0.5rem 0.75rem;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
 
+.badge-primary {
+    background: rgba(40, 167, 69, 0.15);
+    color: var(--primary-dark);
+}
 
-      .nav-tabs-custom {
-        display: flex;
-        flex-wrap: wrap;
-        border-bottom: 2px solid #e9ecef;
-        padding: 0;
-        margin: 0 0 2rem 0;
-    }
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--secondary);
+}
 
-    .nav-tab-item {
-        flex: 1;
-        min-width: 200px;
-        text-align: center;
-    }
+.empty-state-icon {
+    font-size: 4rem;
+    color: var(--primary); /* Green empty state icon */
+    margin-bottom: 1rem;
+}
 
-    .nav-tab-link {
-        display: block;
-        padding: 1rem 1.5rem;
-        background-color: #f8f9fa;
-        color: var(--secondary);
-        text-decoration: none;
-        border: none;
-        border-bottom: 3px solid transparent;
-        transition: all 0.3s ease;
-        font-weight: 600;
-        position: relative;
-        overflow: hidden;
-    }
+.empty-state h4 {
+    color: var(--secondary);
+    margin-bottom: 0.5rem;
+}
 
-    .nav-tab-link:hover {
-        background-color: #e9ecef;
-        color: var(--success-dark);
-    }
-
-    .nav-tab-link.active {
-        background-color: white;
-        color: var(--success);
-        border-bottom: 3px solid var(--success);
-        border-top: 3px solid var(--success);
-    }
-
-    .tab-icon {
-        margin-right: 8px;
-        font-size: 1.1rem;
-    }
-
-    .tab-content {
-        padding: 0;
-        background: white;
-    }
-
-    .tab-pane {
-        display: none;
-        animation: fadeIn 0.5s ease;
-    }
-
-    .tab-pane.active {
-        display: block;
-    }
+.empty-state .btn i {
+    color: white; /* White icons in buttons */
+}
 </style>
-<div class="card">
-    <div class="card shadow-sm border-0">
-        <div class="card-header" style="border-top: 5px solid #28a745; border-radius: 10px;">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                <h5 class="mb-2 mb-md-0 text-center text-center" style="font-family: 'Times New Roman', serif;">
-                    <strong>REPORTS OF</strong>
-                </h5>
-            </div>
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="card">
+        <div class="card-header-custom">
+            <h5>REPORTS OF SEMI-EXPENDABLE PROPERTY ISSUED (RSPI)</h5>
         </div>
     </div>
 
-    <!-- Tabs Navigation -->
+    <!-- Tabs Navigation - Original Design -->
     <div class="tabs-container">
         <ul class="nav-tabs-custom" id="categoriesTabs">
             <li class="nav-tab-item">
@@ -353,151 +518,165 @@ $serial_number = $rspi_serial_prefix . $serial_suffix;
             </li>
             <li class="nav-tab-item">
                 <a href="rspi-rep.php" class="nav-tab-link active" data-tab="rspi">
-                    <i class="fas fa-tools tab-icon"></i> Semi-Expendable Property Isuued (RSPI)
+                    <i class="fas fa-tools tab-icon"></i> Semi-Expendable Property Issued (RSPI)
                 </a>
             </li>
         </ul>
     </div>
 
-    <div class="row">
-        <div class="col-md-12">
-            <!-- Filter Section -->
-            <div class="filter-section no-print">
-                <h5>Filter RSPI Report</h5>
-                <form id="rspiFilterForm" method="GET">
-                    <div class="filter-row">
-                        <div class="filter-group">
-                            <label for="report_date">Date:</label>
-                            <input type="date" name="report_date" id="report_date" 
-                                   class="form-control" value="<?= $report_date ?>">
-                        </div>
-                        <div class="filter-group">
-                            <label for="fund_cluster">Fund Cluster:</label>
-                            <select name="fund_cluster" id="fund_cluster" class="form-control">
-                                <option value="all">All Fund Clusters</option>
-                                <?php foreach($fund_clusters as $fc): ?>
-                                    <option value="<?= $fc['name']; ?>" 
-                                        <?= ($selected_cluster == $fc['name']) ? 'selected' : ''; ?>>
-                                        <?= $fc['name']; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="value_type">Property Value:</label>
-                            <select name="value_type" id="value_type" class="form-control">
-                                <option value="">All Values</option>
-                                <option value="low" <?= ($value_type == 'low') ? 'selected' : ''; ?>>Low Value (Below ₱5,000)</option>
-                                <option value="high" <?= ($value_type == 'high') ? 'selected' : ''; ?>>High Value (₱5,000 - ₱50,000)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="filter-row">
-                        <div class="filter-group">
-                            <label for="serial_suffix">Serial Number:</label>
-                            <div class="serial-container">
-                                <span class="serial-prefix"><?= $rspi_serial_prefix ?></span>
-                                <input type="text" name="serial_suffix" id="serial_suffix" 
-                                       class="form-control serial-suffix" value="<?= htmlspecialchars($serial_suffix) ?>"
-                                       placeholder="0000" maxlength="4" pattern="[0-9]{4}" title="Enter 4 digits">
-                            </div>
-                            <small class="form-text text-muted">Format: YYYY-MM-<strong>XXXX</strong> (Only last 4 digits are editable)</small>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-filter"></i> Apply Filters
-                    </button>
-                    <button type="button" id="resetFilters" class="btn btn-secondary">
-                        <i class="fas fa-redo"></i> Reset
-                    </button>
-                </form>
-            </div>
-
-            <div class="preview-section">
-                <div class="preview-header">
-                    <h4>Filtered RSPI Items</h4>
-                    <p>Date: <?= $display_date ?> | Fund Cluster: <?= $selected_cluster ? $selected_cluster : 'All' ?> | 
-                       Value: <?= $value_type ? ucfirst($value_type) : 'All' ?> | Serial No: <?= $serial_number ?></p>
+    <!-- Filter Section -->
+    <div class="card filter-section no-print">
+        <h5><i class="fas fa-filter me-2"></i>Filter RSPI Report</h5>
+        <form id="rspiFilterForm" method="GET">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="report_date"><i class="fas fa-calendar me-1"></i>Report Date</label>
+                    <input type="date" name="report_date" id="report_date" 
+                           class="form-control" value="<?= $report_date ?>">
                 </div>
-
-                <?php if (!empty($semi_expendable_items)): ?>
-                    <table class="rspi-property-table">
-                        <thead>
-                            <tr>
-                                <th>Inv Item No</th>
-                                <th>Article</th>
-                                <th>Description</th>
-                                <th>Unit</th>
-                                <th>Total Qty</th>
-                                <th>Issued Qty</th>
-                                <th>Unit Cost</th>
-                                <th>Amount</th>
-                                <th>Fund Cluster</th>
-                                <th>Date Added</th>
-                                <th>Category</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach($semi_expendable_items as $item): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($item['inv_item_no']); ?></td>
-                                <td><?= htmlspecialchars($item['item']); ?></td>
-                                <td><?= htmlspecialchars($item['item_description']); ?></td>
-                                <td><?= htmlspecialchars($item['unit']); ?></td>
-                                <td class="text-center"><?= (int)$item['total_qty']; ?></td>
-                                <td class="text-center"><?= (int)$item['qty_issued']; ?></td>
-                                <td class="text-right">₱<?= number_format($item['unit_cost'], 2); ?></td>
-                                <td class="text-right">₱<?= number_format($item['amount'], 2); ?></td>
-                                <td><?= htmlspecialchars($item['fund_cluster']); ?></td>
-                                <td><?= date("M d, Y", strtotime($item['date_added'])); ?></td>
-                                <td><?= htmlspecialchars($item['category']); ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php else: ?>
-                    <p class="text-center">No items found for the selected filters.</p>
-                <?php endif; ?>
-            </div>
-
-            <!-- Signatories Selection -->
-            <div class="filter-section no-print">
-                <h5>Select Signatories</h5>
-                <div class="filter-row">
-                    <div class="filter-group">
-                        <label for="property_custodian">Property Custodian:</label>
-                        <select id="property_custodian" class="form-control">
-                            <option value="">Select Property Custodian</option>
-                            <?php foreach($signatories as $sig): ?>
-                                <option value="<?= $sig['name']; ?>" 
-                                        data-position="<?= $sig['position']; ?>">
-                                    <?= $sig['name']; ?> (<?= $sig['position']; ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="accounting_staff">Accounting Staff:</label>
-                        <select id="accounting_staff" class="form-control">
-                            <option value="">Select Accounting Staff</option>
-                            <?php foreach($signatories as $sig): ?>
-                                <option value="<?= $sig['name']; ?>" 
-                                        data-position="<?= $sig['position']; ?>">
-                                    <?= $sig['name']; ?> (<?= $sig['position']; ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                <div class="filter-group">
+                    <label for="fund_cluster"><i class="fas fa-money-bill-wave me-1"></i>Fund Cluster</label>
+                    <select name="fund_cluster" id="fund_cluster" class="form-control">
+                        <option value="all">All Fund Clusters</option>
+                        <?php foreach($fund_clusters as $fc): ?>
+                            <option value="<?= $fc['name']; ?>" 
+                                <?= ($selected_cluster == $fc['name']) ? 'selected' : ''; ?>>
+                                <?= $fc['name']; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="value_type"><i class="fas fa-tag me-1"></i>Property Value</label>
+                    <select name="value_type" id="value_type" class="form-control">
+                        <option value="">All Values</option>
+                        <option value="low" <?= ($value_type == 'low') ? 'selected' : ''; ?>>Low Value (Below ₱5,000)</option>
+                        <option value="high" <?= ($value_type == 'high') ? 'selected' : ''; ?>>High Value (₱5,000 - ₱50,000)</option>
+                    </select>
                 </div>
             </div>
-
-            <!-- Print Button -->
-            <div class="text-center no-print mb-4">
-                <button id="printRspi" class="btn btn-success btn-lg">
-                    <i class="fa-solid fa-print"></i> Generate RSPI Report
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="serial_suffix"><i class="fas fa-hashtag me-1"></i>Serial Number</label>
+                    <div class="serial-container">
+                        <span class="serial-prefix"><?= $rspi_serial_prefix ?></span>
+                        <input type="text" name="serial_suffix" id="serial_suffix" 
+                               class="serial-suffix" value="<?= htmlspecialchars($serial_suffix) ?>"
+                               placeholder="0000" maxlength="4" pattern="[0-9]{4}" title="Enter 4 digits">
+                    </div>
+                    <small class="form-text text-muted">Format: YYYY-MM-<strong>XXXX</strong> (Only last 4 digits are editable)</small>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter me-1"></i> Apply Filters
+                </button>
+                <button type="button" id="resetFilters" class="btn btn-secondary">
+                    <i class="fas fa-redo me-1"></i> Reset Filters
                 </button>
             </div>
+        </form>
+    </div>
+
+    <!-- Preview Section -->
+    <div class="card preview-section">
+        <div class="preview-header">
+            <h4><i class="fas fa-eye me-2"></i>Filtered RSPI Items Preview</h4>
+            <p>
+                <span class="badge badge-primary me-2">Date: <?= $display_date ?></span>
+                <span class="badge badge-primary me-2">Fund Cluster: <?= $selected_cluster ? $selected_cluster : 'All' ?></span>
+                <span class="badge badge-primary me-2">Value: <?= $value_type ? ucfirst($value_type) : 'All' ?></span>
+                <span class="badge badge-primary">Serial No: <?= $serial_number ?></span>
+            </p>
         </div>
+
+        <?php if (!empty($semi_expendable_items)): ?>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Property No</th>
+                            <th>Article</th>
+                            <th>Description</th>
+                            <th>Unit</th>
+                            <th>Issued Qty</th>
+                            <th>Unit Cost</th>
+                            <th>Amount</th>
+                            <th>Issued To</th>
+                            <th>Date Issued</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach($semi_expendable_items as $index => $item): ?>
+                        <tr>
+                            <td class="text-center">
+                                <span class="badge badge-primary"><?= $index + 1 ?></span>
+                            </td>
+                            <td><strong><?= htmlspecialchars($item['inv_item_no']); ?></strong></td>
+                            <td><?= htmlspecialchars($item['item']); ?></td>
+                            <td><?= htmlspecialchars($item['item_description']); ?></td>
+                            <td class="text-center"><?= htmlspecialchars($item['unit']); ?></td>
+                            <td class="text-center">
+                                <span class="badge badge-primary"><?= (int)$item['qty_issued']; ?></span>
+                            </td>
+                            <td class="text-right">₱<?= number_format($item['unit_cost'], 2); ?></td>
+                            <td class="text-right"><strong class="text-success">₱<?= number_format($item['amount'], 2); ?></strong></td>
+                            <td><?= htmlspecialchars($item['issued_to']); ?></td>
+                            <td><?= date("M d, Y", strtotime($item['date_issued'])); ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="empty-state">
+                <i class="fas fa-search empty-state-icon"></i>
+                <h4>No Items Found</h4>
+                <p>No semi-expendable properties found for the selected filters.</p>
+                <button type="button" id="resetFiltersEmpty" class="btn btn-primary">
+                    <i class="fas fa-redo me-1"></i> Reset Filters
+                </button>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Signatories Selection -->
+    <div class="card filter-section no-print">
+        <h5><i class="fas fa-signature me-2"></i>Select Signatories</h5>
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="property_custodian"><i class="fas fa-user-tie me-1"></i>Property Custodian</label>
+                <select id="property_custodian" class="form-control">
+                    <option value="">Select Property Custodian</option>
+                    <?php foreach($signatories as $sig): ?>
+                        <option value="<?= $sig['name']; ?>" 
+                                data-position="<?= $sig['position']; ?>">
+                            <?= $sig['name']; ?> (<?= $sig['position']; ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="accounting_staff"><i class="fas fa-calculator me-1"></i>Accounting Staff</label>
+                <select id="accounting_staff" class="form-control">
+                    <option value="">Select Accounting Staff</option>
+                    <?php foreach($signatories as $sig): ?>
+                        <option value="<?= $sig['name']; ?>" 
+                                data-position="<?= $sig['position']; ?>">
+                            <?= $sig['name']; ?> (<?= $sig['position']; ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Button -->
+    <div class="text-center no-print mb-4">
+        <button id="printRspi" class="btn btn-success btn-lg">
+            <i class="fa-solid fa-print me-2"></i> Generate RSPI Report
+        </button>
     </div>
 </div>
 
@@ -506,33 +685,16 @@ $serial_number = $rspi_serial_prefix . $serial_suffix;
 
 <script>
 $(document).ready(function(){
-    // Update preview when filters change
-    function updatePreview() {
-        $('#previewDate').text($('#report_date').val() ? new Date($('#report_date').val()).toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        }) : '<?= date("F d, Y") ?>');
-        
-        $('#previewFundCluster').text($('#fund_cluster').val() !== 'all' ? $('#fund_cluster').val() : 'CAA');
-        $('#previewFundCluster2').text($('#fund_cluster').val() !== 'all' ? $('#fund_cluster').val() : 'CAA');
-    }
-
-    // Update signatories in preview
-    $('#property_custodian').on('change', function(){
-        const selected = $(this).find(':selected');
-        $('#previewCustodianName').text(selected.val() || 'BRIGIDA A. BENSOSAN');
-    });
-
-    $('#accounting_staff').on('change', function(){
-        const selected = $(this).find(':selected');
-        $('#previewAccountingName').text(selected.val() || 'FREDALYN JOY Y. FINMARA');
+    // Reset filters button for empty state
+    $('#resetFiltersEmpty').on('click', function(){
+        $('#rspiFilterForm')[0].reset();
+        $('#serial_suffix').val('0000');
+        window.location.href = window.location.pathname;
     });
 
     // Reset filters
     $('#resetFilters').on('click', function(){
         $('#rspiFilterForm')[0].reset();
-        // Reset serial suffix to default
         $('#serial_suffix').val('0000');
         window.location.href = window.location.pathname;
     });
@@ -552,9 +714,10 @@ $(document).ready(function(){
                 icon: 'warning',
                 title: 'Missing Report Date',
                 text: 'Please select a report date before generating the RSPI report.',
-                confirmButtonColor: '#28a745'
+                confirmButtonColor: '#28a745',
+                confirmButtonText: 'OK'
             });
-            return; // stop execution
+            return;
         }
 
         // 🚫 Prevent printing if serial suffix is empty or invalid
@@ -563,9 +726,10 @@ $(document).ready(function(){
                 icon: 'warning',
                 title: 'Invalid Serial Number',
                 text: 'Please enter a valid 4-digit serial number suffix.',
-                confirmButtonColor: '#28a745'
+                confirmButtonColor: '#28a745',
+                confirmButtonText: 'OK'
             });
-            return; // stop execution
+            return;
         }
 
         let printUrl = 'print_rspi.php?';
@@ -591,10 +755,7 @@ $(document).ready(function(){
         }
     });
 
-    // Initial preview update
-    updatePreview();
-
-    // Update preview on filter changes
-    $('#report_date, #fund_cluster').on('change', updatePreview);
+    // Add animation to cards on load
+    $('.card').addClass('fade-in');
 });
 </script>

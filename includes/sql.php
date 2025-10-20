@@ -206,41 +206,59 @@ function tableExists($table){
  /* Login with the data provided in $_POST,
  /* coming from the login form.
 /*--------------------------------------------------------------*/
-  function authenticate($username='', $password='') {
-    global $db;
-    $username = $db->escape($username);
-    $password = $db->escape($password);
-    $sql  = sprintf("SELECT id,username,password,user_level FROM users WHERE username ='%s' LIMIT 1", $username);
-    $result = $db->query($sql);
-    if($db->num_rows($result)){
-      $user = $db->fetch_assoc($result);
-      $password_request = sha1($password);
-      if($password_request === $user['password'] ){
-        return $user['id'];
-      }
-    }
-   return false;
-  }
+//   function authenticate($username='', $password='') {
+//     global $db;
+//     $username = $db->escape($username);
+//     $password = $db->escape($password);
+//     $sql  = sprintf("SELECT id,username,password,user_level FROM users WHERE username ='%s' LIMIT 1", $username);
+//     $result = $db->query($sql);
+//     if($db->num_rows($result)){
+//       $user = $db->fetch_assoc($result);
+//       $password_request = sha1($password);
+//       if($password_request === $user['password'] ){
+//         return $user['id'];
+//       }
+//     }
+//    return false;
+//   }
   /*--------------------------------------------------------------*/
   /* Login with the data provided in $_POST,
   /* coming from the login_v2.php form.
   /* If you used this method then remove authenticate function.
  /*--------------------------------------------------------------*/
-   function authenticate_v2($username='', $password='') {
-     global $db;
-     $username = $db->escape($username);
-     $password = $db->escape($password);
-     $sql  = sprintf("SELECT id,username,password,user_level FROM users WHERE username ='%s' LIMIT 1", $username);
-     $result = $db->query($sql);
-     if($db->num_rows($result)){
-       $user = $db->fetch_assoc($result);
-       $password_request = sha1($password);
-       if($password_request === $user['password'] ){
-         return $user;
-       }
-     }
+   function authenticate_v2($username = '', $password = '') {
+    global $db, $session;
+
+    $username = $db->escape($username);
+    $password = $db->escape($password);
+
+    // Fetch user details including status
+    $sql  = sprintf("SELECT id, username, password, user_level, status FROM users WHERE username = '%s' LIMIT 1", $username);
+    $result = $db->query($sql);
+
+    if ($db->num_rows($result)) {
+        $user = $db->fetch_assoc($result);
+        $password_request = sha1($password);
+
+        // Check password
+        if ($password_request === $user['password']) {
+
+            // 🔒 Check account status (active/inactive)
+            if ($user['status'] == '0') {
+                $session->msg('d', 'Your account is inactive. Please contact the administrator.');
+                redirect('login.php', false);
+                exit(); // stop further execution
+            }
+
+            // ✅ Return user if active
+            return $user;
+        }
+    }
+
+    // ❌ Invalid username or password
     return false;
-   }
+}
+
 
 
   /*--------------------------------------------------------------*/
@@ -261,14 +279,26 @@ function tableExists($table){
   /* Find all user by
   /* Joining users table and user groups table
   /*--------------------------------------------------------------*/
-function find_all_user(){
+function find_all_user() {
     global $db;
-    $sql  = "SELECT u.id, u.name, u.username, u.image, u.user_level, u.status, u.last_login, u.position,u.last_edited, ";
-    $sql .= "g.group_name, d.dpt AS dep_name ";
-    $sql .= "FROM users u ";
-    $sql .= "LEFT JOIN user_groups g ON u.user_level = g.id ";
-    $sql .= "LEFT JOIN office d ON u.office = d.id ";
-    $sql .= "ORDER BY u.name ASC";
+    $sql  = "SELECT 
+                u.id, 
+                u.name, 
+                u.username, 
+                u.image, 
+                u.user_level, 
+                u.status, 
+                u.last_login, 
+                u.position, 
+                u.last_edited,
+                g.group_name,
+                o.office_name,
+                d.division_name
+            FROM users u
+            LEFT JOIN user_groups g ON u.user_level = g.id
+            LEFT JOIN offices o ON u.office = o.id
+            LEFT JOIN divisions d ON o.division_id = d.id
+            ORDER BY u.name ASC";
     return find_by_sql($sql);
 }
   /*--------------------------------------------------------------*/
@@ -312,22 +342,19 @@ function find_all_user(){
      $current_user = current_user();
      $login_level = find_by_groupLevel($current_user['user_level']);
      //if user not login
-     if (!$session->isUserLoggedIn(true)):
-            $session->msg('d','Please login to continue.');
-            redirect('index.php', false);
-    //   //if Group status Deactive
-    //  elseif($login_level['group_status'] === '0'):
-    //        $session->msg('d','This level user has been banned!');
-    //        redirect('home.php',false);
+    if (!$session->isUserLoggedIn(true)) {
+        $session->msg('d', 'Please login to continue.');
+        redirect('login.php', false);
+    }
+   
     //   //cheackin log in User level and Require level is Less than or equal to
-     elseif($current_user['user_level'] <= (int)$require_level):
-              return true;
-      else:
-            $session->msg("d", "Sorry! you dont have permission to view the page.");
-            redirect('home.php', false);
-        endif;
-
-     }
+     if ($current_user['user_level'] <= (int)$require_level) {
+        return true;
+    } else {
+        $session->msg("d", "Sorry! You don't have permission to view this page.");
+        redirect('login.php', false);
+    }
+}
    /*--------------------------------------------------------------*/
    /* Function for Finding all product name
    /* JOIN with categorie  and media database table
@@ -628,42 +655,42 @@ function find_highest_requested_items($limit = 10){
 
 /******************************/
 
-function get_items_paginated($limit = 10, $page = 1, $category = 'all') {
-    global $db;
-    $start = ($page - 1) * $limit;
+// function get_items_paginated($limit = 10, $page = 1, $category = 'all') {
+//     global $db;
+//     $start = ($page - 1) * $limit;
 
-    $sql = "SELECT 
-                i.id, 
-                i.fund_cluster,
-                i.name, 
-                i.stock_card, 
-                i.unit_id,  
-                u.name AS unit_name, 
-                COALESCE(s.stock, i.quantity) AS quantity, 
-                i.unit_cost, 
-                i.date_added, 
-                i.last_edited,
-                c.name AS category, 
-                m.file_name AS image
-            FROM items i
-            JOIN categories c ON i.categorie_id = c.id
-            LEFT JOIN units u ON i.unit_id = u.id
-            LEFT JOIN media m ON i.media_id = m.id
-            LEFT JOIN item_stocks_per_year s 
-                ON s.item_id = i.id 
-                AND s.school_year_id = (SELECT id FROM school_years WHERE is_current = 1 LIMIT 1)
-            WHERE i.archived = 0"; // 👈 hide archived items
+//     $sql = "SELECT 
+//                 i.id, 
+//                 i.fund_cluster,
+//                 i.name, 
+//                 i.stock_card, 
+//                 i.unit_id,  
+//                 u.name AS unit_name, 
+//                 COALESCE(s.stock, i.quantity) AS quantity, 
+//                 i.unit_cost, 
+//                 i.date_added, 
+//                 i.last_edited,
+//                 c.name AS category, 
+//                 m.file_name AS image
+//             FROM items i
+//             JOIN categories c ON i.categorie_id = c.id
+//             LEFT JOIN units u ON i.unit_id = u.id
+//             LEFT JOIN media m ON i.media_id = m.id
+//             LEFT JOIN item_stocks_per_year s 
+//                 ON s.item_id = i.id 
+//                 AND s.school_year_id = (SELECT id FROM school_years WHERE is_current = 1 LIMIT 1)
+//             WHERE i.archived = 0"; // 👈 hide archived items
 
-    if ($category !== 'all') {
-        $sql .= " AND c.name = '".$db->escape($category)."'";
-    }
+//     if ($category !== 'all') {
+//         $sql .= " AND c.name = '".$db->escape($category)."'";
+//     }
 
-    $sql .= " ORDER BY c.name, i.name
-              LIMIT ".$db->escape((int)$limit)." 
-              OFFSET ".$db->escape((int)$start);
+//     $sql .= " ORDER BY c.name, i.name
+//               LIMIT ".$db->escape((int)$limit)." 
+//               OFFSET ".$db->escape((int)$start);
 
-    return find_by_sql($sql);
-}
+//     return find_by_sql($sql);
+// }
 
 
 

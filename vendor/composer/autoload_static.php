@@ -7,6 +7,11 @@ namespace Composer\Autoload;
 class ComposerStaticInit8f18b7d90bd2a9e42aac9cd9d318fa33
 {
     public static $prefixLengthsPsr4 = array (
+        'P' => 
+        array (
+            'PhpOffice\\PhpWord\\' => 18,
+            'PhpOffice\\Math\\' => 15,
+        ),
         'A' => 
         array (
             'Admin\\AdminLte\\' => 15,
@@ -14,6 +19,14 @@ class ComposerStaticInit8f18b7d90bd2a9e42aac9cd9d318fa33
     );
 
     public static $prefixDirsPsr4 = array (
+        'PhpOffice\\PhpWord\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/phpoffice/phpword/src/PhpWord',
+        ),
+        'PhpOffice\\Math\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/phpoffice/math/src/Math',
+        ),
         'Admin\\AdminLte\\' => 
         array (
             0 => __DIR__ . '/../..' . '/src',

@@ -1,7 +1,6 @@
 <?php
 require_once('includes/load.php');
-page_require_level(1); // Staff or Admin only
-
+page_require_level(1);
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -9,12 +8,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$transaction_id = (int)$_POST['transaction_id'];
-$reissue_qty    = (int)$_POST['reissue_qty'];
-$reissue_date   = $db->escape($_POST['reissue_date']);
+$transaction_id = (int)($_POST['transaction_id'] ?? 0);
+$reissue_qty    = (int)($_POST['reissue_qty'] ?? 0);
+$reissue_date   = $db->escape($_POST['reissue_date'] ?? date('Y-m-d'));
 $remarks        = $db->escape($_POST['remarks'] ?? '');
 
-// 🟢 Validate transaction
+if (!$transaction_id || !$reissue_qty) {
+    echo json_encode(['success' => false, 'message' => 'Missing required fields.']);
+    exit;
+}
+
+// 🟢 Fetch transaction
 $transaction = find_by_id('transactions', $transaction_id);
 if (!$transaction) {
     echo json_encode(['success' => false, 'message' => 'Transaction not found.']);
@@ -23,47 +27,58 @@ if (!$transaction) {
 
 $total_returned = (int)$transaction['qty_returned'];
 $total_reissued = (int)$transaction['qty_re_issued'];
-
-// 🟢 Check remaining reissuable quantity
 $remaining_to_reissue = $total_returned - $total_reissued;
+
+// 🟢 Validate available quantity
 if ($remaining_to_reissue <= 0) {
     echo json_encode(['success' => false, 'message' => 'No items available to re-issue.']);
     exit;
 }
-
 if ($reissue_qty > $remaining_to_reissue) {
-    echo json_encode(['success' => false, 'message' => "You can only re-issue up to {$remaining_to_reissue} item(s)."]);
+    echo json_encode(['success' => false, 'message' => "Only {$remaining_to_reissue} item(s) available for reissue."]);
     exit;
 }
 
-// 🟢 Calculate new reissued count
+// 🟢 Calculate new reissued total and status
 $new_reissued_total = $total_reissued + $reissue_qty;
-
-// 🟢 Determine updated status
 $status = ($new_reissued_total == $total_returned)
     ? 'Re-Issued'
     : 'Partially Re-Issued';
 
-// 🟢 Update the transaction record
-$sql = "
-    UPDATE transactions
-    SET 
-        qty_re_issued = '{$new_reissued_total}',
-        re_issue_date = '{$reissue_date}',
-        remarks =  {$remarks}'),
-        status = '{$status}'
-    WHERE id = '{$transaction_id}'
-";
+$db->query("START TRANSACTION");
 
-if ($db->query($sql)) {
+try {
+    // ✅ Update the transaction
+    $update_sql = "
+        UPDATE transactions
+        SET 
+            qty_re_issued = '{$new_reissued_total}',
+            re_issue_date = '{$reissue_date}',
+            remarks = '{$remarks}',
+            status = '{$status}'
+        WHERE id = '{$transaction_id}'
+    ";
+    if (!$db->query($update_sql)) {
+        throw new Exception('Failed to update transaction.');
+    }
+
+    // ✅ Deduct reissued items from stock again
+    $item_table = !empty($transaction['ICS_No']) ? 'semi_exp_prop' : 'properties';
+    $item = find_by_id($item_table, $transaction['item_id']);
+    if ($item) {
+        $qty_field = !empty($transaction['ICS_No']) ? 'qty_left' : 'qty';
+        $new_qty = $item[$qty_field] - $reissue_qty;
+        $db->query("UPDATE {$item_table} SET {$qty_field} = '{$new_qty}' WHERE id = '{$item['id']}'");
+    }
+
+    $db->query("COMMIT");
+
     echo json_encode([
         'success' => true,
         'message' => "Successfully re-issued {$reissue_qty} item(s)."
     ]);
-} else {
-    echo json_encode([
-        'success' => false,
-        'message' => 'Failed to update transaction. Please try again.'
-    ]);
+} catch (Exception $e) {
+    $db->query("ROLLBACK");
+    echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
 }
 ?>

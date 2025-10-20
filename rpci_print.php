@@ -305,9 +305,11 @@ $fund_cluster_name = $fund_cluster_filter;
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($items as $item): ?>
+            <?php
+            $counter = 1;
+             foreach ($items as $item): ?>
                 <tr>
-                    <td><?php echo $item['id']; ?></td>
+                    <td><?php echo $counter++; ?></td>
                     <td><?php echo $item['name']; ?></td>
                     <td><?php echo $item['stock_card']; ?></td>
                     <td><?php echo $item['unit_name']; ?></td>
@@ -336,45 +338,46 @@ $fund_cluster_name = $fund_cluster_filter;
                 </tr>
             <?php endfor; ?>
         </tbody>
-        <tfoot>
-            <tr>
-                <!-- First signatory -->
-                <td colspan="4" class="tfoot-label" style="border-right:none;">
-                    Certified Correct by:<br><br>
-                    <div style="text-align: center;">
-                        <strong><?php echo $certified_correct_name; ?></strong>
-                        <div class="signature-line" style="margin: 5px auto;"></div>
-                        <div class="signature-caption" style="text-align: center;margin-bottom:5px">
-                            Signature over Printed Name of Inventory Committee Chair and Members
-                        </div>
-                    </div>
-                </td>
+       <tfoot>
+    <tr>
+        <!-- First signatory -->
+        <td colspan="4" class="tfoot-label" style="border-right:none;">
+            <div style="text-align: left;">Certified Correct by:</div><br>
+            <div style="text-align: center;">
+                <strong><?php echo $certified_correct_name; ?></strong>
+                <div class="signature-line" style="margin: 5px auto;"></div>
+                <div class="signature-caption" style="text-align: center; margin-bottom:5px;">
+                    Signature over Printed Name of Inventory Committee Chair and Members
+                </div>
+            </div>
+        </td>
 
-                <!-- Second signatory -->
-                <td colspan="3" class="tfoot-label" style="border-right:none;">
-                    Approved by:<br><br>
-                    <div style="text-align: center;">
-                        <strong><?php echo $approved_by_name; ?></strong>
-                        <div class="signature-line" style="margin: 5px auto;"></div>
-                        <div class="signature-caption" style="text-align: center; margin-bottom:5px">
-                            Signature over Printed Name of Head of Agency/Entity or Authorized Representative
-                        </div>
-                    </div>
-                </td>
+        <!-- Second signatory -->
+        <td colspan="3" class="tfoot-label" style="border-right:none;">
+            <div style="text-align: left;">Approved by:</div><br>
+            <div style="text-align: center;">
+                <strong><?php echo $approved_by_name; ?></strong>
+                <div class="signature-line" style="margin: 5px auto;"></div>
+                <div class="signature-caption" style="text-align: center; margin-bottom:5px;">
+                    Signature over Printed Name of Head of Agency/Entity or Authorized Representative
+                </div>
+            </div>
+        </td>
 
-                <!-- Third signatory -->
-                <td colspan="4" class="tfoot-label">
-                    Verified by:<br><br>
-                    <div style="text-align: center;">
-                        <strong><?php echo $verified_by_name; ?></strong>
-                        <div class="signature-line" style="margin: 5px auto;"></div>
-                        <div class="signature-caption" style="text-align: center;margin-bottom:5px">
-                            Signature over Printed Name of COA Representative
-                        </div>
-                    </div>
-                </td>
-            </tr>
-        </tfoot>
+        <!-- Third signatory -->
+        <td colspan="4" class="tfoot-label">
+            <div style="text-align: left;">Verified by:</div><br>
+            <div style="text-align: center;">
+                <strong><?php echo $verified_by_name; ?></strong>
+                <div class="signature-line" style="margin: 5px auto;"></div>
+                <div class="signature-caption" style="text-align: center; margin-bottom:5px;">
+                    Signature over Printed Name of COA Representative
+                </div>
+            </div>
+        </td>
+    </tr>
+</tfoot>
+
 
 
     </table>

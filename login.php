@@ -63,8 +63,6 @@
       transition: transform 0.3s ease;
     }
 
-  
-
     .login-container:before {
       content: '';
       position: absolute;
@@ -178,8 +176,6 @@
       left: 100%;
     }
 
-  
-
     @keyframes typing {
       from { width: 0; }
       to { width: 100%; }
@@ -199,20 +195,52 @@
       100% { transform: translate(0, -0px); }
     }
 
-    .alert {
+    /* Custom Alert Styles */
+    .custom-alert {
       border-radius: 10px;
       border: none;
       padding: 12px 15px;
+      margin-bottom: 20px;
+      animation: slideInDown 0.5s ease;
     }
 
     .alert-danger {
-      background-color: rgba(220, 53, 69, 0.1);
+      background: linear-gradient(135deg, #f8d7da, #f1b0b7);
       color: #721c24;
+      border-left: 4px solid #dc3545;
     }
 
     .alert-success {
-      background-color: rgba(40, 167, 69, 0.1);
+      background: linear-gradient(135deg, #d4edda, #c3e6cb);
       color: #155724;
+      border-left: 4px solid #28a745;
+    }
+
+    .alert-warning {
+      background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+      color: #856404;
+      border-left: 4px solid #ffc107;
+    }
+
+    .alert-info {
+      background: linear-gradient(135deg, #d1ecf1, #b8e2e8);
+      color: #0c5460;
+      border-left: 4px solid #17a2b8;
+    }
+
+    .alert-dismissible .btn-close {
+      padding: 0.75rem;
+    }
+
+    @keyframes slideInDown {
+      from {
+        transform: translateY(-20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
     }
 
     .forgot-password {
@@ -252,8 +280,43 @@
 
     <h1>Welcome Back</h1>
     <p id="typing-text" class="typing-animation"></p>
-
-    <?php echo display_msg($msg); ?>
+<!-- Message Display Area -->
+<div id="message-container">
+  <?php 
+  // Display message as alert
+  if(isset($msg) && !empty($msg)) {
+    $msg_type = 'danger'; // default type
+    $msg_text = '';
+    
+    // Handle different message formats
+    if(is_array($msg)) {
+      // If $msg is an array with type and text
+      if(isset($msg['type'])) {
+        $msg_type = $msg['type'];
+      }
+      if(isset($msg['text'])) {
+        $msg_text = $msg['text'];
+      } elseif(isset($msg['message'])) {
+        $msg_text = $msg['message'];
+      } else {
+        // If it's a simple array, try to get the first element
+        $msg_text = !empty($msg) ? reset($msg) : '';
+      }
+    } else {
+      // If $msg is a string
+      $msg_text = $msg;
+    }
+    
+    // Only display if we have message text
+    if(!empty($msg_text)) {
+      echo '<div class="custom-alert alert-' . htmlspecialchars($msg_type) . ' alert-dismissible fade show" role="alert">';
+      echo htmlspecialchars($msg_text);
+      echo '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+      echo '</div>';
+    }
+  }
+  ?>
+</div>
 
     <form method="post" action="auth_v2.php" class="clearfix">
       <div class="form-group">
@@ -279,7 +342,9 @@
       </div>
     </form>
 
-  
+    <!-- <div class="forgot-password">
+      <a href="forgot-password.php">Forgot your password?</a>
+    </div> -->
   </div>
 
   <!-- Typing animation -->
@@ -325,6 +390,17 @@
     
     // Start the typing animation
     typePhrase();
+
+    // Auto-dismiss alerts after 5 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+      const alerts = document.querySelectorAll('.custom-alert');
+      alerts.forEach(function(alert) {
+        setTimeout(function() {
+          const bsAlert = new bootstrap.Alert(alert);
+          bsAlert.close();
+        }, 5000);
+      });
+    });
   </script>
 
   <!-- Scripts -->

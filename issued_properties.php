@@ -1,7 +1,7 @@
 <?php
 $page_title = 'Issued Items';
 require_once('includes/load.php');
-page_require_level(2); // Staff or Admin only
+page_require_level(1);
 
 
 // Fetch issued Semi-Expendable (ICS) items
@@ -55,7 +55,7 @@ $sql_returned_ics = "
         t.remarks,
         CONCAT(e.first_name, ' ', e.middle_name, ' ', e.last_name) AS employee_name,
         e.position,
-        e.office,
+        o.office_name,
         p.inv_item_no,
         p.item,
         p.item_description,
@@ -63,11 +63,13 @@ $sql_returned_ics = "
         p.unit_cost
     FROM transactions t
     LEFT JOIN employees e ON t.employee_id = e.id
+    LEFT JOIN offices o ON e.office = o.id
     LEFT JOIN semi_exp_prop p ON t.item_id = p.id
     WHERE t.ICS_No IS NOT NULL 
-      AND t.status IN ('Returned', 'Damaged')
+      AND t.status IN ('Returned', 'Damaged', 'Partially Re-Issued', 'Partially Returned')
     ORDER BY t.return_date DESC
 ";
+
 
 $returned_ics = find_by_sql($sql_returned_ics);
 $ics_transactions = find_by_sql($sql_ics);
@@ -150,26 +152,35 @@ $ics_transactions = find_by_sql($sql_ics);
         background: rgba(40, 167, 69, 0.15);
         color: #1e7e34;
     }
-    
+
     .badge-returned {
         background: rgba(40, 167, 69, 0.15);
         color: #1e7e34;
     }
-    
+
     .badge-re-issued {
         background: rgba(40, 167, 69, 0.15);
         color: #1e7e34;
     }
 
     .badge-returned {
-        background: rgba(108, 117, 125, 0.15);
-        color: #495057;
+        background: rgba(40, 167, 69, 0.15);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
     }
 
     .badge-partially_returned {
-        background: rgba(108, 117, 125, 0.15);
-        color: #495057;
+        background: rgba(255, 193, 7, 0.15);
+        color: #856404;
+        border: 1px solid rgba(255, 193, 7, 0.3);
     }
+
+    .badge-partially_re_issued {
+        background: rgba(0, 123, 255, 0.15);
+        color: #0056b3;
+        border: 1px solid rgba(0, 123, 255, 0.3);
+    }
+
 
     .badge-damaged {
         background: rgba(220, 53, 69, 0.15);
@@ -191,17 +202,17 @@ $ics_transactions = find_by_sql($sql_ics);
         transform: translateY(-1px);
     }
 
-    .btn-outline-primary-custom {
-        border: 1px solid #007bff;
-        color: #007bff;
+    .btn-primary-custom {
+        background:  #007bff;
+        color: #ffffffff;
         border-radius: 6px;
         padding: 0.4rem 0.8rem;
         font-weight: 500;
         transition: all 0.3s ease;
     }
 
-    .btn-outline-primary-custom:hover {
-        background: #007bff;
+    .btn-primary-custom:hover {
+        background: #003e81ff;
         color: white;
         transform: translateY(-1px);
     }
@@ -342,6 +353,25 @@ $ics_transactions = find_by_sql($sql_ics);
     .table-responsive {
         overflow-x: hidden;
     }
+    /* Ultra-compact count column */
+#icsTable th:nth-child(1),
+#icsTable td:nth-child(1),
+#returnedIcsTable th:nth-child(1),
+#returnedIcsTable td:nth-child(1) {
+    width: 8% !important; /* Even smaller */
+    min-width: 30px;
+    max-width: 40px;
+    padding: 0.3rem 0.1rem !important;
+}
+
+/* Compact badge for count */
+#icsTable td:nth-child(1) .badge,
+#returnedIcsTable td:nth-child(1) .badge {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+    min-width: 25px;
+}
+
 </style>
 
 <div class="container-fluid py-4">
@@ -406,20 +436,17 @@ $ics_transactions = find_by_sql($sql_ics);
                                             <?= $t['qty_returned'] ?> <?= $t['unit']; ?>
                                         </span>
                                     </td>
-                                <td class="text-center">
-                                     <span class="badge badge-custom badge-re-issued">
-                                    <?= $t['qty_re_issued'] ?: 0; ?> <?= $t['unit']; ?></td>
-                                        </span>
+                                    <td class="text-center">
+                                        <span class="badge badge-custom badge-re-issued">
+                                            <?= $t['qty_re_issued'] ?: 0; ?> <?= $t['unit']; ?>
+                                    </td>
+                                    </span>
 
 
                                     <td class="text-center">
-                                        <?php if ($t['status'] == 'Returned'): ?>
-                                            <span class="badge badge-custom badge-returned">
-                                                <i class="fas fa-check-circle me-1"></i>Returned
-                                            </span>
-                                        <?php elseif ($t['status'] == 'Partially Returned'): ?>
-                                            <span class="badge badge-custom badge-partially_returned">
-                                                <i class="fas fa-times-circle me-1"></i>Partially Returned
+                                        <?php if ($t['status'] == 'Partially Re-Issued'): ?>
+                                            <span class="badge badge-custom badge-partially_re_issued" style="font-size:10px">
+                                                 <i class="fas fa-redo me-1"></i>Partially Re-Issued
                                             </span>
                                         <?php elseif ($t['status'] == 'Damaged'): ?>
                                             <span class="badge badge-custom badge-damaged">
@@ -491,7 +518,7 @@ $ics_transactions = find_by_sql($sql_ics);
                 <table class="table table-custom" id="returnedIcsTable">
                     <thead>
                         <tr>
-                            <th class="text-center">#</th>
+                            <th class="text-center" >#</th>
                             <th class="text-center">ICS No.</th>
                             <th>Returned By</th>
                             <th>Office</th>
@@ -506,37 +533,55 @@ $ics_transactions = find_by_sql($sql_ics);
                         foreach ($returned_ics as $r): ?>
                             <tr>
                                 <td class="text-center"><span class="badge badge-custom badge-issued"><?= $count++; ?></span></td>
-                                <td class="text-center"><?= $r['ICS_No'] ?: '-'; ?></td>
+                                <td class="document-number"><?= $r['ICS_No'] ?: '-'; ?></td>
                                 <td>
                                     <div class="employee-info">
                                         <span class="employee-name"><?= $r['employee_name']; ?></span>
                                         <span class="employee-position"><?= $r['position']; ?></span>
                                     </div>
                                 </td>
-                                <td><?= $r['office']; ?></td>
+                                <td><?= $r['office_name']; ?></td>
                                 <td>
                                     <div class="item-details">
                                         <div class="item-name" title="<?= htmlspecialchars($r['item']); ?>"><?= htmlspecialchars($r['item']); ?></div>
                                         <div class="item-description"><?= htmlspecialchars($r['item_description']); ?></div>
                                     </div>
                                 </td>
-                                <td class="text-center"><?= $r['qty_returned'] ?: 0; ?> <?= $r['unit']; ?></td>
+                                <td class="text-center" ><span class="badge badge-custom badge-returned"><?= $r['qty_returned'] ?: 0; ?> <?= $r['unit']; ?></span></td>
                                 <td class="text-center">
                                     <?php if ($r['status'] == 'Returned'): ?>
-                                        <span class="badge badge-custom badge-returned"><i class="fas fa-check-circle me-1"></i>Returned</span>
+                                        <span class="badge badge-custom badge-returned">
+                                            <i class="fas fa-check-circle me-1"></i>Returned
+                                        </span>
+                                    <?php elseif ($r['status'] == 'Partially Returned'): ?>
+                                        <span class="badge badge-custom badge-partially_returned">
+                                            <i class="fas fa-exclamation-circle me-1"></i>Partially Returned
+                                        </span>
+                                    <?php elseif ($r['status'] == 'Partially Re-Issued'): ?>
+                                        <span class="badge badge-custom badge-partially_re_issued">
+                                            <i class="fas fa-redo me-1"></i>Partially Re-Issued
+                                        </span>
+                                    <?php elseif ($r['status'] == 'Damaged'): ?>
+                                        <span class="badge badge-custom badge-damaged">
+                                            <i class="fas fa-times-circle me-1"></i>Damaged
+                                        </span>
                                     <?php else: ?>
-                                        <span class="badge badge-custom badge-damaged"><i class="fas fa-times-circle me-1"></i>Damaged</span>
+                                        <span class="badge badge-secondary">
+                                            <i class="fas fa-info-circle me-1"></i>Unknown
+                                        </span>
                                     <?php endif; ?>
                                 </td>
+
+
                                 <td class="text-center">
                                     <div class="action-buttons">
-                                        <a href="view_transaction.php?id=<?= $r['id']; ?>" 
-                                           class="btn btn-outline-success-custom btn-sm" 
-                                           title="View Details">
+                                        <a href="view_transaction.php?id=<?= $r['id']; ?>"
+                                            class="btn btn-outline-success-custom btn-sm"
+                                            title="View Details">
                                             <i class="fas fa-eye"></i>
                                         </a>
 
-                                        <button class="btn btn-outline-primary-custom btn-sm reissue-btn"
+                                        <button class="btn btn-primary-custom btn-sm reissue-btn"
                                             data-bs-toggle="modal"
                                             data-bs-target="#reissueModal"
                                             data-id="<?= $r['id']; ?>"
@@ -659,7 +704,7 @@ $ics_transactions = find_by_sql($sql_ics);
 </div>
 
 <?php include_once('layouts/footer.php'); ?>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
@@ -780,7 +825,7 @@ $ics_transactions = find_by_sql($sql_ics);
                 columnDefs: [{
                         orderable: false,
                         targets: [8]
-                    } // Disable sorting for Actions column
+                    } 
                 ],
             });
         });
@@ -789,101 +834,113 @@ $ics_transactions = find_by_sql($sql_ics);
 
 <script>
     // 🟦 Handle Re-Issue Modal
-const reissueModalEl = document.getElementById('reissueModal');
-const reissueForm = document.getElementById('reissueForm');
-const reissueQtyInput = reissueForm.querySelector('input[name="reissue_qty"]');
+    const reissueModalEl = document.getElementById('reissueModal');
+    const reissueForm = document.getElementById('reissueForm');
+    const reissueQtyInput = reissueForm.querySelector('input[name="reissue_qty"]');
 
-reissueModalEl.addEventListener('show.bs.modal', event => {
-    const button = event.relatedTarget;
-    if (!button) return;
+    reissueModalEl.addEventListener('show.bs.modal', event => {
+        const button = event.relatedTarget;
+        if (!button) return;
 
-    const transId = button.dataset.id;
-    const itemName = button.dataset.item;
-    const returnedQty = parseInt(button.dataset.returned || 0);
-    const reissuedQty = parseInt(button.dataset.reissued || 0);
-    const remainingQty = returnedQty - reissuedQty;
+        const transId = button.dataset.id;
+        const itemName = button.dataset.item;
+        const returnedQty = parseInt(button.dataset.returned || 0);
+        const reissuedQty = parseInt(button.dataset.reissued || 0);
+        const remainingQty = returnedQty - reissuedQty;
 
-    document.getElementById('reissue_transaction_id').value = transId;
-    document.getElementById('reissue_item_name').textContent = `Re-Issue: ${itemName}`;
-    reissueQtyInput.value = '';
-    reissueQtyInput.max = remainingQty;
-    reissueQtyInput.placeholder = `Max: ${remainingQty}`;
-    reissueQtyInput.dataset.remaining = remainingQty;
+        document.getElementById('reissue_transaction_id').value = transId;
+        document.getElementById('reissue_item_name').textContent = `Re-Issue: ${itemName}`;
+        reissueQtyInput.value = '';
+        reissueQtyInput.max = remainingQty;
+        reissueQtyInput.placeholder = `Max: ${remainingQty}`;
+        reissueQtyInput.dataset.remaining = remainingQty;
 
-    if (remainingQty <= 0) {
-        reissueQtyInput.disabled = true;
-        reissueQtyInput.placeholder = 'No quantity left to re-issue';
-    } else {
-        reissueQtyInput.disabled = false;
-    }
-});
+        if (remainingQty <= 0) {
+            reissueQtyInput.disabled = true;
+            reissueQtyInput.placeholder = 'No quantity left to re-issue';
+        } else {
+            reissueQtyInput.disabled = false;
+        }
+    });
 
-// 🟦 Prevent exceeding reissue quantity
-reissueQtyInput.addEventListener('input', () => {
-    const entered = parseInt(reissueQtyInput.value || 0);
-    const max = parseInt(reissueQtyInput.dataset.remaining || 0);
-    if (entered > max) {
-        reissueQtyInput.value = max;
-        Swal.fire({
-            icon: 'warning',
-            title: 'Quantity Limit Exceeded',
-            text: `You can only re-issue up to ${max} item(s).`,
-            timer: 1500,
-            showConfirmButton: false
-        });
-    }
-});
-
-// 🟦 Handle AJAX reissue submission
-reissueForm.addEventListener('submit', async e => {
-    e.preventDefault();
-    const formData = new FormData(reissueForm);
-    const submitBtn = reissueForm.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
-    submitBtn.disabled = true;
-
-    try {
-        const response = await fetch('process_reissue.php', {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            await Swal.fire({
-                icon: 'success',
-                title: 'Item Re-Issued',
-                text: data.message,
+    // 🟦 Prevent exceeding reissue quantity
+    reissueQtyInput.addEventListener('input', () => {
+        const entered = parseInt(reissueQtyInput.value || 0);
+        const max = parseInt(reissueQtyInput.dataset.remaining || 0);
+        if (entered > max) {
+            reissueQtyInput.value = max;
+            Swal.fire({
+                icon: 'warning',
+                title: 'Quantity Limit Exceeded',
+                text: `You can only re-issue up to ${max} item(s).`,
                 timer: 1500,
                 showConfirmButton: false
             });
-            bootstrap.Modal.getInstance(reissueModalEl).hide();
-            location.reload();
-        } else {
-            Swal.fire({ icon: 'error', title: 'Error', text: data.message });
         }
-    } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({ icon: 'error', title: 'Request Failed', text: 'An unexpected error occurred.' });
-    } finally {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    }
-});
-
-// 🟦 Initialize DataTable for returned items
-$(document).ready(function() {
-    $('#returnedIcsTable').DataTable({
-        pageLength: 10,
-        lengthMenu: [5, 10, 25, 50],
-        ordering: true,
-        searching: true,
-        responsive: true,
-        columnDefs: [{ orderable: false, targets: [8] }],
     });
-});
 
+    // 🟦 Handle AJAX reissue submission
+    reissueForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const formData = new FormData(reissueForm);
+        const submitBtn = reissueForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
+        submitBtn.disabled = true;
+
+        try {
+            const response = await fetch('process_reissue.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Item Re-Issued',
+                    text: data.message,
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+                bootstrap.Modal.getInstance(reissueModalEl).hide();
+                location.reload();
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: data.message
+                });
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Request Failed',
+                text: 'An unexpected error occurred.'
+            });
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // 🟦 Initialize DataTable for returned items
+    $(document).ready(function() {
+        $('#returnedIcsTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50],
+            ordering: true,
+            searching: true,
+            responsive: true,
+            autoWidth:false,
+            columnDefs: [{
+                orderable: false,
+                targets: [7],
+            }
+        ],
+        });
+    });
 </script>

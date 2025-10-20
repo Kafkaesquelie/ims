@@ -4,6 +4,25 @@ require_once('includes/load.php');
 page_require_level(1);
 
 $current_user = current_user();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// ✅ Define helper functions FIRST, before they are used
+if (!function_exists('get_unit_name')) {
+    function get_unit_name($unit_id) {
+        global $db;
+        $res = $db->query("SELECT name FROM units WHERE id = '{$unit_id}' LIMIT 1");
+        return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : '';
+    }
+}
+
+if (!function_exists('get_base_unit_name')) {
+    function get_base_unit_name($base_unit_id) {
+        global $db;
+        $res = $db->query("SELECT name FROM base_units WHERE id = '{$base_unit_id}' LIMIT 1");
+        return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : 'Unit';
+    }
+}
 
 if (isset($_GET['issued'])) {
     $request_id = (int)$_GET['issued'];
@@ -137,11 +156,21 @@ if (isset($_GET['issued'])) {
             ");
         }
 
-        // ✅ Determine new status
-        $new_status = $is_user ? 'Completed' : 'Issued';
-        $date_field = $is_user ? "date_completed = NOW()" : "date_issued = NOW()";
+               //  Determine new status - Employees are automatically completed, users stay as Issued
+        if ($is_employee) {
+            // Employee requests: mark as Completed immediately
+            $new_status = 'Completed';
+            $date_field = "date_completed = NOW()";
+        } else {
+            // User requests: mark as Issued (for confirmation)
+            $new_status = 'Issued';
+            $date_field = "date_issued = NOW()";
+        }
 
-        // ✅ Update request status
+        //  Update request status
+        $db->query("UPDATE requests SET status = '{$new_status}', {$date_field} WHERE id = '{$request_id}'");
+
+        //  Update request status
         $db->query("UPDATE requests SET status = '{$new_status}', {$date_field} WHERE id = '{$request_id}'");
 
         $db->query("COMMIT");
@@ -155,25 +184,32 @@ if (isset($_GET['issued'])) {
     exit;
 }
 
-// Add helper functions if not already defined
-if (!function_exists('get_unit_name')) {
-    function get_unit_name($unit_id) {
-        global $db;
-        $res = $db->query("SELECT name FROM units WHERE id = '{$unit_id}' LIMIT 1");
-        return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : '';
-    }
-}
 
-if (!function_exists('get_base_unit_name')) {
-    function get_base_unit_name($base_unit_id) {
-        global $db;
-        $res = $db->query("SELECT name FROM base_units WHERE id = '{$base_unit_id}' LIMIT 1");
-        return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : 'Unit';
-    }
-}
+// Simple fix: Use a custom query to get requests with office and division names
+$sql = "
+    SELECT 
+        r.*,
+        COALESCE(u.name, CONCAT(e.first_name, ' ', e.last_name)) as req_by,
+        COALESCE(u.position, e.position) as position,
+        COALESCE(ud.division_name, ed.division_name, u.division, e.division) as division,
+        COALESCE(uo.office_name, eo.office_name, u.office, e.office) as office,
+        COALESCE(u.image, e.image, 'no_image.png') as image
+    FROM requests r
+    LEFT JOIN users u ON r.requested_by = u.id
+    LEFT JOIN employees e ON r.requested_by = e.id
+    -- Join with divisions table for users
+    LEFT JOIN divisions ud ON u.division = ud.id
+    -- Join with divisions table for employees  
+    LEFT JOIN divisions ed ON e.division = ed.id
+    -- Join with offices table for users
+    LEFT JOIN offices uo ON u.office= uo.id
+    -- Join with offices table for employees
+    LEFT JOIN offices eo ON e.office = eo.id
+    WHERE r.status != 'archived'
+    ORDER BY r.date DESC
+";
 
-// Fetch all requests
-$requests = find_all_req();
+$requests = find_by_sql($sql);
 ?>
 
 <?php include_once('layouts/header.php'); 

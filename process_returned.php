@@ -5,9 +5,8 @@ header('Content-Type: application/json');
 
 $response = ['success' => false, 'message' => ''];
 
-// ✅ Ensure POST request
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    $response['message'] = 'Invalid request method: ' . $_SERVER['REQUEST_METHOD'];
+    $response['message'] = 'Invalid request method.';
     echo json_encode($response);
     exit;
 }
@@ -38,12 +37,12 @@ $qty_returned = (int)$transaction['qty_returned'];
 $total_returned = $qty_returned + $return_qty;
 
 if ($total_returned > $issued_qty) {
-    $response['message'] = 'Return quantity exceeds the total issued quantity.';
+    $response['message'] = 'Return quantity exceeds issued quantity.';
     echo json_encode($response);
     exit;
 }
 
-// ✅ Generate RRSP Number (monthly sequence)
+// ✅ Generate RRSP number
 $yearMonth = date('Y-m');
 $monthStart = $yearMonth . '-01';
 $monthEnd   = date('Y-m-t', strtotime($monthStart));
@@ -60,17 +59,12 @@ $count_data = $result ? $result->fetch_assoc() : ['rrsp_count' => 0];
 $newCount = (int)$count_data['rrsp_count'] + 1;
 $rrsp_no = "{$yearMonth}-" . str_pad($newCount, 4, '0', STR_PAD_LEFT);
 
-// ✅ Determine new status
-if ($total_returned == $issued_qty) {
-    $new_status = 'Returned';
-} else {
-    $new_status = 'Partially Returned';
-}
+$new_status = ($total_returned == $issued_qty) ? 'Returned' : 'Partially Returned';
 
 $db->query("START TRANSACTION");
 
 try {
-    // ✅ Update transaction (track qty_returned and RRSP)
+    // ✅ Update transaction
     $update_sql = "
         UPDATE transactions 
         SET 
@@ -86,7 +80,7 @@ try {
         throw new Exception('Failed to update transaction.');
     }
 
-    // ✅ Update stock quantity (add returned qty back to inventory)
+    // ✅ Return items to stock
     $item_table = !empty($transaction['ICS_No']) ? 'semi_exp_prop' : 'properties';
     $item = find_by_id($item_table, $transaction['item_id']);
     if ($item) {
@@ -96,9 +90,8 @@ try {
     }
 
     $db->query("COMMIT");
-
     $response['success'] = true;
-    $response['message'] = "Item successfully marked as {$new_status}. Generated RRSP No: {$rrsp_no}";
+    $response['message'] = "Item successfully marked as {$new_status}. RRSP No: {$rrsp_no}";
 } catch (Exception $e) {
     $db->query("ROLLBACK");
     $response['message'] = 'Error: ' . $e->getMessage();

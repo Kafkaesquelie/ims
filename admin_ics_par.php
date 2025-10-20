@@ -57,12 +57,13 @@ $issued_items = find_by_sql("
 
 $employees = find_by_sql("
     SELECT 
-        id, 
-        CONCAT(first_name, ' ', middle_name, ' ', last_name) AS fullname, 
-        position,
-        office
-    FROM employees 
-    ORDER BY last_name ASC
+        e.id, 
+        CONCAT(e.first_name, ' ', e.middle_name, ' ', e.last_name) AS fullname, 
+        e.position,
+        o.office_name
+    FROM employees e
+    LEFT JOIN offices o ON e.office = o.id
+    ORDER BY e.last_name ASC
 ");
 
 ?>
@@ -879,7 +880,7 @@ $employees = find_by_sql("
                                         <select class="form-select p-2" name="requestor_id" id="par_requestor_id" required onchange="updateParDepartment()">
                                             <option value=""> Select Requestor </option>
                                             <?php foreach($employees as $emp): ?>
-                                                <option value="<?= $emp['id'] ?>" data-department="<?= $emp['office'] ?? $emp['department'] ?? '' ?>">
+                                                <option value="<?= $emp['id'] ?>" data-department="<?= $emp['office_name'] ?? $emp['department'] ?? '' ?>">
                                                     <?= $emp['fullname'] ?> - <?= $emp['position'] ?>
                                                 </option>
                                             <?php endforeach; ?>
@@ -1060,7 +1061,7 @@ $employees = find_by_sql("
                                         <select class="form-select p-2 border-success" name="requestor_id" id="ics_requestor_id" required onchange="updateIcsDepartment()">
                                             <option value=""> Select Requestor </option>
                                             <?php foreach($employees as $emp): ?>
-                                                <option value="<?= $emp['id'] ?>" data-department="<?= $emp['office'] ?? $emp['department'] ?? '' ?>">
+                                                <option value="<?= $emp['id'] ?>" data-department="<?= $emp['office_name'] ?? $emp['department'] ?? '' ?>">
                                                     <?= $emp['fullname'] ?> - <?= $emp['position'] ?>
                                                 </option>
                                             <?php endforeach; ?>

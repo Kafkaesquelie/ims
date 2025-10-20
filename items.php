@@ -9,7 +9,8 @@ $base_units = find_by_sql("SELECT id, name, symbol FROM base_units ORDER BY name
 $fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name ASC");
 $categories = find_all('categories');
 
-// Function to get unit name from either units or base_units table
+
+// IMPROVED FUNCTION - Get unit name with better fallbacks
 function get_unit_name($unit_id)
 {
   global $db;
@@ -18,237 +19,292 @@ function get_unit_name($unit_id)
   if ($id === 0) return 'Unit';
 
   // Try units table first
-  $result = $db->query("SELECT name FROM units WHERE id = {$id} LIMIT 1");
+  $result = $db->query("SELECT name, symbol FROM units WHERE id = {$id} LIMIT 1");
   if ($result && $row = $result->fetch_assoc()) {
-    return $row['name'];
+    return !empty($row['symbol']) ? $row['symbol'] : $row['name'];
   }
 
   // Try base_units table
-  $result = $db->query("SELECT name FROM base_units WHERE id = {$id} LIMIT 1");
+  $result = $db->query("SELECT name, symbol FROM base_units WHERE id = {$id} LIMIT 1");
   if ($result && $row = $result->fetch_assoc()) {
-    return $row['name'];
+    return !empty($row['symbol']) ? $row['symbol'] : $row['name'];
   }
 
   return 'Unit';
 }
 
-// FIXED: Properly get base unit from base_units table
-function calculate_display_quantity($item_id, $quantity)
+function get_all_items_with_conversions($limit = 10, $page = 1, $category = 'all')
 {
   global $db;
 
-  // Fetch item info with base unit details
+  $start = ($page - 1) * $limit;
+
+  $category_filter = '';
+  if ($category !== 'all') {
+    $category_filter = " AND i.categorie_id = '{$db->escape($category)}'";
+  }
+
   $sql = "
-    SELECT 
-      i.unit_id AS main_unit_id,
-      i.base_unit_id AS base_unit_id,
-      bu.name AS base_unit_name,
-      uc.conversion_rate
-    FROM items i
-    LEFT JOIN base_units bu ON bu.id = i.base_unit_id
-    LEFT JOIN unit_conversions uc ON uc.item_id = i.id
-    WHERE i.id = '{$item_id}'
-    LIMIT 1";
-  
-  $result = $db->query($sql);
-  if (!$result || $db->num_rows($result) === 0) {
-    // fallback: no item found
-    $item = find_by_id('items', $item_id);
-    $unit_name = get_unit_name($item['unit_id']);
-    return [
-      'display' => number_format($quantity, 2) . " {$unit_name}",
-      'main_quantity' => $quantity,
-      'base_quantity' => 0,
-      'main_unit' => $unit_name,
-      'base_unit' => '',
-      'conversion_rate' => 1,
-      'has_conversion' => false
-    ];
+        SELECT DISTINCT
+            i.id,
+            i.name,
+            i.fund_cluster,
+            i.stock_card,
+            i.quantity,
+            i.unit_id,
+            i.base_unit_id,
+            i.unit_cost,
+            i.categorie_id,
+            i.description,
+            c.name AS category,
+            m.file_name AS image,
+            u.name AS unit_name,
+            u.symbol AS unit_symbol,
+            bu.name AS base_unit_name,
+            bu.symbol AS base_unit_symbol
+        FROM items i
+        LEFT JOIN categories c ON i.categorie_id = c.id
+        LEFT JOIN media m ON i.media_id = m.id
+        LEFT JOIN units u ON i.unit_id = u.id
+        LEFT JOIN base_units bu ON i.base_unit_id = bu.id
+        WHERE i.archived = 0{$category_filter}
+        ORDER BY i.name ASC
+        LIMIT {$start}, {$limit}
+    ";
+
+  $items = find_by_sql($sql);
+
+  foreach ($items as &$item) {
+    $quantity = (float)$item['quantity'];
+
+    $unit_display = !empty($item['unit_symbol']) ? $item['unit_symbol'] : $item['unit_name'];
+    $base_unit_display = !empty($item['base_unit_symbol']) ? $item['base_unit_symbol'] : $item['base_unit_name'];
+
+    // Set default values
+    $item['unit_name'] = $unit_display;
+    $item['base_unit_name'] = $base_unit_display;
+    $item['display_quantity'] = number_format($quantity, 2) . " {$unit_display}";
+    $item['has_conversion'] = false;
+    $item['main_quantity'] = $quantity;
+    $item['base_quantity'] = 0;
+    $item['main_unit'] = $unit_display;
+    $item['base_unit'] = '';
+    $item['main_unit_display'] = $unit_display;
+    $item['base_unit_display'] = '';
+    $item['conversion_rate'] = 1;
+
+    // Only check for conversions if we have a valid base unit scenario
+    if ($item['base_unit_id'] && $item['base_unit_name'] !== 'Not Applicable' && $item['base_unit_id'] != $item['unit_id']) {
+
+      // CORRECTED SQL QUERY - from_unit_id comes from units table, to_unit_id comes from base_units table
+      $conversion_sql = "
+              SELECT 
+                  uc.conversion_rate,
+                  u.name as from_unit_name,
+                  u.symbol as from_unit_symbol,
+                  bu.name as to_unit_name,
+                  bu.symbol as to_unit_symbol
+              FROM unit_conversions uc
+              LEFT JOIN units u ON u.id = uc.from_unit_id
+              LEFT JOIN base_units bu ON bu.id = uc.to_unit_id
+              WHERE uc.item_id = '{$item['id']}'
+              LIMIT 1
+          ";
+
+      $conversion_result = $db->query($conversion_sql);
+
+      // If we have conversion data, calculate the display
+      if ($conversion_result && $db->num_rows($conversion_result) > 0) {
+        $conv = $conversion_result->fetch_assoc();
+        $rate = (float)$conv['conversion_rate'];
+
+        if ($rate > 0) {
+          // Use symbols if available, otherwise use names
+          $main_unit_display = !empty($conv['from_unit_symbol']) ? $conv['from_unit_symbol'] : $conv['from_unit_name'];
+          $base_unit_display = !empty($conv['to_unit_symbol']) ? $conv['to_unit_symbol'] : $conv['to_unit_name'];
+
+          $full_main = floor($quantity);
+          $fraction = $quantity - $full_main;
+          $remaining_base = round($fraction * $rate, 2);
+
+          // Handle floating point rounding
+          if ($remaining_base >= $rate - 0.01) {
+            $full_main += 1;
+            $remaining_base = 0;
+          }
+
+          // Format the display
+          if ($full_main <= 0 && $remaining_base > 0) {
+            $item['display_quantity'] = number_format($remaining_base, 0) . " {$base_unit_display}";
+          } elseif ($full_main > 0 && $remaining_base > 0) {
+            $item['display_quantity'] = intval($full_main) . " {$main_unit_display} | " . number_format($remaining_base, 0) . " {$base_unit_display}";
+          } else {
+            $item['display_quantity'] = intval($full_main) . " {$main_unit_display}";
+          }
+
+          $item['has_conversion'] = true;
+          $item['main_quantity'] = (float)$full_main;
+          $item['base_quantity'] = (float)$remaining_base;
+          $item['main_unit'] = $conv['from_unit_name'];
+          $item['base_unit'] = $conv['to_unit_name'];
+          $item['main_unit_display'] = $main_unit_display;
+          $item['base_unit_display'] = $base_unit_display;
+          $item['conversion_rate'] = $rate;
+        }
+      }
+    }
   }
+  unset($item);
 
-  $item = $result->fetch_assoc();
-
-  $main_unit_id = (int)$item['main_unit_id'];
-  $base_unit_id = (int)$item['base_unit_id'];
-  $base_unit_name = $item['base_unit_name'] ?? '';
-  $rate = (float)($item['conversion_rate'] ?? 1);
-
-  // ✅ Get proper main unit name
-  $main_unit_name = get_unit_name($main_unit_id);
-
-  // ✅ If base unit is "Not Applicable" or same as main unit, show normal quantity
-  if ($base_unit_name === 'Not Applicable' || !$base_unit_id || $base_unit_id == $main_unit_id) {
-    return [
-      'display' => number_format($quantity, 2) . " {$main_unit_name}",
-      'main_quantity' => $quantity,
-      'base_quantity' => 0,
-      'main_unit' => $main_unit_name,
-      'base_unit' => '',
-      'conversion_rate' => 1,
-      'has_conversion' => false
-    ];
-  }
-
-  // ✅ For items with valid base units, just show the quantity with main unit
-  // The base unit info is available for display purposes
-  return [
-    'display' => number_format($quantity, 2) . " {$main_unit_name}",
-    'main_quantity' => $quantity,
-    'base_quantity' => 0,
-    'main_unit' => $main_unit_name,
-    'base_unit' => $base_unit_name,
-    'conversion_rate' => $rate,
-    'has_conversion' => true
-  ];
+  return $items;
 }
 
 // Handle form submission for adding items
 if (isset($_POST['add_item'])) {
-  if (empty($errors)) {
-    $fund_cluster   = $db->escape($_POST['fund_cluster']);
-    $stock_card     = $db->escape($_POST['stock_card']);
-    $name           = $db->escape($_POST['name']);
-    $quantity       = (float)$db->escape($_POST['quantity']);
-    $base_unit_id = (int)$_POST['base_unit_id'];
-    $unit_id        = (int)$db->escape($_POST['unit_id']);
-    $unit_cost      = $db->escape($_POST['unit_cost']);
-    $categorie_id   = (int)$db->escape($_POST['categorie_id']);
-    $desc           = $db->escape($_POST['description']);
-    $media_id       = 0;
+  $errors = array(); // Initialize errors array
 
-    // New fields for unit conversion
-    $base_unit_id   = isset($_POST['base_unit_id']) ? (int)$db->escape($_POST['base_unit_id']) : 0;
-    $conversion_rate = isset($_POST['conversion_rate']) ? (float)$db->escape($_POST['conversion_rate']) : 1.0;
+  $fund_cluster   = $db->escape($_POST['fund_cluster']);
+  $stock_card     = $db->escape($_POST['stock_card']);
+  $name           = $db->escape($_POST['name']);
+  $quantity       = (float)$db->escape($_POST['quantity']);
+  $unit_id        = (int)$db->escape($_POST['unit_id']);
+  $unit_cost      = $db->escape($_POST['unit_cost']);
+  $categorie_id   = (int)$db->escape($_POST['categorie_id']);
+  $desc           = $db->escape($_POST['description']);
+  $media_id       = 0;
 
-    // ✅ Handle image upload
-    if (isset($_FILES['item_image']) && $_FILES['item_image']['name'] != "") {
-      $file_name = basename($_FILES['item_image']['name']);
-      $target_dir = "uploads/items/";
-      $target_file = $target_dir . $file_name;
-      $check = getimagesize($_FILES["item_image"]["tmp_name"]);
+  // New fields for unit conversion
+  $base_unit_id   = isset($_POST['base_unit_id']) ? (int)$db->escape($_POST['base_unit_id']) : 0;
+  $conversion_rate = isset($_POST['conversion_rate']) ? (float)$db->escape($_POST['conversion_rate']) : 1.0;
 
-      if ($check !== false) {
-        if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $target_file)) {
-          $db->query("INSERT INTO media (file_name) VALUES ('{$file_name}')");
-          $media_id = $db->insert_id();
-        } else {
-          $session->msg('d', 'Failed to upload image.');
-          redirect('items.php', false);
-        }
+  // Handle image upload
+  if (isset($_FILES['item_image']) && $_FILES['item_image']['name'] != "") {
+    $file_name = basename($_FILES['item_image']['name']);
+    $target_dir = "uploads/items/";
+    $target_file = $target_dir . $file_name;
+    $check = getimagesize($_FILES["item_image"]["tmp_name"]);
+
+    if ($check !== false) {
+      if (move_uploaded_file($_FILES["item_image"]["tmp_name"], $target_file)) {
+        $db->query("INSERT INTO media (file_name) VALUES ('{$file_name}')");
+        $media_id = $db->insert_id();
       } else {
-        $session->msg('d', 'File is not an image.');
+        $session->msg('d', 'Failed to upload image.');
         redirect('items.php', false);
       }
     } else {
-      // Use default image if no upload
-      $default_file = 'no_image.png';
-      $db->query("INSERT INTO media (file_name) VALUES ('{$default_file}')");
-      $media_id = $db->insert_id();
-    }
-
-    // ✅ Check for duplicate name
-    $check_name_sql = "SELECT id FROM items WHERE name = '{$name}' LIMIT 1";
-    $check_name_result = $db->query($check_name_sql);
-    if ($db->num_rows($check_name_result) > 0) {
-      $_SESSION['form_data'] = $_POST;
-      $session->msg('d', "Item Name already exists.");
+      $session->msg('d', 'File is not an image.');
       redirect('items.php', false);
     }
+  } else {
+    // Use default image if no upload
+    $default_file = 'no_image.png';
+    $db->query("INSERT INTO media (file_name) VALUES ('{$default_file}')");
+    $media_id = $db->insert_id();
+  }
 
-    // ✅ Check for duplicate Stock Card
-    $check_sql = "SELECT id FROM items WHERE stock_card = '{$stock_card}' LIMIT 1";
-    $check_result = $db->query($check_sql);
-    if ($db->num_rows($check_result) > 0) {
-      $_SESSION['form_data'] = $_POST;
-      $session->msg('d', "Stock Card <b>{$stock_card}</b> already exists.");
-      redirect('items.php', false);
+  // Check for duplicate name
+  $check_name_sql = "SELECT id FROM items WHERE name = '{$name}' LIMIT 1";
+  $check_name_result = $db->query($check_name_sql);
+  if ($db->num_rows($check_name_result) > 0) {
+    $_SESSION['form_data'] = $_POST;
+    $session->msg('d', "Item Name already exists.");
+    redirect('items.php', false);
+  }
+
+  // Check for duplicate Stock Card
+  $check_sql = "SELECT id FROM items WHERE stock_card = '{$stock_card}' LIMIT 1";
+  $check_result = $db->query($check_sql);
+  if ($db->num_rows($check_result) > 0) {
+    $_SESSION['form_data'] = $_POST;
+    $session->msg('d', "Stock Card <b>{$stock_card}</b> already exists.");
+    redirect('items.php', false);
+  }
+
+  // Insert item into items table
+  $sql = "INSERT INTO items (fund_cluster, stock_card, name, quantity, unit_id, base_unit_id, unit_cost, categorie_id, description, media_id, date_added)
+      VALUES ('{$fund_cluster}', '{$stock_card}', '{$name}', '{$quantity}', '{$unit_id}', '{$base_unit_id}', 
+                '{$unit_cost}', '{$categorie_id}', '{$desc}', '{$media_id}', NOW())";
+
+  if ($db->query($sql)) {
+    $item_id = $db->insert_id();
+
+    // Get current school year ID function
+    function get_current_school_year_id()
+    {
+      global $db;
+      // Try both possible formats
+      $res = $db->query("SELECT id FROM school_years WHERE is_current = 1 LIMIT 1");
+      if ($res && $db->num_rows($res) > 0) {
+        $row = $res->fetch_assoc();
+        return (int)$row['id'];
+      }
+
+      // If not found with is_current = 1, try is_current = 'active'
+      $res = $db->query("SELECT id FROM school_years WHERE is_current = 'active' LIMIT 1");
+      if ($res && $db->num_rows($res) > 0) {
+        $row = $res->fetch_assoc();
+        return (int)$row['id'];
+      }
+
+      return null;
     }
 
-    // ✅ Insert item into items table
-    $sql = "INSERT INTO items (fund_cluster, stock_card, name, quantity, unit_id, base_unit_id, unit_cost, categorie_id, description, media_id, date_added)
-        VALUES ('{$fund_cluster}', '{$stock_card}', '{$name}', '{$quantity}', '{$unit_id}', '{$base_unit_id}', 
-                  '{$unit_cost}', '{$categorie_id}', '{$desc}', '{$media_id}', NOW())";
+    $current_sy_id = get_current_school_year_id();
 
-    if ($db->query($sql)) {
-      $item_id = $db->insert_id();
+    // Initialize stock record for that year
+    if ($current_sy_id) {
+      $insert_stock_sql = "INSERT INTO item_stocks_per_year (item_id, school_year_id, stock, updated_at)
+              VALUES ('{$item_id}', '{$current_sy_id}', '{$quantity}', NOW())";
 
-      // ✅ FIXED: Get current school year ID function
-      function get_current_school_year_id()
-      {
-        global $db;
-        // Try both possible formats
-        $res = $db->query("SELECT id FROM school_years WHERE is_current = 1 LIMIT 1");
-        if ($res && $db->num_rows($res) > 0) {
-          $row = $res->fetch_assoc();
-          return (int)$row['id'];
-        }
-
-        // If not found with is_current = 1, try is_current = 'active'
-        $res = $db->query("SELECT id FROM school_years WHERE is_current = 'active' LIMIT 1");
-        if ($res && $db->num_rows($res) > 0) {
-          $row = $res->fetch_assoc();
-          return (int)$row['id'];
-        }
-
-        return null;
+      if (!$db->query($insert_stock_sql)) {
+        $session->msg('d', 'Item added but failed to initialize stock record: ' . $db->error());
+        redirect('items.php', false);
       }
-
-      $current_sy_id = get_current_school_year_id();
-
-      // ✅ FIXED: Initialize stock record for that year
-      if ($current_sy_id) {
-        $insert_stock_sql = "INSERT INTO item_stocks_per_year (item_id, school_year_id, stock, updated_at)
-                VALUES ('{$item_id}', '{$current_sy_id}', '{$quantity}', NOW())";
-
-        if (!$db->query($insert_stock_sql)) {
-          $session->msg('d', 'Item added but failed to initialize stock record: ' . $db->error());
-          redirect('items.php', false);
-        }
-      } else {
-        $session->msg('w', 'Item added but no active school year found for stock tracking.');
-      }
-
-      // ✅ FIXED: Insert conversion info ONLY if needed and valid
-      $base_unit_name = '';
-      foreach ($base_units as $bu) {
-        if ($bu['id'] == $base_unit_id) {
-          $base_unit_name = $bu['name'];
-          break;
-        }
-      }
-
-      // Only insert conversion if:
-      // 1. Base unit is selected AND not "Not Applicable" 
-      // 2. Base unit is different from regular unit
-      // 3. Conversion rate is valid (> 0)
-      if (
-        $base_unit_id &&
-        $base_unit_name !== 'Not Applicable' &&
-        $base_unit_id != $unit_id &&
-        $conversion_rate > 0
-      ) {
-
-        // Insert into unit_conversions table
-        $conversion_sql = "INSERT INTO unit_conversions (item_id, from_unit_id, to_unit_id, conversion_rate)
-                VALUES ('{$item_id}', '{$unit_id}', '{$base_unit_id}', '{$conversion_rate}')";
-
-        if (!$db->query($conversion_sql)) {
-          $session->msg('w', 'Item added but unit conversion failed: ' . $db->error());
-        }
-      }
-
-      unset($_SESSION['form_data']);
-      $session->msg('s', "Item added successfully.");
-      redirect('items.php', false);
     } else {
-      $_SESSION['form_data'] = $_POST;
-      $session->msg('d', 'Failed to add item! ' . $db->error());
-      redirect('items.php', false);
+      $session->msg('w', 'Item added but no active school year found for stock tracking.');
     }
+
+    // Insert conversion info ONLY if needed and valid
+    $base_unit_name = '';
+    foreach ($base_units as $bu) {
+      if ($bu['id'] == $base_unit_id) {
+        $base_unit_name = $bu['name'];
+        break;
+      }
+    }
+
+    // Only insert conversion if:
+    // 1. Base unit is selected AND not "Not Applicable" 
+    // 2. Base unit is different from regular unit
+    // 3. Conversion rate is valid (> 0)
+    if (
+      $base_unit_id &&
+      $base_unit_name !== 'Not Applicable' &&
+      $base_unit_id != $unit_id &&
+      $conversion_rate > 0
+    ) {
+
+      // Insert into unit_conversions table
+      $conversion_sql = "INSERT INTO unit_conversions (item_id, from_unit_id, to_unit_id, conversion_rate)
+              VALUES ('{$item_id}', '{$unit_id}', '{$base_unit_id}', '{$conversion_rate}')";
+
+      if (!$db->query($conversion_sql)) {
+        $session->msg('w', 'Item added but unit conversion failed: ' . $db->error());
+      }
+    }
+
+    unset($_SESSION['form_data']);
+    $session->msg('s', "Item added successfully.");
+    redirect('items.php', false);
+  } else {
+    $_SESSION['form_data'] = $_POST;
+    $session->msg('d', 'Failed to add item! ' . $db->error());
+    redirect('items.php', false);
   }
 }
 
-// ✅ Handle Bulk Archive
+// Handle Bulk Archive
 if (isset($_POST['bulk_archive_ids']) && !empty($_POST['bulk_archive_ids'])) {
   $ids = array_map('intval', $_POST['bulk_archive_ids']);
   foreach ($ids as $id) {
@@ -258,43 +314,13 @@ if (isset($_POST['bulk_archive_ids']) && !empty($_POST['bulk_archive_ids'])) {
   redirect('items.php');
 }
 
-// ✅ Pagination and category filter
+// Use the NEW function to get items (ABSOLUTELY NO DUPLICATES)
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $category = isset($_GET['category']) ? $_GET['category'] : 'all';
-$items = get_items_paginated(10, $page, $category);
+$items = get_all_items_with_conversions(10, $page, $category);
 
-// Process items for display with proper quantity formatting
-// Avoid duplicates: ensure unique items by ID
-$seen_ids = [];
-foreach ($items as $key => &$item) {
-  if (in_array($item['id'], $seen_ids)) {
-    unset($items[$key]); // skip duplicate
-    continue;
-  }
-  $seen_ids[] = $item['id'];
-
-  // Default values
-  $item['unit_id'] = $item['unit_id'] ?? 0;
-  $item['base_unit_id'] = $item['base_unit_id'] ?? 0;
-  $item['quantity'] = $item['quantity'] ?? 0;
-
-  // Calculate display quantities using the FIXED function
-  $quantity_data = calculate_display_quantity($item['id'], $item['quantity']);
-
-  $item['display_quantity'] = $quantity_data['display'];
-  $item['has_conversion'] = $quantity_data['has_conversion'];
-  $item['main_quantity'] = $quantity_data['main_quantity'];
-  $item['base_quantity'] = $quantity_data['base_quantity'];
-  $item['main_unit'] = $quantity_data['main_unit'];
-  $item['base_unit'] = $quantity_data['base_unit'];
-  $item['conversion_rate'] = $quantity_data['conversion_rate'];
-
-  // Safe unit names
-  $item['unit_name'] = get_unit_name($item['unit_id']);
-  $item['base_unit_name'] = get_unit_name($item['base_unit_id']);
-}
-unset($item); // good practice when using reference in foreach
-
+// DEBUG: Check what items we're getting
+error_log("CLEAN DEBUG: Processing " . count($items) . " unique items");
 ?>
 
 
@@ -723,28 +749,6 @@ if (!empty($msg) && is_array($msg)):
     }
   }
 
-  .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-    background: var(--primary-light) !important;
-    color: white !important;
-    border: none !important;
-  }
-
-  .dataTables_wrapper .dataTables_length,
-  .dataTables_wrapper .dataTables_filter {
-    margin-bottom: 1rem;
-  }
-
-  .dataTables_wrapper .dataTables_filter input {
-    border-radius: 6px;
-    border: 1px solid #dee2e6;
-    padding: 0.375rem 0.75rem;
-  }
-
-  .dataTables_wrapper .dataTables_length select {
-    border-radius: 6px;
-    border: 1px solid #dee2e6;
-  }
-
   /* Enhanced quantity display styles */
   .quantity-breakdown {
     font-size: 0.8rem;
@@ -992,381 +996,375 @@ if (!empty($msg) && is_array($msg)):
   </div>
 
 
- <!-- Items Table -->
-<div class="card-header-custom" id="itemsTableSection">
-  <?php if ($items && count($items) > 0): ?>
-    <div class="table-responsive">
-      <table class="table table-custom" id="itemsTable">
-        <thead>
-          <tr>
-            <th class="text-center" width="50"><input type="checkbox" id="selectAll"></th>
-            <th width="250">Item Description</th>
-            <th class="text-center" width="120">Fund Cluster</th>
-            <th class="text-center" width="120">Stock No.</th>
-            <th class="text-center" width="80">Photo</th>
-            <th class="text-center" width="150">Category</th>
-            <th class="text-center" width="120">Unit Cost</th>
-            <th class="text-center" width="150">Stock</th>
-            <th class="text-center actions-column" width="120">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($items as $item): 
-            // ✅ FIXED: Define all required variables with proper defaults
-            $item_quantity = $item['quantity'] ?? 0;
-            $item_unit_id = $item['unit_id'] ?? 0;
-            $item_base_unit_id = $item['base_unit_id'] ?? 0;
-            $item_category = $item['category'] ?? 'Uncategorized';
-            $item_image = $item['image'] ?? 'no_image.png';
-            $item_unit_name = $item['unit_name'] ?? 'Unit';
-            $lowStock = ((float)$item_quantity < 10);
-            
-            // ✅ FIXED: Calculate conversion data for this specific item
-            $quantity_data = calculate_display_quantity($item['id'], $item_quantity);
-            $display_quantity = $quantity_data['display'];
-            $has_conversion = $quantity_data['has_conversion'];
-            $main_quantity = $quantity_data['main_quantity'];
-            $base_quantity = $quantity_data['base_quantity'];
-            $main_unit = $quantity_data['main_unit'];
-            $base_unit = $quantity_data['base_unit'];
-            $conversion_rate = $quantity_data['conversion_rate'];
-          ?>
-            <tr class="<?= $lowStock ? 'table-danger' : ''; ?>" data-category="<?= remove_junk($item_category); ?>">
-              <td class="text-center">
-                <input type="checkbox" class="item-checkbox" data-id="<?= (int)$item['id']; ?>">
-              </td>
-              <td>
-                <div class="d-flex align-items-start">
-                  <div>
-                    <strong><?= remove_junk($item['name']); ?></strong>
-                    <div class="text-muted small mt-1">
-                      <i class="fas fa-ruler me-1"></i>UOM: <?= remove_junk($item_unit_name); ?>
-                      
-                      <?php if ($has_conversion): ?>
-                        <br>
-                        <small class="text-info conversion-info">
-                          <i class="fas fa-exchange-alt me-1"></i>
-                          1 <?= $main_unit; ?> = <?= $conversion_rate; ?> <?= $base_unit; ?>
-                        </small>
-                      <?php elseif (!empty($item['base_unit_name']) && $item['base_unit_name'] !== 'Not Applicable'): ?>
-                        <br>
-                        <small class="text-muted">
-                          Base Unit: <?= $item['base_unit_name'] ?? ''; ?>
-                        </small>
-                      <?php endif; ?>
-                      
-                      <?php if ($lowStock): ?>
-                        <span class="low-stock-badge">Low Stock</span>
-                      <?php endif; ?>
+  <!-- Items Table -->
+  <div class="card-header-custom" id="itemsTableSection">
+    <?php if ($items && count($items) > 0): ?>
+      <div class="table-responsive">
+        <table class="table table-custom" id="itemsTable">
+          <thead>
+            <tr>
+              <th class="text-center" width="50"><input type="checkbox" id="selectAll"></th>
+              <th width="250">Item Description</th>
+              <th class="text-center" width="120">Fund Cluster</th>
+              <th class="text-center" width="120">Stock No.</th>
+              <th class="text-center" width="80">Photo</th>
+              <th class="text-center" width="150">Category</th>
+              <th class="text-center" width="120">Unit Cost</th>
+              <th class="text-center" width="150">Stock</th>
+              <th class="text-center actions-column" width="120">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($items as $item):
+              $item_quantity = $item['quantity'] ?? 0;
+              $item_category = $item['category'] ?? 'Uncategorized';
+              $item_image = $item['image'] ?? 'no_image.png';
+              $lowStock = ((float)$item_quantity < 10);
+
+              // Use the pre-calculated data
+              $has_conversion = $item['has_conversion'] ?? false;
+              $display_quantity = $item['display_quantity'] ?? '';
+              $main_unit = $item['main_unit'] ?? '';
+              $base_unit = $item['base_unit'] ?? '';
+              $conversion_rate = $item['conversion_rate'] ?? 1;
+              $main_quantity = $item['main_quantity'] ?? 0;
+              $base_quantity = $item['base_quantity'] ?? 0;
+            ?>
+              <tr class="<?= $lowStock ? 'table-danger' : ''; ?>" data-category="<?= remove_junk($item_category); ?>">
+                <td class="text-center">
+                  <input type="checkbox" class="item-checkbox" data-id="<?= (int)$item['id']; ?>">
+                </td>
+                <td>
+                  <div class="d-flex align-items-start">
+                    <div>
+                      <strong><?= remove_junk($item['name']); ?></strong>
+                      <div class="text-muted small mt-1">
+                        <i class="fas fa-ruler me-1"></i>UOM: <?= remove_junk($item['unit_name']); ?>
+
+
+
+                        <?php if ($lowStock): ?>
+                          <span class="low-stock-badge">Low Stock</span>
+                        <?php endif; ?>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </td>
-              <td class="text-center">
-                <?php
-                $fund_cluster = strtoupper($item['fund_cluster'] ?? '');
-                $badgeClass = ($fund_cluster === 'GAA') ? 'badge-success' : 'badge-primary';
-                ?>
-                <span class="badge badge-custom <?= $badgeClass ?>">
-                  <?= htmlspecialchars($fund_cluster) ?>
-                </span>
-              </td>
-              <td class="text-center">
-                <code><?= remove_junk($item['stock_card'] ?? ''); ?></code>
-              </td>
-              <td class="text-center">
-                <img class="item-image"
-                  src="uploads/items/<?= !empty($item_image) ? $item_image : 'no_image.png'; ?>"
-                  alt="<?= remove_junk($item['name']); ?>">
-              </td>
-              <td class="text-center">
-                <span class="badge badge-custom badge-primary">
-                  <?= remove_junk($item_category); ?>
-                </span>
-              </td>
-              <td class="text-center">
-                <strong class="text-success">₱<?= number_format($item['unit_cost'] ?? 0, 2); ?></strong>
-              </td>
-              <td class="text-center">
-                <div class="d-flex flex-column align-items-center">
-                  <!-- Main quantity display -->
-                  <span class="badge badge-custom <?= $lowStock ? 'badge-warning' : 'badge-primary'; ?> p-2" >
-                    <!-- Detailed breakdown for items with conversion -->
-                  <?php if ($has_conversion): ?>
-                      <small class="text-dark" style="font-size:14px">
-                        <strong><?= $main_quantity; ?></strong> <?= $main_unit; ?>  
-                        | 
-                        <strong><?= number_format($base_quantity); ?></strong> <?= $base_unit; ?> 
-                      </small>
-                  <?php endif; ?>
+                </td>
+                <td class="text-center">
+                  <?php
+                  $fund_cluster = strtoupper($item['fund_cluster'] ?? '');
+                  $badgeClass = ($fund_cluster === 'GAA') ? 'badge-success' : 'badge-primary';
+                  ?>
+                  <span class="badge badge-custom <?= $badgeClass ?>">
+                    <?= htmlspecialchars($fund_cluster) ?>
                   </span>
-                </div>
-              </td>
-              <td class="text-center">
-                <div class="btn-group btn-group-custom">
-                  <a href="edit_item.php?id=<?= (int)$item['id']; ?>" class="btn btn-warning-custom" title="Edit">
-                    <i class="fas fa-edit"></i>
-                  </a>
-                  <a href="a_script.php?id=<?= (int)$item['id']; ?>" class="btn btn-danger-custom archive-btn" title="Archive" data-id="<?= (int)$item['id']; ?>">
-                    <i class="fa-solid fa-file-zipper"></i>
-                  </a>
-                </div>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </div>
-  <?php else: ?>
-    <!-- Empty State -->
-    <div class="empty-state">
-      <div class="empty-state-icon">
-        <i class="fas fa-box-open"></i>
+                </td>
+                <td class="text-center">
+                  <code><?= remove_junk($item['stock_card'] ?? ''); ?></code>
+                </td>
+                <td class="text-center">
+                  <img class="item-image"
+                    src="uploads/items/<?= !empty($item_image) ? $item_image : 'no_image.png'; ?>"
+                    alt="<?= remove_junk($item['name']); ?>">
+                </td>
+                <td class="text-center">
+                  <span class="badge badge-custom badge-primary">
+                    <?= remove_junk($item_category); ?>
+                  </span>
+                </td>
+                <td class="text-center">
+                  <strong class="text-success">₱<?= number_format($item['unit_cost'] ?? 0, 2); ?></strong>
+                </td>
+     <td class="text-center">
+  <div class="d-flex flex-column align-items-center">
+    <span class="badge badge-custom <?= $lowStock ? 'badge-warning' : 'badge-primary'; ?> p-2" style="font-size:14px">
+      <?php if ($has_conversion): ?>
+        <!-- For items with conversion, use the conversion unit data -->
+        <?php if ($main_quantity > 0 && $base_quantity > 0): ?>
+          <strong><?= intval($main_quantity); ?></strong> <?= $item['main_unit']; ?>
+          |
+          <strong><?= intval($base_quantity); ?></strong> <?= $item['base_unit']; ?>
+        <?php elseif ($main_quantity > 0): ?>
+          <strong><?= intval($main_quantity); ?></strong> <?= $item['main_unit']; ?>
+        <?php else: ?>
+          <strong><?= intval($base_quantity); ?></strong> <?= $item['base_unit']; ?>
+        <?php endif; ?>
+      <?php else: ?>
+        <!-- For items without conversion, use the main unit name -->
+        <strong><?= number_format($item_quantity); ?></strong> <?= $item['unit_name']; ?>
+      <?php endif; ?>
+    </span>
+    
+    <!-- Show conversion info when applicable -->
+    <?php if ($has_conversion): ?>
+      <small class="text-muted quantity-breakdown mt-1">
+        1 <?= $item['main_unit']; ?> = <?= $conversion_rate; ?> <?= $item['base_unit']; ?>
+      </small>
+    <?php endif; ?>
+  </div>
+</td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-custom">
+                    <a href="edit_item.php?id=<?= (int)$item['id']; ?>" class="btn btn-warning-custom" title="Edit">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <a href="a_script.php?id=<?= (int)$item['id']; ?>" class="btn btn-danger-custom archive-btn" title="Archive" data-id="<?= (int)$item['id']; ?>">
+                      <i class="fa-solid fa-file-zipper"></i>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
       </div>
-      <h4>No Inventory Items Found</h4>
-      <p>Get started by adding your first inventory item.</p>
-      <button type="button" id="showAddFormEmptyBtn" class="btn btn-primary-custom">
-        <i class="fas fa-plus me-2"></i> Add First Item
-      </button>
-    </div>
-  <?php endif; ?>
-</div>
+    <?php else: ?>
+      <!-- Empty State -->
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="fas fa-box-open"></i>
+        </div>
+        <h4>No Inventory Items Found</h4>
+        <p>Get started by adding your first inventory item.</p>
+        <button type="button" id="showAddFormEmptyBtn" class="btn btn-primary-custom">
+          <i class="fas fa-plus me-2"></i> Add First Item
+        </button>
+      </div>
+    <?php endif; ?>
+  </div>
 
-</div>
+  <?php include_once('layouts/footer.php'); ?>
 
-<?php include_once('layouts/footer.php'); ?>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+  <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
-<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
-
-<script>
-  $(document).ready(function() {
-    var table = $('#itemsTable').DataTable({
-      pageLength: 5,
-      lengthMenu: [5, 10, 25, 50],
-      ordering: true,
-      searching: false,
-      autoWidth: false,
-      fixedColumns: true
-    });
-    $('#searchInput').on('keyup', function() {
-      table.search(this.value).draw();
-    }); // 🔍 Custom search box function
+  <script>
+    $(document).ready(function() {
+      var table = $('#itemsTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: false,
+        autoWidth: false,
+        fixedColumns: true
+      });
+      $('#searchInput').on('keyup', function() {
+        table.search(this.value).draw();
+      }); // 🔍 Custom search box function
 
 
-    // Show add item form
-    function showAddForm() {
-      $('#addItemForm').fadeIn(300).addClass('fade-in');
-      $('#itemsTableSection').hide();
-      $('html, body').animate({
-        scrollTop: $('#addItemForm').offset().top - 20
-      }, 300);
-    }
-
-    // Hide add item form
-    function hideAddForm() {
-      $('#addItemForm').fadeOut(300);
-      $('#itemsTableSection').fadeIn(300);
-      $('html, body').animate({
-        scrollTop: $('#itemsTableSection').offset().top - 20
-      }, 300);
-    }
-
-    // Event listeners for showing form
-    $('#showAddFormBtn, #showAddFormEmptyBtn').on('click', showAddForm);
-
-    // Event listeners for hiding form
-    $('#cancelAddBtn, #cancelFormBtn').on('click', hideAddForm);
-
-    // Form validation
-    (function() {
-      'use strict';
-      window.addEventListener('load', function() {
-        var forms = document.getElementsByClassName('needs-validation');
-        var validation = Array.prototype.filter.call(forms, function(form) {
-          form.addEventListener('submit', function(event) {
-            if (form.checkValidity() === false) {
-              event.preventDefault();
-              event.stopPropagation();
-            }
-            form.classList.add('was-validated');
-          }, false);
-        });
-      }, false);
-    })();
-
-    // Bulk selection functionality
-    function updateBulkActions() {
-      const selectedCount = $('.item-checkbox:checked').length;
-      const bulkActions = $('#bulkActions');
-      const selectedCountElement = $('#selectedCount');
-
-      selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
-
-      if (selectedCount > 0) {
-        bulkActions.addClass('show');
-      } else {
-        bulkActions.removeClass('show');
-      }
-    }
-
-    // Select All functionality
-    $('#selectAll').on('change', function() {
-      const checked = $(this).is(':checked');
-      table.rows().nodes().to$().find('.item-checkbox').prop('checked', checked);
-      updateBulkActions();
-    });
-
-    // Individual checkbox change
-    $('#itemsTable tbody').on('change', '.item-checkbox', updateBulkActions);
-
-    // Clear selection
-    $('#clearSelection').on('click', function() {
-      table.rows().nodes().to$().find('.item-checkbox').prop('checked', false);
-      $('#selectAll').prop('checked', false);
-      updateBulkActions();
-    });
-
-    // Bulk Edit
-    $('#bulkEdit').on('click', function() {
-      const ids = table.$('.item-checkbox:checked').map(function() {
-        return $(this).data('id');
-      }).get();
-
-      if (ids.length > 0) {
-        window.location.href = "bulk_edit_items.php?ids=" + ids.join(',');
-      } else {
-        Swal.fire('No items selected', 'Please select items to edit.', 'info');
-      }
-    });
-
-    // Bulk Archive
-    $('#bulkArchive').on('click', function() {
-      const ids = table.$('.item-checkbox:checked').map(function() {
-        return $(this).data('id');
-      }).get();
-
-      if (ids.length === 0) {
-        Swal.fire('No items selected', 'Please select items to archive.', 'info');
-        return;
+      // Show add item form
+      function showAddForm() {
+        $('#addItemForm').fadeIn(300).addClass('fade-in');
+        $('#itemsTableSection').hide();
+        $('html, body').animate({
+          scrollTop: $('#addItemForm').offset().top - 20
+        }, 300);
       }
 
-      Swal.fire({
-        title: 'Archive Items?',
-        text: `You are about to archive ${ids.length} item(s). This action can be undone later.`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, archive them!',
-        cancelButtonText: 'Cancel'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          const form = $('<form method="POST" action="items.php"></form>');
-          ids.forEach(id => {
-            form.append(`<input type="hidden" name="bulk_archive_ids[]" value="${id}">`);
+      // Hide add item form
+      function hideAddForm() {
+        $('#addItemForm').fadeOut(300);
+        $('#itemsTableSection').fadeIn(300);
+        $('html, body').animate({
+          scrollTop: $('#itemsTableSection').offset().top - 20
+        }, 300);
+      }
+
+      // Event listeners for showing form
+      $('#showAddFormBtn, #showAddFormEmptyBtn').on('click', showAddForm);
+
+      // Event listeners for hiding form
+      $('#cancelAddBtn, #cancelFormBtn').on('click', hideAddForm);
+
+      // Form validation
+      (function() {
+        'use strict';
+        window.addEventListener('load', function() {
+          var forms = document.getElementsByClassName('needs-validation');
+          var validation = Array.prototype.filter.call(forms, function(form) {
+            form.addEventListener('submit', function(event) {
+              if (form.checkValidity() === false) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+              form.classList.add('was-validated');
+            }, false);
           });
-          $('body').append(form);
-          form.submit();
+        }, false);
+      })();
+
+      // Bulk selection functionality
+      function updateBulkActions() {
+        const selectedCount = $('.item-checkbox:checked').length;
+        const bulkActions = $('#bulkActions');
+        const selectedCountElement = $('#selectedCount');
+
+        selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
+
+        if (selectedCount > 0) {
+          bulkActions.addClass('show');
+        } else {
+          bulkActions.removeClass('show');
+        }
+      }
+
+      // Select All functionality
+      $('#selectAll').on('change', function() {
+        const checked = $(this).is(':checked');
+        table.rows().nodes().to$().find('.item-checkbox').prop('checked', checked);
+        updateBulkActions();
+      });
+
+      // Individual checkbox change
+      $('#itemsTable tbody').on('change', '.item-checkbox', updateBulkActions);
+
+      // Clear selection
+      $('#clearSelection').on('click', function() {
+        table.rows().nodes().to$().find('.item-checkbox').prop('checked', false);
+        $('#selectAll').prop('checked', false);
+        updateBulkActions();
+      });
+
+      // Bulk Edit
+      $('#bulkEdit').on('click', function() {
+        const ids = table.$('.item-checkbox:checked').map(function() {
+          return $(this).data('id');
+        }).get();
+
+        if (ids.length > 0) {
+          window.location.href = "bulk_edit_items.php?ids=" + ids.join(',');
+        } else {
+          Swal.fire('No items selected', 'Please select items to edit.', 'info');
         }
       });
-    });
 
-    // Individual archive confirmation
-    document.querySelectorAll('.archive-btn').forEach(function(button) {
-      button.addEventListener('click', function(e) {
-        e.preventDefault();
-        const url = this.getAttribute('href');
-        const id = this.getAttribute('data-id');
+      // Bulk Archive
+      $('#bulkArchive').on('click', function() {
+        const ids = table.$('.item-checkbox:checked').map(function() {
+          return $(this).data('id');
+        }).get();
+
+        if (ids.length === 0) {
+          Swal.fire('No items selected', 'Please select items to archive.', 'info');
+          return;
+        }
 
         Swal.fire({
-          title: 'Archive Item?',
-          text: "This item will be moved to archives. You can restore it later if needed.",
+          title: 'Archive Items?',
+          text: `You are about to archive ${ids.length} item(s). This action can be undone later.`,
           icon: 'warning',
           showCancelButton: true,
           confirmButtonColor: '#d33',
           cancelButtonColor: '#6c757d',
-          confirmButtonText: 'Yes, archive it!',
+          confirmButtonText: 'Yes, archive them!',
           cancelButtonText: 'Cancel'
         }).then((result) => {
           if (result.isConfirmed) {
-            window.location.href = url;
+            const form = $('<form method="POST" action="items.php"></form>');
+            ids.forEach(id => {
+              form.append(`<input type="hidden" name="bulk_archive_ids[]" value="${id}">`);
+            });
+            $('body').append(form);
+            form.submit();
+          }
+        });
+      });
+
+      // Individual archive confirmation
+      document.querySelectorAll('.archive-btn').forEach(function(button) {
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          const url = this.getAttribute('href');
+          const id = this.getAttribute('data-id');
+
+          Swal.fire({
+            title: 'Archive Item?',
+            text: "This item will be moved to archives. You can restore it later if needed.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, archive it!',
+            cancelButtonText: 'Cancel'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              window.location.href = url;
+            }
+          });
+        });
+      });
+
+      // Add row hover effects
+      const tableRows = document.querySelectorAll('#itemsTable tbody tr');
+      tableRows.forEach(row => {
+        row.addEventListener('click', function(e) {
+          if (!e.target.closest('.btn-group-custom') && !e.target.closest('.item-checkbox')) {
+            const checkbox = this.querySelector('.item-checkbox');
+            if (checkbox) {
+              checkbox.checked = !checkbox.checked;
+              updateBulkActions();
+            }
           }
         });
       });
     });
 
-    // Add row hover effects
-    const tableRows = document.querySelectorAll('#itemsTable tbody tr');
-    tableRows.forEach(row => {
-      row.addEventListener('click', function(e) {
-        if (!e.target.closest('.btn-group-custom') && !e.target.closest('.item-checkbox')) {
-          const checkbox = this.querySelector('.item-checkbox');
-          if (checkbox) {
-            checkbox.checked = !checkbox.checked;
-            updateBulkActions();
+    document.addEventListener("DOMContentLoaded", () => {
+      const searchInput = document.getElementById("searchInput");
+      const table = document.getElementById("itemsTable");
+      const rows = table.getElementsByTagName("tr");
+
+      searchInput.addEventListener("keyup", function() {
+        const filter = this.value.toLowerCase();
+
+        // Loop through table rows (skip header)
+        for (let i = 1; i < rows.length; i++) {
+          const cells = rows[i].getElementsByTagName("td");
+          let match = false;
+
+          // Check every cell for a match
+          for (let j = 0; j < cells.length; j++) {
+            const cellText = cells[j].textContent || cells[j].innerText;
+            if (cellText.toLowerCase().indexOf(filter) > -1) {
+              match = true;
+              break;
+            }
           }
+
+          // Show or hide the row based on match
+          rows[i].style.display = match ? "" : "none";
         }
       });
     });
-  });
-</script>
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const searchInput = document.getElementById("searchInput");
-    const table = document.getElementById("itemsTable");
-    const rows = table.getElementsByTagName("tr");
+  </script>
 
-    searchInput.addEventListener("keyup", function() {
-      const filter = this.value.toLowerCase();
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const baseUnit = document.getElementById('base_unit_id');
+      const convRate = document.getElementById('conversion_rate');
+      const unitSelect = document.getElementById('unit_id');
 
-      // Loop through table rows (skip header)
-      for (let i = 1; i < rows.length; i++) {
-        const cells = rows[i].getElementsByTagName("td");
-        let match = false;
+      function toggleConversionRate() {
+        const baseUnitName = baseUnit.options[baseUnit.selectedIndex].text;
+        const baseUnitValue = baseUnit.value;
+        const unitValue = unitSelect.value;
 
-        // Check every cell for a match
-        for (let j = 0; j < cells.length; j++) {
-          const cellText = cells[j].textContent || cells[j].innerText;
-          if (cellText.toLowerCase().indexOf(filter) > -1) {
-            match = true;
-            break;
-          }
+        // Disable conversion rate if:
+        // 1. Base unit is "Not Applicable" OR
+        // 2. Base unit is same as regular unit
+        if (baseUnitName === 'Not Applicable' || baseUnitValue === unitValue) {
+          convRate.value = '';
+          convRate.disabled = true;
+          convRate.placeholder = 'Not needed';
+        } else {
+          convRate.disabled = false;
+          convRate.placeholder = 'e.g., 10 (if 1 box = 10 pieces)';
         }
-
-        // Show or hide the row based on match
-        rows[i].style.display = match ? "" : "none";
       }
+
+      baseUnit.addEventListener('change', toggleConversionRate);
+      unitSelect.addEventListener('change', toggleConversionRate);
+      toggleConversionRate(); // run on load
     });
-  });
-</script>
-
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const baseUnit = document.getElementById('base_unit_id');
-    const convRate = document.getElementById('conversion_rate');
-    const unitSelect = document.getElementById('unit_id');
-
-    function toggleConversionRate() {
-      const baseUnitName = baseUnit.options[baseUnit.selectedIndex].text;
-      const baseUnitValue = baseUnit.value;
-      const unitValue = unitSelect.value;
-
-      // Disable conversion rate if:
-      // 1. Base unit is "Not Applicable" OR
-      // 2. Base unit is same as regular unit
-      if (baseUnitName === 'Not Applicable' || baseUnitValue === unitValue) {
-        convRate.value = '';
-        convRate.disabled = true;
-        convRate.placeholder = 'Not needed';
-      } else {
-        convRate.disabled = false;
-        convRate.placeholder = 'e.g., 10 (if 1 box = 10 pieces)';
-      }
-    }
-
-    baseUnit.addEventListener('change', toggleConversionRate);
-    unitSelect.addEventListener('change', toggleConversionRate);
-    toggleConversionRate(); // run on load
-  });
-</script>
+  </script>

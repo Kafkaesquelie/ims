@@ -1001,8 +1001,8 @@ button, .btn {
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Division *</label>
-                        <select name="division_id" class="form-select" required>
+                        <label class="form-label fw-semibold">Division *</label><br>
+                        <select name="division_id" class="form-select w-100 p-2" required>
                             <option value="">Select Division </option>
                             <?php foreach($divisions as $d): ?>
                                 <option value="<?= $d['id'] ?>"><?= $d['division_name'] ?></option>

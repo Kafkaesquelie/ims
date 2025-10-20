@@ -772,7 +772,7 @@ if (!empty($msg) && is_array($msg)):
                     <a href="edit_smp.php?id=<?= $item['id'] ?>" class="btn btn-warning-custom" title="Edit">
                       <i class="fas fa-edit"></i>
                     </a>
-                    <a href="archive_semi_exp.php?id=<?= $item['id'] ?>" class="btn btn-danger-custom archive-btn" title="Archive" data-id="<?= $item['id'] ?>">
+                    <a href="a_script.php?id=<?= $item['id'] ?>" class="btn btn-danger-custom archive-btn" title="Archive" data-id="<?= $item['id'] ?>">
                                                <i class="fa-solid fa-file-zipper"></i> 
 
                     </a>

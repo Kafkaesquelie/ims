@@ -19,30 +19,35 @@ $current_user = current_user();
 $current_user_name = isset($current_user['name']) ? $current_user['name'] : '';
 $current_user_position = isset($current_user['position']) ? $current_user['position'] : '';
 
-// ✅ Function to calculate stock based on date selection using stock_history
+// ✅ Get active tab from POST or default to inventories
+$active_tab = $_POST['active_tab'] ?? 'inventories';
+
+// ✅ Function to calculate stock based on date selection for items
 function calculate_stock_for_date($item_id, $selected_date, $is_start_date = true) {
+    global $db;
+    
     if ($is_start_date) {
         // For start date: show total stock_in quantity until the selected date
         $stock_in_query = find_by_sql("
             SELECT SUM(new_qty - previous_qty) as total_stock_in 
             FROM stock_history 
-            WHERE item_id = {$item_id} 
+            WHERE item_id = '{$db->escape($item_id)}' 
             AND change_type = 'stock_in' 
-            AND date_changed <= '{$selected_date} 23:59:59'
+            AND date_changed <= '{$db->escape($selected_date)} 23:59:59'
         ");
         
-        $total_stock_in = $stock_in_query ? $stock_in_query[0]['total_stock_in'] : 0;
+        $total_stock_in = $stock_in_query ? ($stock_in_query[0]['total_stock_in'] ?? 0) : 0;
         
         // Also get any initial stock from item_stocks_per_year before the semester
         $initial_stock_query = find_by_sql("
             SELECT stock FROM item_stocks_per_year 
-            WHERE item_id = {$item_id} 
-            AND updated_at < '{$selected_date} 00:00:00'
+            WHERE item_id = '{$db->escape($item_id)}' 
+            AND updated_at < '{$db->escape($selected_date)} 00:00:00'
             ORDER BY updated_at DESC 
             LIMIT 1
         ");
         
-        $initial_stock = $initial_stock_query ? $initial_stock_query[0]['stock'] : 0;
+        $initial_stock = $initial_stock_query ? ($initial_stock_query[0]['stock'] ?? 0) : 0;
         
         return $initial_stock + $total_stock_in;
         
@@ -51,13 +56,13 @@ function calculate_stock_for_date($item_id, $selected_date, $is_start_date = tru
         // Get the latest stock record from item_stocks_per_year on or before the selected date
         $current_stock_query = find_by_sql("
             SELECT stock FROM item_stocks_per_year 
-            WHERE item_id = {$item_id} 
-            AND updated_at <= '{$selected_date} 23:59:59'
+            WHERE item_id = '{$db->escape($item_id)}' 
+            AND updated_at <= '{$db->escape($selected_date)} 23:59:59'
             ORDER BY updated_at DESC 
             LIMIT 1
         ");
         
-        if ($current_stock_query) {
+        if ($current_stock_query && isset($current_stock_query[0]['stock'])) {
             return $current_stock_query[0]['stock'];
         }
         
@@ -71,28 +76,30 @@ function calculate_stock_for_date($item_id, $selected_date, $is_start_date = tru
                     ELSE 0 
                 END) as net_change
             FROM stock_history 
-            WHERE item_id = {$item_id} 
-            AND date_changed <= '{$selected_date} 23:59:59'
+            WHERE item_id = '{$db->escape($item_id)}' 
+            AND date_changed <= '{$db->escape($selected_date)} 23:59:59'
         ");
         
-        $net_change = $stock_calculation ? $stock_calculation[0]['net_change'] : 0;
+        $net_change = $stock_calculation ? ($stock_calculation[0]['net_change'] ?? 0) : 0;
         
         // Get initial stock before any transactions
         $initial_query = find_by_sql("
             SELECT stock FROM item_stocks_per_year 
-            WHERE item_id = {$item_id} 
+            WHERE item_id = '{$db->escape($item_id)}' 
             ORDER BY updated_at ASC 
             LIMIT 1
         ");
         
-        $initial_stock = $initial_query ? $initial_query[0]['stock'] : 0;
+        $initial_stock = $initial_query ? ($initial_query[0]['stock'] ?? 0) : 0;
         
         return $initial_stock + $net_change;
     }
 }
 
-// ✅ Function to get stock details for display
+// ✅ Function to get stock details for display for items
 function get_stock_details($item_id, $selected_date, $is_start_date = true) {
+    global $db;
+    
     if ($is_start_date) {
         // For start date: get all stock_in transactions
         $stock_details = find_by_sql("
@@ -103,13 +110,13 @@ function get_stock_details($item_id, $selected_date, $is_start_date = true) {
                 sh.date_changed,
                 sh.remarks
             FROM stock_history sh
-            WHERE sh.item_id = {$item_id} 
+            WHERE sh.item_id = '{$db->escape($item_id)}' 
             AND sh.change_type = 'stock_in'
-            AND sh.date_changed <= '{$selected_date} 23:59:59'
+            AND sh.date_changed <= '{$db->escape($selected_date)} 23:59:59'
             ORDER BY sh.date_changed ASC
         ");
         
-        return $stock_details;
+        return $stock_details ?: [];
     } else {
         // For end date: get current stock and recent transactions
         $stock_details = find_by_sql("
@@ -120,56 +127,66 @@ function get_stock_details($item_id, $selected_date, $is_start_date = true) {
                 sh.date_changed,
                 sh.remarks
             FROM stock_history sh
-            WHERE sh.item_id = {$item_id} 
-            AND sh.date_changed <= '{$selected_date} 23:59:59'
+            WHERE sh.item_id = '{$db->escape($item_id)}' 
+            AND sh.date_changed <= '{$db->escape($selected_date)} 23:59:59'
             ORDER BY sh.date_changed DESC
             LIMIT 10
         ");
         
-        return $stock_details;
+        return $stock_details ?: [];
     }
 }
 
+// ✅ Function to calculate quantity for semi-expendable properties based on date
+function calculate_semi_exp_qty_for_date($semi_id, $selected_date, $is_start_date = true) {
+    global $db;
+    
+    if ($is_start_date) {
+        // For start date: total quantity (assuming initial quantity is the total)
+        $semi_item = find_by_sql("SELECT total_qty FROM semi_exp_prop WHERE id = '{$db->escape($semi_id)}' LIMIT 1");
+        return $semi_item ? ($semi_item[0]['total_qty'] ?? 0) : 0;
+    } else {
+        // For end date: remaining quantity
+        $semi_item = find_by_sql("SELECT qty_left FROM semi_exp_prop WHERE id = '{$db->escape($semi_id)}' LIMIT 1");
+        return $semi_item ? ($semi_item[0]['qty_left'] ?? 0) : 0;
+    }
+}
 
-// ✅ SEMI-EXPENDABLES - Updated to handle semester dates
+// ✅ Function to calculate quantity for properties based on date
+function calculate_property_qty_for_date($property_id, $selected_date, $is_start_date = true) {
+    global $db;
+    
+    // Properties typically don't change quantity, so return the fixed quantity
+    $property = find_by_sql("SELECT qty FROM properties WHERE id = '{$db->escape($property_id)}' LIMIT 1");
+    return $property ? ($property[0]['qty'] ?? 0) : 0;
+}
+
+// ✅ SEMI-EXPENDABLES - Corrected query (no connection to item_stocks_per_year)
 $sql_semi = "
   SELECT 
     sep.*, 
-    sc.semicategory_name,
-    ispy.stock as start_stock,
-    ispy_end.stock as end_stock
+    sc.semicategory_name
   FROM semi_exp_prop sep
   JOIN transactions t ON sep.id = t.item_id
   LEFT JOIN semicategories sc ON sep.semicategory_id = sc.id
-  LEFT JOIN item_stocks_per_year ispy ON sep.id = ispy.item_id 
-    AND ispy.school_year_id = (SELECT id FROM school_years WHERE is_current = 1)
-  LEFT JOIN item_stocks_per_year ispy_end ON sep.id = ispy_end.item_id 
-    AND ispy_end.school_year_id = (SELECT id FROM school_years WHERE is_current = 1)
-  WHERE t.transaction_type = 'issue'
-    AND t.ICS_No IS NOT NULL
+ WHERE 
+        (t.transaction_type = 'issue' AND t.ICS_No IS NOT NULL)
+        OR t.status = 'Partially Re-Issued'
+  GROUP BY sep.id
 ";
 
-// ... rest of your existing semi-expendables query conditions remain the same ...
-
-// ✅ PROPERTIES - Updated to handle semester dates
+// ✅ PROPERTIES - Corrected query (no connection to item_stocks_per_year)
 $sql_props = "
   SELECT 
     p.*, 
-    s.subcategory_name,
-    ispy.stock as start_stock,
-    ispy_end.stock as end_stock
+    s.subcategory_name
   FROM properties p
   JOIN transactions t ON p.id = t.item_id
   LEFT JOIN subcategories s ON p.subcategory_id = s.id
-  LEFT JOIN item_stocks_per_year ispy ON p.id = ispy.item_id 
-    AND ispy.school_year_id = (SELECT id FROM school_years WHERE is_current = 1)
-  LEFT JOIN item_stocks_per_year ispy_end ON p.id = ispy_end.item_id 
-    AND ispy_end.school_year_id = (SELECT id FROM school_years WHERE is_current = 1)
   WHERE t.transaction_type = 'issue'
     AND t.PAR_No IS NOT NULL
+  GROUP BY p.id
 ";
-
-// ... rest of your existing properties query conditions remain the same ...
 
 // ✅ REGULAR ITEMS - Updated to handle semester dates
 $sql = "
@@ -188,12 +205,25 @@ $sql = "
     AND ispy.school_year_id = (SELECT id FROM school_years WHERE is_current = 1)
   LEFT JOIN item_stocks_per_year ispy_end ON i.id = ispy_end.item_id 
     AND ispy_end.school_year_id = (SELECT id FROM school_years WHERE is_current = 1)
+  WHERE 1=1
 ";
 
+// Initialize with empty arrays to prevent undefined variable warnings
+$props = [];
+$semi_items = [];
+$items = [];
 
-$props = find_by_sql($sql_props);
-$semi_items = find_by_sql($sql_semi);
-$items = find_by_sql($sql);
+try {
+    $props = find_by_sql($sql_props) ?: [];
+    $semi_items = find_by_sql($sql_semi) ?: [];
+    $items = find_by_sql($sql) ?: [];
+} catch (Exception $e) {
+    // Log error and ensure variables are arrays
+    error_log("Database error: " . $e->getMessage());
+    $props = [];
+    $semi_items = [];
+    $items = [];
+}
 
 // Process items to calculate dynamic stock based on selected date
 $processed_items = [];
@@ -227,6 +257,50 @@ foreach ($items as $item) {
 }
 
 $items = $processed_items;
+
+// Process semi-expendable items to calculate quantities based on selected date
+$processed_semi_items = [];
+foreach ($semi_items as $item) {
+    $semi_id = $item['id'];
+    
+    if ($selected_date) {
+        if ($selected_date == $semester_start_date) {
+            // For start date: use total quantity
+            $item['calculated_qty'] = calculate_semi_exp_qty_for_date($semi_id, $selected_date, true);
+        } elseif ($selected_date == $semester_end_date) {
+            // For end date: use remaining quantity
+            $item['calculated_qty'] = calculate_semi_exp_qty_for_date($semi_id, $selected_date, false);
+        } else {
+            // Default to current quantity
+            $item['calculated_qty'] = $item['qty_left'] ?? $item['total_qty'] ?? 0;
+        }
+    } else {
+        // Default to current quantity
+        $item['calculated_qty'] = $item['qty_left'] ?? $item['total_qty'] ?? 0;
+    }
+    
+    $processed_semi_items[] = $item;
+}
+
+$semi_items = $processed_semi_items;
+
+// Process property items to calculate quantities based on selected date
+$processed_props = [];
+foreach ($props as $item) {
+    $property_id = $item['id'];
+    
+    if ($selected_date) {
+        // Properties typically have fixed quantities
+        $item['calculated_qty'] = calculate_property_qty_for_date($property_id, $selected_date);
+    } else {
+        // Default to current quantity
+        $item['calculated_qty'] = $item['qty'] ?? 0;
+    }
+    
+    $processed_props[] = $item;
+}
+
+$props = $processed_props;
 ?>
 
 <?php include_once('layouts/header.php'); ?>
@@ -731,6 +805,7 @@ $items = $processed_items;
     line-height: 1.2;
   }
 </style>
+
 <div class="card-container mt-3">
   <div class="card shadow-sm border-0">
     <div class="card-header-custom">
@@ -740,17 +815,17 @@ $items = $processed_items;
     <div class="tabs-container">
       <ul class="nav-tabs-custom" id="registryTabs">
         <li class="nav-tab-item">
-          <a href="#inventories" class="nav-tab-link active" data-tab="inventories">
+          <a href="#inventories" class="nav-tab-link <?= $active_tab === 'inventories' ? 'active' : '' ?>" data-tab="inventories">
             <i class="fas fa-boxes tab-icon"></i> Inventories
           </a>
         </li>
         <li class="nav-tab-item">
-          <a href="#property" class="nav-tab-link" data-tab="property">
+          <a href="#property" class="nav-tab-link <?= $active_tab === 'property' ? 'active' : '' ?>" data-tab="property">
             <i class="fas fa-building tab-icon"></i> Property, Plant & Equipment
           </a>
         </li>
         <li class="nav-tab-item">
-          <a href="#semi-expendable" class="nav-tab-link" data-tab="semi-expendable">
+          <a href="#semi-expendable" class="nav-tab-link <?= $active_tab === 'semi-expendable' ? 'active' : '' ?>" data-tab="semi-expendable">
             <i class="fas fa-tools tab-icon"></i> Semi-Expendable Property
           </a>
         </li>
@@ -758,21 +833,17 @@ $items = $processed_items;
 
       <div class="tab-content">
         <!-- Inventories Tab -->
-        <div id="inventories" class="tab-pane active">
-
+        <div id="inventories" class="tab-pane <?= $active_tab === 'inventories' ? 'active' : '' ?>">
           <!-- RPCI Form Section -->
           <div class="rpci-form-container">
             <div class="rpci-header">
               <h2 class="rpci-title">REPORT ON THE PHYSICAL COUNT OF INVENTORIES</h2>
-              <?php if ($selected_date): ?>
-                <div class="rpci-subtitle">
-                  As at: <strong><?php echo $is_start_date_selected ? 'Start of Semester' : 'End of Semester'; ?></strong> 
-                  (<?php echo date('F d, Y', strtotime($selected_date)); ?>)
-                </div>
-              <?php endif; ?>
             </div>
 
             <form method="post" action="" id="filter-form">
+              <!-- Hidden field to track active tab -->
+              <input type="hidden" name="active_tab" value="inventories" id="active_tab">
+              
               <!-- Category and Date Selection -->
               <div class="form-section">
                 <h4 class="form-section-title">Filter</h4>
@@ -823,18 +894,6 @@ $items = $processed_items;
                   BSU-BOKOD CAMPUS is accountable, having assumed such accountability on
                   <input type="date" class="form-control filter-input" name="assumption_date" id="assumption_date" value="<?php echo isset($_POST['assumption_date']) ? $_POST['assumption_date'] : date('Y-m-d'); ?>" style="display:inline-block; width:auto; min-width:150px; border:none; border-bottom: 1px solid #000; background:transparent;">
                 </div>
-                
-                <!-- Stock Calculation Info -->
-                <?php if ($selected_date): ?>
-                  <div class="alert alert-info" style="margin-top: 15px;">
-                    <strong>Stock Calculation:</strong> 
-                    <?php if ($is_start_date_selected): ?>
-                      Showing total <strong>stock_in</strong> quantity until <?php echo date('F d, Y', strtotime($selected_date)); ?>
-                    <?php else: ?>
-                      Showing <strong>remaining/current</strong> quantity as of <?php echo date('F d, Y', strtotime($selected_date)); ?>
-                    <?php endif; ?>
-                  </div>
-                <?php endif; ?>
               </div>
 
               <!-- Inventory Table -->
@@ -866,19 +925,7 @@ $items = $processed_items;
                           <td><?php echo $item['stock_card']; ?></td>
                           <td><?php echo $item['unit_name']; ?></td>
                           <td><?php echo $item['unit_cost']; ?></td>
-                          <td class="balance-per-card" title="<?php 
-                            if (!empty($item['stock_details'])) {
-                                echo 'Stock Details:\n';
-                                foreach ($item['stock_details'] as $detail) {
-                                    echo date('M d, Y', strtotime($detail['date_changed'])) . ': ' . 
-                                         $detail['change_type'] . ' - ' . 
-                                         $detail['previous_qty'] . ' → ' . 
-                                         $detail['new_qty'] . '\n';
-                                }
-                            }
-                          ?>">
-                            <?php echo $item['calculated_stock']; ?>
-                          </td>
+                          <td class="balance-per-card"><?php echo $item['calculated_stock']; ?></td>
                           <td class="on-hand-count"></td>
                           <td class="shortage-overage"></td>
                           <td class="remarks"></td>
@@ -982,19 +1029,18 @@ $items = $processed_items;
           </div>
         </div>
 
-
-
-
         <!-- Property, Plant & Equipment Tab -->
-        <div id="property" class="tab-pane">
+        <div id="property" class="tab-pane <?= $active_tab === 'property' ? 'active' : '' ?>">
           <!-- RPCSPPE Form Section -->
           <div class="rpcppe-form-container">
             <div class="rpcppe-header">
               <h2 class="rpcppe-title">REPORT ON PHYSICAL COUNT OF PROPERTY, PLANT, AND EQUIPMENT (RPCSPPE)</h2>
-
             </div>
 
             <form method="post" action="" id="filter-form-ppe">
+              <!-- Hidden field to track active tab -->
+              <input type="hidden" name="active_tab" value="property" id="active_tab_ppe">
+              
               <!-- Category and Date Selection -->
               <div class="form-section">
                 <h4 class="form-section-title">Filter</h4>
@@ -1043,7 +1089,7 @@ $items = $processed_items;
                   <span class="underline" style="min-width: 180px; margin-left: 5px;"><?php echo $current_user_name; ?></span>,
                   <span class="underline" style="min-width: 150px; margin-left: 5px;"><?php echo $current_user_position; ?></span>,
                   is accountable, having assumed accountability on
-                  <input type="date" class="form-control filter-input" name="assumption_date_ppe" id="assumption_date_ppe" value="<?php echo $assumption_date_ppe; ?>" style="display:inline-block; width:auto; min-width:150px; border:none; border-bottom: 1px solid #000; background:transparent;">
+                  <input type="date" class="form-control filter-input" name="assumption_date_ppe" id="assumption_date_ppe" value="<?php echo isset($_POST['assumption_date_ppe']) ? $_POST['assumption_date_ppe'] : date('Y-m-d'); ?>" style="display:inline-block; width:auto; min-width:150px; border:none; border-bottom: 1px solid #000; background:transparent;">
                 </div>
               </div>
 
@@ -1324,9 +1370,8 @@ $items = $processed_items;
           </div>
         </div>
 
-
         <!-- Semi-Expendable Property Tab -->
-        <div id="semi-expendable" class="tab-pane">
+        <div id="semi-expendable" class="tab-pane <?= $active_tab === 'semi-expendable' ? 'active' : '' ?>">
           <!-- RPCSP Form Section -->
           <div class="rpcsp-form-container">
             <div class="rpcsp-header">
@@ -1334,19 +1379,22 @@ $items = $processed_items;
             </div>
 
             <form method="post" action="" id="filter-form-semi-expendable">
+              <!-- Hidden field to track active tab -->
+              <input type="hidden" name="active_tab" value="semi-expendable" id="active_tab_semi">
+              
               <!-- Category and Date Selection -->
               <div class="form-section">
                 <h4 class="form-section-title">Filter</h4>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label">Subcategory</label>
+                    <label class="form-label">Category</label>
                     <select class="form-control filter-input" name="semicategory_id" id="semicategory_id" style="height: 47px; font-size: 1rem; border: none; background-color: #f8f9fa;">
                       <option value="">All Categories</option>
                       <?php
-                      $subcategories = find_by_sql("SELECT id, semicategory_name FROM semicategories ORDER BY semicategory_name ASC");
-                      foreach ($subcategories as $subcat) {
-                        $selected = (isset($_POST['semicategory_id']) && $_POST['semicategory_id'] == $subcat['id']) ? 'selected' : '';
-                        echo "<option value=\"{$subcat['id']}\" $selected>{$subcat['semicategory_name']}</option>";
+                      $semicategories = find_by_sql("SELECT id, semicategory_name FROM semicategories ORDER BY semicategory_name ASC");
+                      foreach ($semicategories as $semicat) {
+                        $selected = (isset($_POST['semicategory_id']) && $_POST['semicategory_id'] == $semicat['id']) ? 'selected' : '';
+                        echo "<option value=\"{$semicat['id']}\" $selected>{$semicat['semicategory_name']}</option>";
                       }
                       ?>
                     </select>
@@ -1390,7 +1438,7 @@ $items = $processed_items;
                   <span class="underline" style="min-width: 180px; margin-left: 5px;"><?php echo $current_user_name; ?></span>,
                   <span class="underline" style="min-width: 150px; margin-left: 5px;"><?php echo $current_user_position; ?></span>,
                   BSU-BOKOD CAMPUS is accountable, having assumed such accountability on
-                  <input type="date" class="form-control filter-input" name="assumption_date_semi" id="assumption_date_semi" value="<?php echo $assumption_date_semi; ?>" style="display:inline-block; width:auto; min-width:150px; border:none; border-bottom: 1px solid #000; background:transparent;">
+                  <input type="date" class="form-control filter-input" name="assumption_date_semi" id="assumption_date_semi" value="<?php echo isset($_POST['assumption_date_semi']) ? $_POST['assumption_date_semi'] : date('Y-m-d'); ?>" style="display:inline-block; width:auto; min-width:150px; border:none; border-bottom: 1px solid #000; background:transparent;">
                 </div>
               </div>
 
@@ -1406,16 +1454,14 @@ $items = $processed_items;
                         <th rowspan="2">Semi-expendable Property No.</th>
                         <th rowspan="2">Unit of Measure</th>
                         <th rowspan="2">Unit Value</th>
-                        <th colspan="2">Balance per Card</th>
-                        <th colspan="2">On Hand Per Count</th>
+                        <th colspan="1">Balance per Card</th>
+                        <th colspan="1">On Hand Per Count</th>
                         <th colspan="2">Shortage/Overage</th>
                         <th rowspan="2">Remarks</th>
                       </tr>
                       <tr>
                         <th>Qty</th>
-                        <th>Value</th>
                         <th>Qty</th>
-                        <th>Value</th>
                         <th>Qty</th>
                         <th>Value</th>
                       </tr>
@@ -1431,12 +1477,10 @@ $items = $processed_items;
                           <td><?php echo $item['item_description']; ?></td>
                           <td><?php echo $item['inv_item_no']; ?></td>
                           <td><?php echo $item['unit']; ?></td>
-                          <td>₱<?php echo number_format($item['unit_cost'], 2); ?></td>
                           <td><?php echo $item['total_qty']; ?></td>
-                          <td>₱<?php echo number_format($item['total_qty'] * $item['unit_cost'], 2); ?></td>
-                          <td><?php echo $item['qty_left']; ?></td>
-                          <td>₱<?php echo number_format($item['total_qty'] * $item['unit_cost'], 2); ?></td>
-                          <td>0</td>
+                          <td>-</td>
+                          <td>₱0.00</td>
+                          <td>-</td>
                           <td>₱0.00</td>
                           <td></td>
                         </tr>
@@ -1552,8 +1596,8 @@ $items = $processed_items;
 <?php include_once('layouts/footer.php'); ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
- // For Inventories tab
-  document.getElementById('print-report').addEventListener('click', function() {
+// For Inventories tab
+document.getElementById('print-report').addEventListener('click', function() {
     const categorySelect = document.querySelector('select[name="categorie_id"]');
     const dateInput = document.querySelector('select[name="date_added"]');
     const fundClusterSelect = document.querySelector('select[name="fund_cluster"]');
@@ -1564,24 +1608,24 @@ $items = $processed_items;
 
     // Validation
     if (!categorySelect.value) {
-      Swal.fire('Missing Category', 'Please select a category before printing.', 'warning');
-      return;
+        Swal.fire('Missing Category', 'Please select a category before printing.', 'warning');
+        return;
     }
     if (!dateInput.value) {
-      Swal.fire('Missing Date', 'Please select a date before printing.', 'warning');
-      return;
+        Swal.fire('Missing Date', 'Please select a date before printing.', 'warning');
+        return;
     }
     if (!fundClusterSelect.value) {
-      Swal.fire('Missing Fund Cluster', 'Please select a fund cluster before printing.', 'warning');
-      return;
+        Swal.fire('Missing Fund Cluster', 'Please select a fund cluster before printing.', 'warning');
+        return;
     }
     if (!assumptionDateInput.value) {
-      Swal.fire('Missing Assumption Date', 'Please select an assumption date before printing.', 'warning');
-      return;
+        Swal.fire('Missing Assumption Date', 'Please select an assumption date before printing.', 'warning');
+        return;
     }
     if (!certifiedCorrect.value || !approvedBy.value || !verifiedBy.value) {
-      Swal.fire('Missing Certifications', 'Please select all required certifications before printing the report.', 'warning');
-      return;
+        Swal.fire('Missing Certifications', 'Please select all required certifications before printing the report.', 'warning');
+        return;
     }
 
     // Submit form to printable page
@@ -1589,137 +1633,229 @@ $items = $processed_items;
     form.target = '_blank';
     form.action = 'rpci_print.php';
     form.submit();
-  });
+});
 
-    
-  // Auto-calculation for on-hand count changes
-  document.addEventListener('DOMContentLoaded', function() {
+// Auto-calculation for on-hand count changes
+document.addEventListener('DOMContentLoaded', function() {
     const onHandCells = document.querySelectorAll('.on-hand-count');
     
     onHandCells.forEach(cell => {
-      cell.addEventListener('input', function() {
-        const row = this.closest('tr');
-        const balanceCell = row.querySelector('.balance-per-card');
-        const shortageCell = row.querySelector('.shortage-overage');
-        const remarksCell = row.querySelector('.remarks');
-        
-        const balanceQty = parseInt(balanceCell.textContent) || 0;
-        const onHandQty = parseInt(this.textContent) || 0;
-        const difference = onHandQty - balanceQty;
-        
-        shortageCell.textContent = difference;
-        
-        // Set remarks based on difference
-        if (difference > 0) {
-          remarksCell.textContent = 'Overage';
-          remarksCell.style.color = 'green';
-        } else if (difference < 0) {
-          remarksCell.textContent = 'Shortage';
-          remarksCell.style.color = 'red';
-        } else {
-          remarksCell.textContent = 'Correct';
-          remarksCell.style.color = 'blue';
-        }
-      });
+        cell.addEventListener('input', function() {
+            const row = this.closest('tr');
+            const balanceCell = row.querySelector('.balance-per-card');
+            const shortageCell = row.querySelector('.shortage-overage');
+            const remarksCell = row.querySelector('.remarks');
+            
+            const balanceQty = parseInt(balanceCell.textContent) || 0;
+            const onHandQty = parseInt(this.textContent) || 0;
+            const difference = onHandQty - balanceQty;
+            
+            shortageCell.textContent = difference;
+            
+            // Set remarks based on difference
+            if (difference > 0) {
+                remarksCell.textContent = 'Overage';
+                remarksCell.style.color = 'green';
+            } else if (difference < 0) {
+                remarksCell.textContent = 'Shortage';
+                remarksCell.style.color = 'red';
+            } else {
+                remarksCell.textContent = 'Correct';
+                remarksCell.style.color = 'blue';
+            }
+        });
     });
     
     // Make on-hand cells editable
     onHandCells.forEach(cell => {
-      cell.setAttribute('contenteditable', 'true');
-      cell.style.minWidth = '50px';
-      cell.style.border = '1px dashed #ccc';
-      cell.style.padding = '2px';
+        cell.setAttribute('contenteditable', 'true');
+        cell.style.minWidth = '50px';
+        cell.style.border = '1px dashed #ccc';
+        cell.style.padding = '2px';
     });
-  });
+});
 
-  // Tab switching and filter functionality remains the same as your original code
-  document.addEventListener('DOMContentLoaded', function() {
+// Tab switching and filter functionality
+document.addEventListener('DOMContentLoaded', function() {
     const tabLinks = document.querySelectorAll('.nav-tab-link');
     const tabPanes = document.querySelectorAll('.tab-pane');
 
     tabLinks.forEach(link => {
-      link.addEventListener('click', function(e) {
-        e.preventDefault();
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
 
-        // Remove active class from all tabs and panes
-        tabLinks.forEach(tab => tab.classList.remove('active'));
-        tabPanes.forEach(pane => pane.classList.remove('active'));
+            // Remove active class from all tabs and panes
+            tabLinks.forEach(tab => tab.classList.remove('active'));
+            tabPanes.forEach(pane => pane.classList.remove('active'));
 
-        // Add active class to clicked tab and corresponding pane
-        this.classList.add('active');
-        const tabId = this.getAttribute('href');
-        document.querySelector(tabId).classList.add('active');
-      });
+            // Add active class to clicked tab and corresponding pane
+            this.classList.add('active');
+            const tabId = this.getAttribute('href');
+            document.querySelector(tabId).classList.add('active');
+        });
     });
 
-    // Filter functionality for inventories tab
+    // ==================== INVENTORIES TAB FILTERS ====================
     const categorySelect = document.querySelector('select[name="categorie_id"]');
     const dateInput = document.querySelector('select[name="date_added"]');
     const fundClusterSelect = document.querySelector('select[name="fund_cluster"]');
-    const tableRows = document.querySelectorAll('.rpci-table tbody tr');
+    const inventoryTableRows = document.querySelectorAll('#inventories .rpci-table tbody tr');
 
-    function filterTable() {
-      const selectedCategory = categorySelect.value;
-      const selectedDate = dateInput.value;
-      const selectedFundCluster = fundClusterSelect.value;
+    function filterInventoryTable() {
+        const selectedCategory = categorySelect?.value || '';
+        const selectedDate = dateInput?.value || '';
+        const selectedFundCluster = fundClusterSelect?.value || '';
 
-      tableRows.forEach(row => {
-        const rowCategory = row.getAttribute('data-category');
-        const rowDate = row.getAttribute('data-date');
-        const rowFundCluster = row.getAttribute('data-fund-cluster');
-        let show = true;
+        inventoryTableRows.forEach(row => {
+            const rowCategory = row.getAttribute('data-category') || '';
+            const rowDate = row.getAttribute('data-date') || '';
+            const rowFundCluster = row.getAttribute('data-fund-cluster') || '';
+            let show = true;
 
-        // Filter by category
-        if (selectedCategory && selectedCategory !== rowCategory) {
-          show = false;
-        }
+            // Filter by category
+            if (selectedCategory && selectedCategory !== rowCategory) {
+                show = false;
+            }
 
-        // Filter by date - show items with date <= selected date
-        if (selectedDate && rowDate > selectedDate) {
-          show = false;
-        }
+            // Filter by date - show items with date <= selected date
+            if (selectedDate && rowDate > selectedDate) {
+                show = false;
+            }
 
-        // Filter by fund cluster
-        if (selectedFundCluster && selectedFundCluster !== rowFundCluster) {
-          show = false;
-        }
+            // Filter by fund cluster
+            if (selectedFundCluster && selectedFundCluster !== rowFundCluster) {
+                show = false;
+            }
 
-        row.style.display = show ? '' : 'none';
-      });
+            row.style.display = show ? '' : 'none';
+        });
     }
 
-    // Add event listeners to all filter inputs
-    if (categorySelect) categorySelect.addEventListener('change', filterTable);
-    if (dateInput) dateInput.addEventListener('change', filterTable);
-    if (fundClusterSelect) fundClusterSelect.addEventListener('change', filterTable);
+    // Add event listeners to inventory filter inputs
+    if (categorySelect) categorySelect.addEventListener('change', filterInventoryTable);
+    if (dateInput) dateInput.addEventListener('change', filterInventoryTable);
+    if (fundClusterSelect) fundClusterSelect.addEventListener('change', filterInventoryTable);
+
+    // ==================== PROPERTIES TAB FILTERS ====================
+    const ppeCategorySelect = document.querySelector('select[name="ppe_category_id"]');
+    const ppeDateInput = document.querySelector('select[name="ppedate_added"]');
+    const ppeFundClusterSelect = document.querySelector('select[name="ppefund_cluster"]');
+    const ppeTableRows = document.querySelectorAll('#property .rpcppe-table tbody tr:not(:last-child)');
+
+    function filterPPETable() {
+        const selectedCategory = ppeCategorySelect?.value || '';
+        const selectedDate = ppeDateInput?.value || '';
+        const selectedFundCluster = ppeFundClusterSelect?.value || '';
+
+        ppeTableRows.forEach(row => {
+            const rowCategory = row.getAttribute('data-category-ppe') || '';
+            const rowDate = row.getAttribute('data-date-ppe') || '';
+            const rowFundCluster = row.getAttribute('data-fund-cluster-ppe') || '';
+            let show = true;
+
+            // Filter by category
+            if (selectedCategory && selectedCategory !== rowCategory) {
+                show = false;
+            }
+
+            // Filter by date - show items with date <= selected date
+            if (selectedDate && rowDate > selectedDate) {
+                show = false;
+            }
+
+            // Filter by fund cluster
+            if (selectedFundCluster && selectedFundCluster !== rowFundCluster) {
+                show = false;
+            }
+
+            row.style.display = show ? '' : 'none';
+        });
+    }
+
+    // Add event listeners to PPE filter inputs
+    if (ppeCategorySelect) ppeCategorySelect.addEventListener('change', filterPPETable);
+    if (ppeDateInput) ppeDateInput.addEventListener('change', filterPPETable);
+    if (ppeFundClusterSelect) ppeFundClusterSelect.addEventListener('change', filterPPETable);
+
+    // ==================== SEMI-EXPENDABLE TAB FILTERS ====================
+    const semiCategorySelect = document.querySelector('select[name="semicategory_id"]');
+    const semiDateInput = document.querySelector('select[name="smpdate_added"]');
+    const semiFundClusterSelect = document.querySelector('select[name="smpfund_cluster"]');
+    const semiValueTypeSelect = document.querySelector('select[name="value_type"]');
+    const semiTableRows = document.querySelectorAll('#semi-expendable .rpcsp-table tbody tr');
+
+    function filterSemiTable() {
+        const selectedCategory = semiCategorySelect?.value || '';
+        const selectedDate = semiDateInput?.value || '';
+        const selectedFundCluster = semiFundClusterSelect?.value || '';
+        const selectedValueType = semiValueTypeSelect?.value || '';
+
+        semiTableRows.forEach(row => {
+            const rowCategory = row.getAttribute('data-category-smp') || '';
+            const rowDate = row.getAttribute('data-date-smp') || '';
+            const rowFundCluster = row.getAttribute('data-fund-cluster-smp') || '';
+            const rowValueType = row.getAttribute('data-value-type') || '';
+            let show = true;
+
+            // Filter by category
+            if (selectedCategory && selectedCategory !== rowCategory) {
+                show = false;
+            }
+
+            // Filter by date - show items with date <= selected date
+            if (selectedDate && rowDate > selectedDate) {
+                show = false;
+            }
+
+            // Filter by fund cluster
+            if (selectedFundCluster && selectedFundCluster !== rowFundCluster) {
+                show = false;
+            }
+
+            // Filter by value type
+            if (selectedValueType && selectedValueType !== rowValueType) {
+                show = false;
+            }
+
+            row.style.display = show ? '' : 'none';
+        });
+    }
+
+    // Add event listeners to semi-expendable filter inputs
+    if (semiCategorySelect) semiCategorySelect.addEventListener('change', filterSemiTable);
+    if (semiDateInput) semiDateInput.addEventListener('change', filterSemiTable);
+    if (semiFundClusterSelect) semiFundClusterSelect.addEventListener('change', filterSemiTable);
+    if (semiValueTypeSelect) semiValueTypeSelect.addEventListener('change', filterSemiTable);
 
     // Initial filter on page load
-    if (tableRows.length > 0) filterTable();
-  });
+    if (inventoryTableRows.length > 0) filterInventoryTable();
+    if (ppeTableRows.length > 0) filterPPETable();
+    if (semiTableRows.length > 0) filterSemiTable();
+});
 
-  // For Property, Plant & Equipment tab
-  document.getElementById('print-report-ppe').addEventListener('click', function() {
+// For Property, Plant & Equipment tab
+document.getElementById('print-report-ppe').addEventListener('click', function() {
     const categorySelect = document.querySelector('select[name="ppe_category_id"]');
-    const dateInput = document.querySelector('input[name="ppedate_added"]');
+    const dateInput = document.querySelector('select[name="ppedate_added"]');
     const fundClusterSelect = document.querySelector('select[name="ppefund_cluster"]');
     const assumptionDateInput = document.querySelector('input[name="assumption_date_ppe"]');
 
     // Validation
     if (!categorySelect.value) {
-      Swal.fire('Missing Category', 'Please select a category before printing.', 'warning');
-      return;
+        Swal.fire('Missing Category', 'Please select a category before printing.', 'warning');
+        return;
     }
     if (!dateInput.value) {
-      Swal.fire('Missing Date', 'Please select a date before printing.', 'warning');
-      return;
+        Swal.fire('Missing Date', 'Please select a date before printing.', 'warning');
+        return;
     }
     if (!fundClusterSelect.value) {
-      Swal.fire('Missing Fund Cluster', 'Please select a fund cluster before printing.', 'warning');
-      return;
+        Swal.fire('Missing Fund Cluster', 'Please select a fund cluster before printing.', 'warning');
+        return;
     }
     if (!assumptionDateInput.value) {
-      Swal.fire('Missing Assumption Date', 'Please select an assumption date before printing.', 'warning');
-      return;
+        Swal.fire('Missing Assumption Date', 'Please select an assumption date before printing.', 'warning');
+        return;
     }
 
     // Submit form to printable page
@@ -1727,12 +1863,12 @@ $items = $processed_items;
     form.target = '_blank';
     form.action = 'rpcppe_print.php';
     form.submit();
-  });
+});
 
-  // For Semi-Expendable Property tab
-  document.getElementById('print-report-semi').addEventListener('click', function() {
-    const subcategorySelect = document.querySelector('select[name="subcategory_id"]');
-    const dateInput = document.querySelector('input[name="smpdate_added"]');
+// For Semi-Expendable Property tab
+document.getElementById('print-report-semi').addEventListener('click', function() {
+    const subcategorySelect = document.querySelector('select[name="semicategory_id"]');
+    const dateInput = document.querySelector('select[name="smpdate_added"]');
     const fundClusterSelect = document.querySelector('select[name="smpfund_cluster"]');
     const assumptionDateInput = document.querySelector('input[name="assumption_date_semi"]');
     const certifiedCorrect = document.querySelector('select[name="certified_correct_by_semi"]');
@@ -1741,24 +1877,24 @@ $items = $processed_items;
 
     // Validation
     if (!subcategorySelect.value) {
-      Swal.fire('Missing Subcategory', 'Please select a subcategory before printing.', 'warning');
-      return;
+        Swal.fire('Missing Subcategory', 'Please select a subcategory before printing.', 'warning');
+        return;
     }
     if (!dateInput.value) {
-      Swal.fire('Missing Date', 'Please select a date before printing.', 'warning');
-      return;
+        Swal.fire('Missing Date', 'Please select a date before printing.', 'warning');
+        return;
     }
     if (!fundClusterSelect.value) {
-      Swal.fire('Missing Fund Cluster', 'Please select a fund cluster before printing.', 'warning');
-      return;
+        Swal.fire('Missing Fund Cluster', 'Please select a fund cluster before printing.', 'warning');
+        return;
     }
     if (!assumptionDateInput.value) {
-      Swal.fire('Missing Assumption Date', 'Please select an assumption date before printing.', 'warning');
-      return;
+        Swal.fire('Missing Assumption Date', 'Please select an assumption date before printing.', 'warning');
+        return;
     }
     if (!certifiedCorrect.value || !approvedBy.value || !witnessedBy.value) {
-      Swal.fire('Missing Certifications', 'Please select all required certifications before printing the report.', 'warning');
-      return;
+        Swal.fire('Missing Certifications', 'Please select all required certifications before printing the report.', 'warning');
+        return;
     }
 
     // Submit form to printable page
@@ -1766,173 +1902,9 @@ $items = $processed_items;
     form.target = '_blank';
     form.action = 'rpcsp_print.php';
     form.submit();
-  });
+});
 
-  // Tab switching functionality
-  document.addEventListener('DOMContentLoaded', function() {
-    const tabLinks = document.querySelectorAll('.nav-tab-link');
-    const tabPanes = document.querySelectorAll('.tab-pane');
-
-    tabLinks.forEach(link => {
-      link.addEventListener('click', function(e) {
-        e.preventDefault();
-
-        // Remove active class from all tabs and panes
-        tabLinks.forEach(tab => tab.classList.remove('active'));
-        tabPanes.forEach(pane => pane.classList.remove('active'));
-
-        // Add active class to clicked tab and corresponding pane
-        this.classList.add('active');
-        const tabId = this.getAttribute('href');
-        document.querySelector(tabId).classList.add('active');
-      });
-    });
-
-    // Filter functionality for inventories tab
-    const categorySelect = document.querySelector('select[name="categorie_id"]');
-    const dateInput = document.querySelector('input[name="date_added"]');
-    const fundClusterSelect = document.querySelector('select[name="fund_cluster"]');
-    const tableRows = document.querySelectorAll('.rpci-table tbody tr');
-
-    function filterTable() {
-      const selectedCategory = categorySelect.value;
-      const selectedDate = dateInput.value;
-      const selectedFundCluster = fundClusterSelect.value;
-
-      tableRows.forEach(row => {
-        const rowCategory = row.getAttribute('data-category');
-        const rowDate = row.getAttribute('data-date');
-        const rowFundCluster = row.getAttribute('data-fund-cluster');
-        let show = true;
-
-        // Filter by category
-        if (selectedCategory && selectedCategory !== rowCategory) {
-          show = false;
-        }
-
-        // Filter by date - show items with date <= selected date
-        if (selectedDate && rowDate > selectedDate) {
-          show = false;
-        }
-
-        // Filter by fund cluster
-        if (selectedFundCluster && selectedFundCluster !== rowFundCluster) {
-          show = false;
-        }
-
-        row.style.display = show ? '' : 'none';
-      });
-    }
-
-    // Add event listeners to all filter inputs
-    if (categorySelect) categorySelect.addEventListener('change', filterTable);
-    if (dateInput) dateInput.addEventListener('change', filterTable);
-    if (fundClusterSelect) fundClusterSelect.addEventListener('change', filterTable);
-
-    // Initial filter on page load
-    if (tableRows.length > 0) filterTable();
-
-    // Filter functionality for semi-expendable tab
-    const subcategorySelectSemi = document.querySelector('select[name="subcategory_id"]');
-    const dateInputSemi = document.querySelector('input[name="smpdate_added"]');
-    const fundClusterSelectSemi = document.querySelector('select[name="smpfund_cluster"]');
-    const valueTypeSelectSemi = document.querySelector('select[name="value_type"]');
-    const tableRowsSemi = document.querySelectorAll('#semi-expendable .rpcsp-table tbody tr');
-
-    function filterTableSemi() {
-      const selectedSubcategory = subcategorySelectSemi.value;
-      const selectedDate = dateInputSemi.value;
-      const selectedFundCluster = fundClusterSelectSemi.value;
-      const selectedValueType = valueTypeSelectSemi.value;
-
-      tableRowsSemi.forEach(row => {
-        const rowSubcategory = row.getAttribute('data-category-smp');
-        const rowDate = row.getAttribute('data-date-smp');
-        const rowFundCluster = row.getAttribute('data-fund-cluster-smp');
-        const rowValueType = row.getAttribute('data-value-type');
-        let show = true;
-
-        // Filter by subcategory
-        if (selectedSubcategory && selectedSubcategory !== rowSubcategory) {
-          show = false;
-        }
-
-        // Filter by date - show items with date <= selected date
-        if (selectedDate && rowDate > selectedDate) {
-          show = false;
-        }
-
-        // Filter by fund cluster
-        if (selectedFundCluster && selectedFundCluster !== rowFundCluster) {
-          show = false;
-        }
-
-        // Filter by value type
-        if (selectedValueType && selectedValueType !== rowValueType) {
-          show = false;
-        }
-
-        row.style.display = show ? '' : 'none';
-      });
-    }
-
-    // Add event listeners to all filter inputs
-    if (subcategorySelectSemi) subcategorySelectSemi.addEventListener('change', filterTableSemi);
-    if (dateInputSemi) dateInputSemi.addEventListener('change', filterTableSemi);
-    if (fundClusterSelectSemi) fundClusterSelectSemi.addEventListener('change', filterTableSemi);
-    if (valueTypeSelectSemi) valueTypeSelectSemi.addEventListener('change', filterTableSemi);
-
-    // Initial filter on page load
-    if (tableRowsSemi.length > 0) filterTableSemi();
-
-    // Filter functionality for PPE tab
-    const categorySelectPPE = document.querySelector('select[name="ppe_category_id"]');
-    const dateInputPPE = document.querySelector('input[name="ppedate_added"]');
-    const fundClusterSelectPPE = document.querySelector('select[name="ppefund_cluster"]');
-    const tableRowsPPE = document.querySelectorAll('#property .rpcppe-table tbody tr:not(:last-child)');
-
-    function filterTablePPE() {
-      const selectedCategory = categorySelectPPE.value;
-      const selectedDate = dateInputPPE.value;
-      const selectedFundCluster = fundClusterSelectPPE.value;
-
-      tableRowsPPE.forEach(row => {
-        const rowCategory = row.getAttribute('data-category-ppe');
-        const rowDate = row.getAttribute('data-date-ppe');
-        const rowFundCluster = row.getAttribute('data-fund-cluster-ppe');
-        let show = true;
-
-        // Filter by category
-        if (selectedCategory && selectedCategory !== rowCategory) {
-          show = false;
-        }
-
-        // Filter by date - show items with date <= selected date
-        if (selectedDate && rowDate > selectedDate) {
-          show = false;
-        }
-
-        // Filter by fund cluster
-        if (selectedFundCluster && selectedFundCluster !== rowFundCluster) {
-          show = false;
-        }
-
-        row.style.display = show ? '' : 'none';
-      });
-    }
-
-    // Add event listeners to all filter inputs
-    if (categorySelectPPE) categorySelectPPE.addEventListener('change', filterTablePPE);
-    if (dateInputPPE) dateInputPPE.addEventListener('change', filterTablePPE);
-    if (fundClusterSelectPPE) fundClusterSelectPPE.addEventListener('change', filterTablePPE);
-
-    // Initial filter on page load
-    if (tableRowsPPE.length > 0) filterTablePPE();
-  });
-</script>
-
-<script>
-  // Add this to your existing JavaScript
+// Handle date change for all tabs
 document.addEventListener('DOMContentLoaded', function() {
     // Handle date change for inventory tab
     const dateSelect = document.querySelector('select[name="date_added"]');
@@ -1971,6 +1943,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
                 submitBtn.disabled = true;
             }
+        });
+    });
+});
+
+// Update active tab when user clicks on tabs and update hidden fields
+document.addEventListener('DOMContentLoaded', function() {
+    const tabLinks = document.querySelectorAll('.nav-tab-link');
+    const activeTabInputs = document.querySelectorAll('input[name="active_tab"]');
+
+    tabLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const tabId = this.getAttribute('href').substring(1);
+            
+            // Update all hidden active_tab inputs
+            activeTabInputs.forEach(input => {
+                input.value = tabId;
+            });
+            
+            // Remove active class from all tabs and panes
+            document.querySelectorAll('.nav-tab-link').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            // Add active class to clicked tab and corresponding pane
+            this.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
         });
     });
 });

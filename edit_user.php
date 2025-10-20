@@ -16,7 +16,6 @@ if(isset($_GET['id'])){
 }
 
 // Fetch departments, divisions, and offices
-$departments = find_all('departments');
 $divisions = find_all('divisions');
 $offices = find_all('offices');
 
@@ -37,27 +36,25 @@ if(isset($_POST['submit_image'])) {
 
 // Update user info
 if (isset($_POST['update_user'])) {
-    $req_fields = array('name','username','department','designation','role');
+    $req_fields = array('name','username','position','division','office','role');
     validate_fields($req_fields);
 
     if (empty($errors)) {
         $id            = (int)$_POST['user_id'];
         $name          = remove_junk($db->escape($_POST['name']));
         $username      = remove_junk($db->escape($_POST['username']));
-        $department_id = (int)$db->escape($_POST['department']);
         $division_id   = (int)$db->escape($_POST['division']);
         $office_id     = (int)$db->escape($_POST['office']);
-        $designation   = remove_junk($db->escape($_POST['designation']));
+        $position   = remove_junk($db->escape($_POST['position']));
         $user_level    = (int)$db->escape($_POST['role']);
         $status        = isset($_POST['status']) ? 1 : 0;
 
         $has_change = (
             $name !== $edit_user['name'] ||
             $username !== $edit_user['username'] ||
-            (int)$department_id !== (int)$edit_user['department'] ||
             (int)$division_id !== (int)$edit_user['division'] ||
             (int)$office_id !== (int)$edit_user['office'] ||
-            $designation !== $edit_user['position'] || // renamed field
+            $position !== $edit_user['position'] || 
             (int)$user_level !== (int)$edit_user['user_level'] ||
             $status !== (int)$edit_user['status']
         );
@@ -71,10 +68,9 @@ if (isset($_POST['update_user'])) {
         $sql = "UPDATE users SET 
                     name = '{$name}', 
                     username = '{$username}', 
-                    department = '{$department_id}', 
                     division = '{$division_id}', 
                     office = '{$office_id}', 
-                    position = '{$designation}', 
+                    position = '{$position}', 
                     user_level = '{$user_level}',
                     status = '{$status}'
                 WHERE id = '{$id}'";
@@ -139,19 +135,9 @@ if (isset($_POST['update_user'])) {
               </div>
 
               <div class="row mt-3">
-                <div class="col-md-4">
-                  <label for="department">Department</label>
-                  <select class="form-control" name="department" >
-                    <option value="">Select Department</option>
-                    <?php foreach($departments as $dept): ?>
-                      <option value="<?php echo (int)$dept['id']; ?>" <?php if($edit_user['department'] == $dept['id']) echo 'selected'; ?>>
-                        <?php echo remove_junk($dept['department']); ?>
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
-                </div>
+                
 
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <label for="division">Division</label>
                   <select class="form-control" name="division" id="divisionSelect">
                     <option value="">Select Division</option>
@@ -163,7 +149,7 @@ if (isset($_POST['update_user'])) {
                   </select>
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <label for="office">Office</label>
                   <select class="form-control" name="office" id="officeSelect">
                     <option value="">Select Office</option>
@@ -178,8 +164,8 @@ if (isset($_POST['update_user'])) {
 
               <div class="row mt-3">
                 <div class="col-md-6">
-                  <label for="designation">Designation</label>
-                  <input type="text" class="form-control" name="designation" value="<?php echo remove_junk($edit_user['position']); ?>" required>
+                  <label for="position">Designation</label>
+                  <input type="text" class="form-control" name="position" value="<?php echo remove_junk($edit_user['position']); ?>" required>
                 </div>
                 <div class="col-md-6">
                   <label for="role">User Role</label>
@@ -228,7 +214,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     officeSelect.innerHTML = '<option value="">Select Office</option>';
                     data.forEach(office => {
                         const option = document.createElement('option');
-                        option.value = office.office_name; // or office.id if storing ID
+                        option.value = office.id; // or office.id if storing ID
                         option.textContent = office.office_name;
                         officeSelect.appendChild(option);
                     });

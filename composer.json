@@ -11,5 +11,7 @@
             "email": "gy1etan090@gmail.com"
         }
     ],
-    "require": {}
+    "require": {
+        "phpoffice/phpword": "^1.3"
+    }
 }

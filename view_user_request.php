@@ -7,10 +7,9 @@ page_require_level(3);
 $request_id = (int)$_GET['id'];
 
 $request = find_by_sql("
-    SELECT r.*, d.department
+    SELECT r.*
     FROM requests r
     LEFT JOIN users u ON r.requested_by = u.id
-    LEFT JOIN departments d ON u.department = d.id
     WHERE r.id = $request_id
 ");
 
@@ -325,15 +324,6 @@ include_once('layouts/header.php');
                             <div class="form-control-custom">
                                 <i class="fa-solid fa-calendar me-2 text-success"></i>
                                 <?php echo read_date($request['date']); ?>
-                            </div>
-                        </div>
-
-                        <!-- Department -->
-                        <div class="col-md-6 mb-4">
-                            <label class="form-label-custom d-block">Department</label>
-                            <div class="form-control-custom">
-                                <i class="fa-solid fa-building me-2 text-success"></i>
-                                <?php echo remove_junk($request['department']); ?>
                             </div>
                         </div>
 

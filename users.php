@@ -302,7 +302,8 @@ if (!empty($msg) && is_array($msg)):
                     <th>Profile</th>
                     <th>Name</th>
                     <th>Username</th>
-                    <th>Department</th>               
+                    <th>Division</th>               
+                    <th>Office</th>               
                     <th>Status</th>
                     <th>Last Login</th>
                     <th>Last Edited</th>
@@ -322,7 +323,8 @@ if (!empty($msg) && is_array($msg)):
             <small class="text-muted"><?php echo remove_junk(ucwords($a_user['position'])); ?></small>
         </td>
         <td><?php echo remove_junk(ucwords($a_user['username']))?></td>
-        <td><?php echo remove_junk(ucwords($a_user['dep_name']))?></td>
+        <td><?php echo remove_junk(ucwords($a_user['division_name']))?></td>
+        <td><?php echo remove_junk(ucwords($a_user['office_name']))?></td>
         <td class="text-center">
         <?php echo $a_user['status']==1 
             ? '<span class="badge bg-success">Active</span>' 

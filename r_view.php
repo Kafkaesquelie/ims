@@ -12,6 +12,36 @@ if (!$request) {
     redirect('requests.php');
 }
 
+// Handle RIS number update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_ris'])) {
+    $new_ris_no = trim($db->escape($_POST['ris_no']));
+    
+    // Validate RIS number
+    if (empty($new_ris_no)) {
+        $session->msg("d", "RIS Number cannot be empty.");
+        redirect("r_view.php?id={$request_id}", false);
+    }
+    
+    // Check if RIS number is duplicate (excluding current request)
+    $check_sql = "SELECT id FROM requests WHERE ris_no = '{$new_ris_no}' AND id != '{$request_id}' LIMIT 1";
+    $check_result = $db->query($check_sql);
+    
+    if ($db->num_rows($check_result) > 0) {
+        $session->msg("d", "RIS Number '{$new_ris_no}' is already used by another request.");
+        redirect("r_view.php?id={$request_id}", false);
+    }
+    
+    // Update RIS number
+    $update_sql = "UPDATE requests SET ris_no = '{$new_ris_no}' WHERE id = '{$request_id}'";
+    if ($db->query($update_sql)) {
+        $session->msg("s", "RIS Number updated successfully to: {$new_ris_no}");
+        redirect("r_view.php?id={$request_id}", false);
+    } else {
+        $session->msg("d", "Failed to update RIS Number.");
+        redirect("r_view.php?id={$request_id}", false);
+    }
+}
+
 // Get requestor name
 $user = find_by_id('users', $request['requested_by']);
 if ($user) {
@@ -47,23 +77,40 @@ $items = find_by_sql("
 ");
 
 // Get unique fund clusters
-$fund_clusters = array_unique(array_column($items, 'fund_cluster'));
-$fund_cluster_display = !empty($fund_clusters) ? implode(', ', array_filter($fund_clusters)) : '__________';
+$fund_clusters = [];
+foreach ($items as $item) {
+    if (!empty($item['fund_cluster'])) {
+        $fund_clusters[] = $item['fund_cluster'];
+    }
+}
+$fund_clusters = array_unique($fund_clusters);
+$fund_cluster_display = !empty($fund_clusters) ? implode(', ', $fund_clusters) : '__________';
 
 // Current logged-in user
 $current_user = current_user();
 $current_user_name = $current_user ? remove_junk($current_user['name']) : "System User";
 $current_user_position = $current_user['position'] ?? 'Administrator';
 
-// Generate RIS format
-$ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") . '-0000';
+// Check RIS number status
+$current_ris_no = $request['ris_no'] ?? '';
+$is_ris_missing = empty($current_ris_no);
+$is_ris_duplicate = false;
+
+if (!$is_ris_missing) {
+    $check_duplicate_sql = "SELECT id FROM requests WHERE ris_no = '{$current_ris_no}' AND id != '{$request_id}' LIMIT 1";
+    $duplicate_result = $db->query($check_duplicate_sql);
+    $is_ris_duplicate = $db->num_rows($duplicate_result) > 0;
+}
+
+// Check if approval is allowed
+$can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['status']) !== 'approved';
 
 ?>
 
 <?php include_once('layouts/header.php'); ?>
 
 <style>
-/* Main Styling - Green Theme */
+/* Your existing CSS styles remain the same */
 :root {
     --primary-green: #1e7e34;
     --secondary-green: #28a745;
@@ -141,7 +188,15 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
     color: var(--dark-green);
 }
 
-.ris-display {
+.ris-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ris-input {
     background: var(--primary-green);
     color: white;
     padding: 0.5rem 1rem;
@@ -150,6 +205,110 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
     font-size: 1.1rem;
     display: inline-block;
     box-shadow: 0 2px 4px rgba(30, 126, 52, 0.3);
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+    min-width: 150px;
+    text-align: center;
+    flex: 0 0 auto;
+}
+
+.ris-input:focus {
+    outline: none;
+    border-color: var(--accent-green);
+    background: var(--secondary-green);
+    box-shadow: 0 4px 8px rgba(30, 126, 52, 0.4);
+}
+
+.ris-input.editable {
+    background: var(--secondary-green);
+    cursor: text;
+}
+
+.ris-input.readonly {
+    background: var(--primary-green);
+    cursor: not-allowed;
+}
+
+.ris-edit-btn {
+    background: var(--accent-green);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+}
+
+.ris-edit-btn:hover {
+    background: var(--dark-green);
+    transform: translateY(-1px);
+}
+
+.ris-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    width: 100%;
+}
+
+.ris-save-btn {
+    background: var(--primary-green);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ris-save-btn:hover {
+    background: var(--dark-green);
+}
+
+.ris-cancel-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ris-cancel-btn:hover {
+    background: #5a6268;
+}
+
+.ris-status {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    width: 100%;
+}
+
+.ris-valid {
+    color: var(--primary-green);
+}
+
+.ris-invalid {
+    color: #dc3545;
+}
+
+.ris-warning {
+    color: #ffc107;
 }
 
 .fund-cluster-display {
@@ -298,6 +457,18 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
     text-decoration: none;
 }
 
+.action-btn:disabled {
+    background: #6c757d !important;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.action-btn:disabled:hover {
+    transform: none;
+    box-shadow: 0 4px 15px rgba(30, 126, 52, 0.3);
+}
+
 .btn-back {
     background: #6c757d;
     color: white;
@@ -335,7 +506,7 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
         visibility: visible;
     }
     
-    .action-buttons, header, footer, .breadcrumb {
+    .action-buttons, header, footer, .breadcrumb, .ris-edit-btn, .ris-actions, .ris-status {
         display: none !important;
     }
     
@@ -418,6 +589,15 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
     .ris-title {
         font-size: 1.4rem;
     }
+    
+    .ris-input-container {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .ris-edit-btn {
+        margin-top: 0.5rem;
+    }
 }
 
 /* Additional Green Accents */
@@ -457,7 +637,8 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
 <div class="container-fluid my-4">
     <div class="row">
         <div class="col-12">
-           
+            <!-- Display messages -->
+            <?php echo display_msg($msg); ?>
 
             <!-- RIS Form -->
             <div class="ris-form position-relative">
@@ -483,7 +664,40 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
                         </div>
                         <div class="info-item">
                             <span class="info-label">RIS Number</span>
-                            <span class="ris-display"><?= $ris_no_display ?></span>
+                            <div class="ris-input-container">
+                                <form id="risForm" method="post" style="display: contents;">
+                                    <input type="hidden" name="update_ris" value="1">
+                                    <input type="text" 
+                                           name="ris_no" 
+                                           value="<?= htmlspecialchars($current_ris_no) ?>" 
+                                           class="ris-input readonly" 
+                                           id="risInput"
+                                           readonly
+                                           maxlength="20"
+                                           pattern="[A-Za-z0-9\-]+"
+                                           title="RIS Number format: YYYY-MM-XXXX">
+                                    <button type="button" class="ris-edit-btn" id="risEditBtn">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                </form>
+                            </div>
+                            <div class="ris-actions" id="risActions" style="display: none;">
+                                <button type="submit" form="risForm" class="ris-save-btn">
+                                    <i class="fas fa-check"></i> Save
+                                </button>
+                                <button type="button" class="ris-cancel-btn" id="risCancelBtn">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                            </div>
+                            <div class="ris-status" id="risStatus">
+                                <?php if ($is_ris_missing): ?>
+                                    <span class="ris-invalid"><i class="fas fa-exclamation-triangle"></i> RIS Number required</span>
+                                <?php elseif ($is_ris_duplicate): ?>
+                                    <span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>
+                                <?php else: ?>
+                                    <span class="ris-valid"><i class="fas fa-check-circle"></i> Valid RIS Number</span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
 
@@ -514,7 +728,7 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
                             <tbody>
                                 <?php foreach ($items as $item): 
                                     $item_stock = find_by_id('items', $item['item_id']);
-                                    $stock_available = $item_stock ? ($item['qty'] <= $item_stock['quantity']) : false;
+                                    $stock_available = $item_stock ? ($item_stock['quantity'] >= $item['qty']) : false;
                                 ?>
                                 <tr>
                                     <td><strong>0<?= (int)$item['stock_card'] ?></strong></td>
@@ -595,10 +809,13 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
         <i class="fas fa-arrow-left"></i> Back
     </a>
 
-    
     <?php if(strtolower($request['status']) !== 'approved'): ?>
-    <a href="approve_req.php?id=<?= (int)$request['id'] ?>" class="action-btn btn-approve approve-btn">
-        <i class="fas fa-check"></i> Approve
+    <a href="approve_req.php?id=<?= (int)$request['id'] ?>" 
+       class="action-btn btn-approve approve-btn" 
+       id="approveBtn"
+       <?= !$can_approve ? 'disabled' : '' ?>>
+        <i class="fas fa-check"></i> 
+        <?= $can_approve ? 'Approve' : 'Cannot Approve' ?>
     </a>
     <?php endif; ?>
 </div>
@@ -606,9 +823,82 @@ $ris_no_display = !empty($request['ris_no']) ? $request['ris_no'] : date("Y-m") 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Approval confirmation
+    const risInput = document.getElementById('risInput');
+    const risEditBtn = document.getElementById('risEditBtn');
+    const risCancelBtn = document.getElementById('risCancelBtn');
+    const risActions = document.getElementById('risActions');
+    const risForm = document.getElementById('risForm');
+    const risStatus = document.getElementById('risStatus');
+    const approveBtn = document.getElementById('approveBtn');
+    let originalRisValue = risInput.value;
+
+    // RIS number editing
+    risEditBtn.addEventListener('click', function() {
+        risInput.classList.remove('readonly');
+        risInput.classList.add('editable');
+        risInput.readOnly = false;
+        risInput.focus();
+        risActions.style.display = 'flex';
+        risEditBtn.style.display = 'none';
+    });
+
+    risCancelBtn.addEventListener('click', function() {
+        risInput.value = originalRisValue;
+        risInput.classList.remove('editable');
+        risInput.classList.add('readonly');
+        risInput.readOnly = true;
+        risActions.style.display = 'none';
+        risEditBtn.style.display = 'block';
+        updateRISStatus(originalRisValue);
+    });
+
+    // Real-time RIS validation
+    risInput.addEventListener('input', function() {
+        updateRISStatus(this.value);
+    });
+
+    // Form submission with validation
+    risForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const risValue = risInput.value.trim();
+        
+        if (!risValue) {
+            showAlert('Error', 'RIS Number cannot be empty.', 'error');
+            return;
+        }
+
+        // Check for duplicate RIS number
+        checkRISDuplicate(risValue).then(isDuplicate => {
+            if (isDuplicate && risValue !== originalRisValue) {
+                showAlert('Duplicate RIS', 'This RIS Number is already used by another request. Please use a different number.', 'error');
+                return;
+            }
+
+            // Submit the form
+            risForm.submit();
+        });
+    });
+
+    // Approval confirmation with validation
     document.querySelectorAll('.approve-btn').forEach(function(button) {
         button.addEventListener('click', function(e) {
+            if (button.disabled) {
+                e.preventDefault();
+                
+                const risValue = risInput.value.trim();
+                let message = '';
+                
+                if (!risValue) {
+                    message = 'RIS Number is required before approval. Please set a valid RIS Number.';
+                } else {
+                    message = 'RIS Number is either missing or duplicate. Please fix the RIS Number before approval.';
+                }
+                
+                showAlert('Cannot Approve', message, 'warning');
+                return;
+            }
+
             e.preventDefault();
             const url = this.getAttribute('href');
             
@@ -630,6 +920,65 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+
+    function updateRISStatus(risValue) {
+        if (!risValue.trim()) {
+            risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-exclamation-triangle"></i> RIS Number required</span>';
+            updateApproveButton(false);
+            return;
+        }
+
+        checkRISDuplicate(risValue).then(isDuplicate => {
+            // Don't show duplicate if it's the current request's own RIS number
+            if (isDuplicate && risValue !== originalRisValue) {
+                risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>';
+                updateApproveButton(false);
+            } else {
+                risStatus.innerHTML = '<span class="ris-valid"><i class="fas fa-check-circle"></i> Valid RIS Number</span>';
+                updateApproveButton(true);
+            }
+        });
+    }
+
+    function checkRISDuplicate(risValue) {
+        return fetch('check_ris_duplicate.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'ris_no=' + encodeURIComponent(risValue) + '&exclude_id=<?= $request_id ?>'
+        })
+        .then(response => response.json())
+        .then(data => {
+            return data.exists || false;
+        })
+        .catch(error => {
+            console.error('Error checking RIS duplicate:', error);
+            return false;
+        });
+    }
+
+    function updateApproveButton(canApprove) {
+        if (approveBtn) {
+            approveBtn.disabled = !canApprove;
+            approveBtn.innerHTML = canApprove ? 
+                '<i class="fas fa-check"></i> Approve' : 
+                '<i class="fas fa-times"></i> Cannot Approve';
+        }
+    }
+
+    function showAlert(title, text, icon) {
+        Swal.fire({
+            title: title,
+            text: text,
+            icon: icon,
+            confirmButtonColor: '#1e7e34',
+            background: '#fff'
+        });
+    }
+
+    // Initial status check
+    updateRISStatus(risInput.value);
 });
 </script>
 

@@ -1,12 +1,12 @@
 <?php
-$page_title = 'All Properties, Plant and Equipment';
+$page_title = 'All Equipment';
 require_once('includes/load.php');
 page_require_level(1);
 
 $fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name ASC");
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_property'])) {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_equipment'])) {
   $req_fields = array('fund_cluster', 'property_no', 'subcategory_id', 'article', 'description', 'unit', 'unit_cost', 'qty', 'date_acquired');
   validate_fields($req_fields);
 
@@ -30,50 +30,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_property'])) {
                   )";
 
     if ($db->query($query)) {
-      $session->msg("s", "Property added successfully.");
-      redirect('ppe.php', false);
+      $session->msg("s", "Equipment added successfully.");
+      redirect('equipment.php', false);
     } else {
-      $session->msg("d", "Sorry, failed to add property.");
-      redirect('ppe.php', false);
+      $session->msg("d", "Sorry, failed to add equipment.");
+      redirect('equipment.php', false);
     }
   } else {
     $session->msg("d", $errors);
-    redirect('ppe.php', false);
+    redirect('equipment.php', false);
   }
 }
 
 // Get subcategories for dropdown
 $all_subcategories = find_all('subcategories');
 
-// Fetch all properties
-$all_properties = find_all('properties');
+// Fetch all equipment (fixed query to include all equipment)
+$all_equipment = find_by_sql("SELECT p.*, s.subcategory_name as category_name 
+                             FROM properties p 
+                             LEFT JOIN subcategories s ON p.subcategory_id = s.id 
+                             WHERE s.subcategory_name LIKE '%equipment%' OR s.subcategory_name LIKE '%Equipment%'
+                             ORDER BY p.article ASC");
 
-// Separate properties by type (Property, Plant, Equipment)
-$properties_by_type = [
-  'property' => [],
-  'plant' => [],
-  'equipment' => []
-];
+$equipment_count = count($all_equipment);
 
-foreach ($all_properties as $property) {
-  $category_name = strtolower($property['category_name'] ?? '');
-
-  if (strpos($category_name, 'plant') !== false) {
-    $properties_by_type['plant'][] = $property;
-  } elseif (strpos($category_name, 'equipment') !== false) {
-    $properties_by_type['equipment'][] = $property;
-  } else {
-    $properties_by_type['property'][] = $property;
-  }
-}
-
-// Get counts for each type
-$property_count = count($properties_by_type['property']);
-$plant_count = count($properties_by_type['plant']);
-$equipment_count = count($properties_by_type['equipment']);
-$total_count = count($all_properties);
-
-// Calculate total values for each type
+// Calculate total value
 function calculate_total_value($items)
 {
   $total = 0;
@@ -83,10 +64,17 @@ function calculate_total_value($items)
   return $total;
 }
 
-$property_value = calculate_total_value($properties_by_type['property']);
-$plant_value = calculate_total_value($properties_by_type['plant']);
-$equipment_value = calculate_total_value($properties_by_type['equipment']);
-$total_value = $property_value + $plant_value + $equipment_value;
+$equipment_value = calculate_total_value($all_equipment);
+
+// Get active categories count
+$active_categories = find_by_sql("SELECT COUNT(DISTINCT subcategory_id) as category_count 
+                                 FROM properties p 
+                                 LEFT JOIN subcategories s ON p.subcategory_id = s.id 
+                                 WHERE s.subcategory_name LIKE '%equipment%' OR s.subcategory_name LIKE '%Equipment%'");
+$category_count = $active_categories[0]['category_count'];
+
+// Get total properties count (all equipment items)
+$total_properties = $equipment_count;
 ?>
 <?php include_once('layouts/header.php'); ?>
 
@@ -125,7 +113,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 0.5rem;
     font-weight: 500;
     transition: all 0.3s ease;
   }
@@ -142,9 +130,10 @@ $total_value = $property_value + $plant_value + $equipment_value;
     color: var(--dark);
     border: none;
     border-radius: 6px;
-    padding: 0.5rem 1rem;
+    padding: 0.35rem 0.5rem;
     font-weight: 500;
     transition: all 0.3s ease;
+    font-size: 0.875rem;
   }
 
   .btn-warning-custom:hover {
@@ -158,9 +147,10 @@ $total_value = $property_value + $plant_value + $equipment_value;
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 0.5rem 1rem;
+    padding: 0.35rem 0.5rem;
     font-weight: 500;
     transition: all 0.3s ease;
+    font-size: 0.875rem;
   }
 
   .btn-danger-custom:hover {
@@ -169,102 +159,13 @@ $total_value = $property_value + $plant_value + $equipment_value;
     color: white;
   }
 
-  /* Enhanced Tab Styles */
-  .nav-tabs-custom {
-    border: none;
-    border-bottom: 3px solid #dee2e6;
-    border-top: 2px solid #dee2e6;
-    background: white;
-    border-radius: 0;
-    width: 100%;
-    display: flex;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  }
-
-  .nav-tabs-custom .nav-item {
-    flex: 1;
-    text-align: center;
-    margin: 0;
-  }
-
-  .nav-tabs-custom .nav-link {
-    border: none;
-    border-bottom: 3px solid transparent;
-    border-radius: 0;
-    color: var(--secondary);
-    font-weight: 600;
-    padding: 1.25rem 1rem;
-    margin: 0;
-    transition: all 0.3s ease;
-    background: transparent;
-    position: relative;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  .nav-tabs-custom .nav-link:hover {
-    border-color: var(--primary-light);
-    color: var(--primary);
-    background: rgba(40, 167, 69, 0.05);
-  }
-
-  .nav-tabs-custom .nav-link.active {
-    background: white;
-    border-color: var(--primary);
-    color: var(--primary);
-    font-weight: 700;
-  }
-
-  .nav-tabs-custom .nav-link.active::after {
-    content: '';
-    position: absolute;
-    bottom: -3px;
-    left: 0;
-    width: 100%;
-    height: 3px;
-    background: var(--primary);
-  }
-
-  .tab-badge {
-    background: var(--primary);
-    color: white;
-    border-radius: 50px;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    min-width: 30px;
-  }
-
-  .nav-tabs-custom .nav-link.active .tab-badge {
-    background: var(--primary-dark);
-  }
-
-  .tab-pane {
-    animation: fadeIn 0.3s ease-in-out;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
   /* Table Styles */
   .table-custom {
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--shadow);
     margin-bottom: 0;
+    width: 100%;
   }
 
   .table-custom thead {
@@ -285,6 +186,7 @@ $total_value = $property_value + $plant_value + $equipment_value;
     padding: 0.75rem;
     vertical-align: middle;
     border-bottom: 1px solid #dee2e6;
+    font-size:13px;
   }
 
   .table-custom tbody tr {
@@ -310,16 +212,18 @@ $total_value = $property_value + $plant_value + $equipment_value;
   }
 
   .actions-column {
-    width: 120px;
+    width: 100px;
     text-align: center;
   }
 
   .btn-group-custom {
     display: flex;
+    gap: 0.25rem;
   }
 
   .btn-group-custom .btn {
     width: 100%;
+    padding: 0.25rem 0.4rem;
   }
 
   .empty-state {
@@ -405,45 +309,33 @@ $total_value = $property_value + $plant_value + $equipment_value;
     margin-bottom: 0.5rem;
   }
 
-  /* Type-specific colors */
-  .stat-property {
+  /* Stat item colors */
+  .stat-total {
     border-top-color: #28a745;
   }
 
-  .stat-property .stat-value {
+  .stat-total .stat-value {
     color: #28a745;
   }
 
-  .stat-plant {
+  .stat-categories {
     border-top-color: #17a2b8;
   }
 
-  .stat-plant .stat-value {
+  .stat-categories .stat-value {
     color: #17a2b8;
   }
 
-  .stat-equipment {
+  .stat-value {
     border-top-color: #6f42c1;
   }
 
-  .stat-equipment .stat-value {
+  .stat-value .stat-value {
     color: #6f42c1;
   }
 
-  .tab-property .table-custom thead {
-    background: linear-gradient(135deg, #28a745, #1e7e34);
-  }
-
-  .tab-plant .table-custom thead {
-    background: linear-gradient(135deg, #17a2b8, #138496);
-  }
-
-  .tab-equipment .table-custom thead {
-    background: linear-gradient(135deg, #6f42c1, #59359a);
-  }
-
-  /* Add Property Form Styles */
-  .add-property-form {
+  /* Add Equipment Form Styles */
+  .add-equipment-form {
     background: white;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
@@ -484,67 +376,10 @@ $total_value = $property_value + $plant_value + $equipment_value;
     border-bottom: 2px solid var(--primary-light);
   }
 
-  /* Table Container Fix */
-  .table-responsive {
-    overflow-x: auto;
-    max-width: 100%;
-  }
-
-  /* Fixed Table Layout */
-  .table-custom {
-    table-layout: fixed;
+  /* Table Container - No scrollbar */
+  .table-container {
     width: 100%;
-  }
-
-  /* Specific Column Widths */
-  .table-custom th:nth-child(1),
-  .table-custom td:nth-child(1) {
-    width: 5%;
-  }
-
-  .table-custom th:nth-child(2),
-  .table-custom td:nth-child(2) {
-    width: 8%;
-  }
-
-  .table-custom th:nth-child(3),
-  .table-custom td:nth-child(3) {
-    width: 10%;
-  }
-
-  .table-custom th:nth-child(4),
-  .table-custom td:nth-child(4) {
-    width: 12%;
-  }
-
-  .table-custom th:nth-child(5),
-  .table-custom td:nth-child(5) {
-    width: 20%;
-  }
-
-  .table-custom th:nth-child(6),
-  .table-custom td:nth-child(6) {
-    width: 8%;
-  }
-
-  .table-custom th:nth-child(7),
-  .table-custom td:nth-child(7) {
-    width: 5%;
-  }
-
-  .table-custom th:nth-child(8),
-  .table-custom td:nth-child(8) {
-    width: 10%;
-  }
-
-  .table-custom th:nth-child(9),
-  .table-custom td:nth-child(9) {
-    width: 10%;
-  }
-
-  .table-custom th:nth-child(10),
-  .table-custom td:nth-child(10) {
-    width: 12%;
+    overflow: visible;
   }
 
   /* Ensure text doesn't break in table cells */
@@ -552,7 +387,6 @@ $total_value = $property_value + $plant_value + $equipment_value;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 0;
   }
 
   /* Allow description to show full text on hover */
@@ -579,25 +413,6 @@ $total_value = $property_value + $plant_value + $equipment_value;
 
   /* Responsive Design */
   @media (max-width: 768px) {
-    .nav-tabs-custom {
-      flex-direction: column;
-    }
-
-    .nav-tabs-custom .nav-item {
-      flex: none;
-    }
-
-    .nav-tabs-custom .nav-link {
-      padding: 1rem 0.5rem;
-      font-size: 0.9rem;
-    }
-
-    .tab-badge {
-      font-size: 0.7rem;
-      padding: 0.2rem 0.4rem;
-      min-width: 25px;
-    }
-
     .stats-grid {
       grid-template-columns: 1fr;
     }
@@ -610,6 +425,11 @@ $total_value = $property_value + $plant_value + $equipment_value;
     .search-box {
       max-width: 100%;
     }
+
+    /* On mobile, allow horizontal scroll for table */
+    .table-container {
+      overflow-x: auto;
+    }
   }
 </style>
 
@@ -618,242 +438,131 @@ $total_value = $property_value + $plant_value + $equipment_value;
   <div class="card-header-custom">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
       <div>
-        <h4 class="page-title">Properties, Plant and Equipment Management</h4>
+        <h4 class="page-title">Equipment Management</h4>
         <nav aria-label="breadcrumb">
           <ol class="breadcrumb breadcrumb-custom">
             <li class="breadcrumb-item"><a href="admin.php">Home</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Properties</li>
+            <li class="breadcrumb-item active" aria-current="page">Equipment</li>
           </ol>
         </nav>
       </div>
       <div class="header-actions">
         <div class="search-box">
           <i class="fas fa-search search-icon"></i>
-          <input type="text" class="form-control" placeholder="Search..." id="searchInput">
+          <input type="text" class="form-control" placeholder="Search equipment..." id="searchInput">
         </div>
-
+        <button type="button" id="showAddFormBtn" class="btn btn-primary-custom">
+          <i class="fas fa-plus me-2"></i> Add Equipment
+        </button>
       </div>
     </div>
   </div>
 
   <!-- Statistics Cards -->
   <div class="stats-grid">
-    <div class="stat-item stat-property">
-      <div class="stat-value"><?php echo $property_count; ?></div>
-      <div class="stat-label">Properties</div>
-      <small class="text-muted">₱<?php echo number_format($property_value, 2); ?></small>
+    <div class="stat-item stat-total">
+      <div class="stat-value"><?php echo $total_properties; ?></div>
+      <div class="stat-label">Total Equipment</div>
+      <small class="text-muted">Items in inventory</small>
     </div>
-    <div class="stat-item stat-plant">
-      <div class="stat-value"><?php echo $plant_count; ?></div>
-      <div class="stat-label">Plant Items</div>
-      <small class="text-muted">₱<?php echo number_format($plant_value, 2); ?></small>
+    <div class="stat-item stat-categories">
+      <div class="stat-value"><?php echo $category_count; ?></div>
+      <div class="stat-label">Active Categories</div>
+      <small class="text-muted">Equipment types</small>
     </div>
-    <div class="stat-item stat-equipment">
-      <div class="stat-value"><?php echo $equipment_count; ?></div>
-      <div class="stat-label">Equipment</div>
-      <small class="text-muted">₱<?php echo number_format($equipment_value, 2); ?></small>
-    </div>
-    <div class="stat-item">
-      <div class="stat-value"><?php echo $total_count; ?></div>
-      <div class="stat-label">Total Items</div>
-      <small class="text-muted">₱<?php echo number_format($total_value, 2); ?></small>
+    <div class="stat-item stat-value">
+      <div class="stat-value">₱<?php echo number_format($equipment_value, 2); ?></div>
+      <div class="stat-label">Total Value</div>
     </div>
   </div>
 
-  <!-- Tabs Navigation -->
-  <ul class="nav nav-tabs nav-tabs-custom" id="ppeTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="property-tab" data-bs-toggle="tab" data-bs-target="#property" type="button" role="tab">
-        <i class="fas fa-building me-2"></i>Properties
-        <span class="tab-badge"><?php echo $property_count; ?></span>
-      </button>
-    </li>
-
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="equipment-tab" data-bs-toggle="tab" data-bs-target="#equipment" type="button" role="tab">
-        <i class="fas fa-tools me-2"></i>Equipment
-        <span class="tab-badge"><?php echo $equipment_count; ?></span>
-      </button>
-    </li>
-  </ul>
-
-  <!-- Tab Content -->
-  <div class="tab-content" id="ppeTabsContent">
-
-
-    <!-- Property Tab -->
-    <div class="tab-pane fade show active tab-property" id="property" role="tabpanel">
-      <?php if ($equipment_count > 0): ?>
-        <div class="table-responsive">
-          <table class="table table-custom" id="equipmentTable">
-            <thead>
+  <!-- Equipment Table Section -->
+  <div class="card-header-custom" id="equipmentTableSection">
+    <?php if ($equipment_count > 0): ?>
+      <div class="table-container">
+        <table class="table table-custom" id="equipmentTable">
+          <thead>
+            <tr>
+              <th class="text-center">#</th>
+              <th>Fund Cluster</th>
+              <th>Property No.</th>
+              <th>Article</th>
+              <th class="custom-desc">Description</th>
+              <th class="text-center">Unit Cost</th>
+              <th class="text-center">Qty</th>
+              <th class="text-center">Total Value</th>
+              <th class="text-center">Date Acquired</th>
+              <th class="text-center actions-column">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($all_equipment as $index => $equipment): ?>
+              <?php
+              $total_value = $equipment['unit_cost'] * $equipment['qty'];
+              $date_acquired = !empty($equipment['date_acquired'])
+                ? date('M d, Y', strtotime($equipment['date_acquired']))
+                : '-';
+              ?>
               <tr>
-                <th class="text-center">#</th>
-                <th>Classification</th>
-                <th>Description</th>
-                <th>Nature of Occupancy</th>
-                <th class="custom-desc">Location</th>
-                <th class="text-center">Date Constructed</th>
-                <th class="text-center">Reference</th>
-                <th class="text-center">Acquisition Cost</th>
-                <th class="text-center">Market/Appraisal</th>
-                <th class="text-center">Date of Appraisal</th>
-                <th class="text-center actions-column">Remarks</th>
+                <td class="text-center">
+                  <span class="badge badge-custom badge-primary"><?= $index + 1 ?></span>
+                </td>
+                <td><?= remove_junk($equipment['fund_cluster']); ?></td>
+                <td><strong><?= remove_junk($equipment['property_no']); ?></strong></td>
+                <td><?= remove_junk($equipment['article']); ?><br>
+                  <small class="text-muted"> <?= remove_junk($equipment['unit']); ?></small>
+                </td>
+                <td class="custom-desc" title="<?= htmlspecialchars(remove_junk($equipment['description'])); ?>">
+                  <?php
+                  $desc = remove_junk($equipment['description']);
+                  echo strlen($desc) > 50 ? substr($desc, 0, 50) . '...' : $desc;
+                  ?>
+                </td>
+                <td class="text-center"><strong>₱<?= number_format($equipment['unit_cost'], 2); ?></strong></td>
+                <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($equipment['qty']); ?></span></td>
+                <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td>
+                <td class="text-center"><?= $date_acquired; ?></td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-custom">
+                    <a href="edit_ppe.php?id=<?= (int)$equipment['id']; ?>"
+                      class="btn btn-warning-custom" title="Edit">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <a href="a_script.php?id=<?= (int)$equipment['id']; ?>"
+                      class="btn btn-danger-custom archive-btn"
+                      data-id="<?= (int)$equipment['id']; ?>"
+                      title="Archive">
+                      <i class="fa-solid fa-file-zipper"></i>
+                    </a>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($properties_by_type['equipment'] as $index => $property): ?>
-                <?php
-                $total_value = $property['unit_cost'] * $property['qty'];
-                $date_acquired = !empty($property['date_acquired'])
-                  ? date('M d, Y', strtotime($property['date_acquired']))
-                  : '-';
-                ?>
-                <tr>
-                  <td class="text-center">
-                    <span class="badge badge-custom badge-primary"><?= $index + 1 ?></span>
-                  </td>
-                  <td><?= remove_junk($property['fund_cluster']); ?></td>
-                  <td><strong><?= remove_junk($property['property_no']); ?></strong></td>
-                  <td><?= remove_junk($property['article']); ?><br>
-                    <small class="text-muted"> <?= remove_junk($property['unit']); ?></small>
-                  </td>
-                  <td class="custom-desc" title="<?= htmlspecialchars(remove_junk($property['description'])); ?>">
-                    <?php
-                    $desc = remove_junk($property['description']);
-                    echo strlen($desc) > 50 ? substr($desc, 0, 50) . '...' : $desc;
-                    ?>
-                  </td>
-                  <td class="text-center"><strong>₱<?= number_format($property['unit_cost'], 2); ?></strong></td>
-                  <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($property['qty']); ?></span></td>
-                  <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td>
-                  <td class="text-center"><?= $date_acquired; ?></td>
-                  <td class="text-center">
-                    <div class="btn-group btn-group-custom">
-                      <a href="edit_ppe.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-warning-custom" title="Edit">
-                        <i class="fas fa-edit"></i>
-                      </a>
-                      <a href="archive_property.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-danger-custom archive-btn"
-                        data-id="<?= (int)$property['id']; ?>"
-                        title="Archive">
-                        <i class="fa-solid fa-file-zipper"></i>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php else: ?>
-        <div class="empty-state">
-          <i class="fas fa-tools empty-state-icon"></i>
-          <h4>No Equipment Found</h4>
-          <p>Get started by adding your first equipment</p>
-          <button type="button" class="btn btn-primary-custom show-add-form">
-            <i class="fas fa-plus me-2"></i> Add Equipment
-          </button>
-        </div>
-      <?php endif; ?>
-    </div>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php else: ?>
+      <div class="empty-state">
+        <i class="fas fa-tools empty-state-icon"></i>
+        <h4>No Equipment Found</h4>
+        <p>Get started by adding your first equipment</p>
+        <button type="button" class="btn btn-primary-custom" id="showAddFormEmptyBtn">
+          <i class="fas fa-plus me-2"></i> Add Equipment
+        </button>
+      </div>
+    <?php endif; ?>
   </div>
 
-
-  
-    <!-- Equipments Tab -->
-    <div class="tab-pane fade tab-equipments" id="equipment" role="tabpanel">
-      <button type="button" id="showAddFormBtn" class="btn btn-primary-custom">
-        <i class="fas fa-plus me-2"></i> Add Equipment
-      </button>
-      <?php if ($property_count > 0): ?>
-        <div class="table-responsive">
-          <table class="table table-custom" id="propertyTable">
-            <thead>
-              <tr>
-                <th class="text-center">#</th>
-                <th>Fund Cluster</th>
-                <th>Property No.</th>
-                <th>Article</th>
-                <th class="custom-desc">Description</th>
-                <th class="text-center">Unit Cost</th>
-                <th class="text-center">Qty</th>
-                <th class="text-center">Total Value</th>
-                <th class="text-center">Date Acquired</th>
-                <th class="text-center actions-column">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($properties_by_type['property'] as $index => $property): ?>
-                <?php
-                $total_value = $property['unit_cost'] * $property['qty'];
-                $date_acquired = !empty($property['date_acquired'])
-                  ? date('M d, Y', strtotime($property['date_acquired']))
-                  : '-';
-                ?>
-                <tr>
-                  <td class="text-center">
-                    <span class="badge badge-custom badge-primary"><?= $index + 1 ?></span>
-                  </td>
-                  <td><?= remove_junk($property['fund_cluster']); ?></td>
-                  <td><strong><?= remove_junk($property['property_no']); ?></strong></td>
-                  <td><?= remove_junk($property['article']); ?><br>
-                    <small class="text-muted"> <?= remove_junk($property['unit']); ?></small>
-                  </td>
-                  <td class="custom-desc" title="<?= htmlspecialchars(remove_junk($property['description'])); ?>">
-                    <?php
-                    $desc = remove_junk($property['description']);
-                    echo strlen($desc) > 50 ? substr($desc, 0, 50) . '...' : $desc;
-                    ?>
-                  </td>
-                  <td class="text-center"><strong>₱<?= number_format($property['unit_cost'], 2); ?></strong></td>
-                  <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($property['qty']); ?></span></td>
-                  <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td>
-                  <td class="text-center"><?= $date_acquired; ?></td>
-                  <td class="text-center">
-                    <div class="btn-group btn-group-custom">
-                      <a href="edit_ppe.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-warning-custom" title="Edit">
-                        <i class="fas fa-edit"></i>
-                      </a>
-                      <a href="archive_property.php?id=<?= (int)$property['id']; ?>"
-                        class="btn btn-danger-custom archive-btn"
-                        data-id="<?= (int)$property['id']; ?>"
-                        title="Archive">
-                        <i class="fa-solid fa-file-zipper"></i>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php else: ?>
-        <div class="empty-state">
-          <i class="fas fa-building empty-state-icon"></i>
-          <h4>No Properties Found</h4>
-          <p>Get started by adding your first property</p>
-          <button type="button" class="btn btn-primary-custom show-add-form">
-            <i class="fas fa-plus me-2"></i> Add Property
-          </button>
-        </div>
-      <?php endif; ?>
-    </div>
-
-
-
-  <!-- Add Property Form (Hidden by default) -->
-  <div class="add-property-form" id="addPropertyForm">
+  <!-- Add Equipment Form (Hidden by default) -->
+  <div class="add-equipment-form" id="addEquipmentForm">
     <div class="add-form-header">
-      <h5><i class="fas fa-plus-circle me-2"></i> Add New Property, Plant & Equipment</h5>
+      <h5><i class="fas fa-plus-circle me-2"></i> Add New Equipment</h5>
       <button type="button" id="cancelAddBtn" class="btn btn-light btn-sm">
         <i class="fas fa-times me-1"></i> Cancel
       </button>
     </div>
 
-    <form method="post" action="ppe.php" class="needs-validation" novalidate>
+    <form method="post" action="equipment.php" class="needs-validation" novalidate>
       <div class="form-section">
         <h6 class="section-title">Basic Information</h6>
         <div class="row">
@@ -890,11 +599,13 @@ $total_value = $property_value + $plant_value + $equipment_value;
             <div class="form-group">
               <label for="subcategory_id" class="form-label fw-bold">Category <span class="text-danger">*</span></label>
               <select name="subcategory_id" id="subcategory_id" class="form-control" required>
-                <option value=""> Select Category </option>
+                <option value="">Select Category</option>
                 <?php foreach ($all_subcategories as $sub): ?>
-                  <option value="<?php echo (int)$sub['id']; ?>">
-                    <?php echo remove_junk($sub['subcategory_name']); ?>
-                  </option>
+                  <?php if (stripos($sub['subcategory_name'], 'equipment') !== false): ?>
+                    <option value="<?php echo (int)$sub['id']; ?>">
+                      <?php echo remove_junk($sub['subcategory_name']); ?>
+                    </option>
+                  <?php endif; ?>
                 <?php endforeach; ?>
               </select>
               <div class="invalid-feedback">
@@ -992,16 +703,13 @@ $total_value = $property_value + $plant_value + $equipment_value;
           <button type="button" id="cancelFormBtn" class="btn btn-secondary">
             <i class="fas fa-times me-1"></i> Cancel
           </button>
-          <button type="submit" name="add_property" class="btn btn-success">
-            <i class="fas fa-save me-1"></i> Save Property
+          <button type="submit" name="add_equipment" class="btn btn-success">
+            <i class="fas fa-save me-1"></i> Save Equipment
           </button>
         </div>
       </div>
     </form>
   </div>
-
-
-
 </div>
 
 <!-- SweetAlert for flash messages -->
@@ -1025,29 +733,12 @@ $total_value = $property_value + $plant_value + $equipment_value;
 <?php include_once('layouts/footer.php'); ?>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
   $(document).ready(function() {
-    // Initialize DataTables for each table
-    var propertyTable = $('#propertyTable').DataTable({
-      pageLength: 5,
-      lengthMenu: [5, 10, 25, 50],
-      ordering: true,
-      searching: true,
-      autoWidth: false,
-    });
-
-    var plantTable = $('#plantTable').DataTable({
-      pageLength: 5,
-      lengthMenu: [5, 10, 25, 50],
-      ordering: true,
-      searching: true,
-      autoWidth: false,
-    });
-
+    // Initialize DataTable
     var equipmentTable = $('#equipmentTable').DataTable({
-      pageLength: 5,
+      pageLength: 10,
       lengthMenu: [5, 10, 25, 50],
       ordering: true,
       searching: true,
@@ -1056,27 +747,22 @@ $total_value = $property_value + $plant_value + $equipment_value;
 
     // Global search functionality
     $('#searchInput').on('keyup', function() {
-      var searchTerm = this.value;
-
-      // Search in active tab's table
-      var activeTab = $('.nav-tabs .nav-link.active').attr('id');
-
-      switch (activeTab) {
-        case 'property-tab':
-          propertyTable.search(searchTerm).draw();
-          break;
-        case 'plant-tab':
-          plantTable.search(searchTerm).draw();
-          break;
-        case 'equipment-tab':
-          equipmentTable.search(searchTerm).draw();
-          break;
-      }
+      equipmentTable.search(this.value).draw();
     });
 
     // Show add form buttons
-    $('.show-add-form').on('click', function() {
-      $('#showAddFormBtn').click();
+    $('#showAddFormBtn, #showAddFormEmptyBtn').on('click', function() {
+      $('#addEquipmentForm').slideDown(300);
+      $('#equipmentTableSection').slideUp(300); // Hide table section
+      $('html, body').animate({
+        scrollTop: $('#addEquipmentForm').offset().top - 20
+      }, 300);
+    });
+
+    // Hide add form
+    $('#cancelAddBtn, #cancelFormBtn').on('click', function() {
+      $('#addEquipmentForm').slideUp(300);
+      $('#equipmentTableSection').slideDown(300); // Show table section
     });
 
     // Archive confirmation
@@ -1087,8 +773,8 @@ $total_value = $property_value + $plant_value + $equipment_value;
         const id = this.getAttribute('data-id');
 
         Swal.fire({
-          title: 'Archive Property?',
-          text: "This property will be moved to archives. You can restore it later if needed.",
+          title: 'Archive Equipment?',
+          text: "This equipment will be moved to archives. You can restore it later if needed.",
           icon: 'warning',
           showCancelButton: true,
           confirmButtonColor: '#d33',
@@ -1101,23 +787,6 @@ $total_value = $property_value + $plant_value + $equipment_value;
           }
         });
       });
-    });
-
-    // Tab change event - reset search
-    $('#ppeTabs button').on('shown.bs.tab', function(e) {
-      $('#searchInput').val('').trigger('keyup');
-    });
-
-    // Add Property Form functionality
-    $('#showAddFormBtn').on('click', function() {
-      $('#addPropertyForm').slideDown(300);
-      $('html, body').animate({
-        scrollTop: $('#addPropertyForm').offset().top - 20
-      }, 300);
-    });
-
-    $('#cancelAddBtn, #cancelFormBtn').on('click', function() {
-      $('#addPropertyForm').slideUp(300);
     });
   });
 </script>

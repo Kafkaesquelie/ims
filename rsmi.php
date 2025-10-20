@@ -28,13 +28,17 @@ if ($selected_cluster && $selected_cluster !== 'all') {
 
 $display_date = $report_date ? date("F d, Y", strtotime($report_date)) : '';
 
+// Fixed query with proper column aliases to check which unit system is used
 $issued_items = find_by_sql("
     SELECT 
-        r.id ,
+        r.id,
         r.ris_no,
         i.stock_card,
         i.name AS item_name,
-        ri.unit AS unit_name,
+        u.symbol AS unit_symbol,
+        bu.symbol AS base_unit_symbol,
+        i.unit_id,
+        i.base_unit_id,
         ri.qty AS qty_issued,
         i.unit_cost,
         (ri.qty * i.unit_cost) AS amount,
@@ -42,6 +46,8 @@ $issued_items = find_by_sql("
     FROM request_items ri
     JOIN requests r ON ri.req_id = r.id
     JOIN items i ON ri.item_id = i.id
+    LEFT JOIN units u ON i.unit_id = u.id
+    LEFT JOIN base_units bu ON i.base_unit_id = bu.id
     WHERE r.status NOT IN ('Pending', 'Approved')
       AND i.stock_card IS NOT NULL
       AND i.stock_card != ''
@@ -169,6 +175,28 @@ $serial_no_prefix = $year . '-' . $month . '-';
     border-color: #dc3545;
     color: #dc3545;
 }
+
+/* Export button styling */
+.btn-export {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-export:hover {
+    background: linear-gradient(135deg, #138496, #117a8b);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(23, 162, 184, 0.4);
+    color: white;
+}
+
+.export-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
 </style>
 
 <div class="card">
@@ -232,7 +260,7 @@ $serial_no_prefix = $year . '-' . $month . '-';
                                         <?= $fc['name']; ?>
                                     </option>
                                 <?php endforeach; ?>
-                            </select>
+                    </select>
                         </div>
                     </td>
                     <td>
@@ -248,7 +276,7 @@ $serial_no_prefix = $year . '-' . $month . '-';
                             <i>To be filled up by the Supply and/or Property Division/Unit</i>
                         </td>
                         <td colspan="2" class="text-center" style="background:#f2f2f2;">
-                            <i>To be filled up by Accounting Division Unit</i>
+                            <i>To be filled up by the Accounting Division/Unit</i>
                         </td>
                     </tr>
                     <tr>
@@ -278,7 +306,25 @@ $serial_no_prefix = $year . '-' . $month . '-';
                                 <td class="text-center"></td>
                                 <td class="text-center"><?= $item['stock_card']; ?></td>
                                 <td><?= $item['item_name']; ?></td>
-                                <td class="text-center"><?= $item['unit_name']; ?></td>
+                                <td class="text-center">
+                                    <?php 
+                                    // Check which unit system is being used
+                                    $unit_display = 'N/A';
+                                    
+                                    // Priority: Check if unit_id is set (custom unit)
+                                    if (!empty($item['unit_id']) && !empty($item['unit_symbol'])) {
+                                        $unit_display = $item['unit_symbol'];
+                                        $unit_type = 'custom_unit';
+                                    }
+                                    // Fallback: Check if base_unit_id is set (base unit)
+                                    elseif (!empty($item['base_unit_id']) && !empty($item['base_unit_symbol'])) {
+                                        $unit_display = $item['base_unit_symbol'];
+                                        $unit_type = 'base_unit';
+                                    }
+                                    
+                                    echo $unit_display;
+                                    ?>
+                                </td>
                                 <td class="text-center"><?= $item['qty_issued']; ?></td>
                                 <td class="text-right">₱<?= number_format($item['unit_cost'], 2); ?></td>
                                 <td class="text-right">₱<?= number_format($item['amount'], 2); ?></td>
@@ -292,7 +338,9 @@ $serial_no_prefix = $year . '-' . $month . '-';
                                     'qty' => 0,
                                     'unit_cost' => $item['unit_cost'],
                                     'total_cost' => 0,
-                                    'uacs' => '---'
+                                    'uacs' => '---',
+                                    'unit' => $unit_display,
+                                    'unit_type' => $unit_type ?? 'unknown'
                                 ];
                             }
                             $recap[$stock]['qty'] += $item['qty_issued'];
@@ -318,22 +366,15 @@ $serial_no_prefix = $year . '-' . $month . '-';
                     <!-- Recapitulation Rows -->
                     <?php if(!empty($recap)): ?>
                         <tr>
-                            <td colspan="1" class="text-center" style="font-weight:bold; background:#f2f2f2;"></td>
-                            <td colspan="2" class="text-center" style="font-weight:bold; background:#f2f2f2;">
-                                Recapitulation
-                            </td>
-                            <td colspan="1" class="text-center" style="font-weight:bold; background:#f2f2f2;"></td>
-                            <td colspan="1" class="text-center" style="font-weight:bold; background:#f2f2f2;"></td>
-                            <td colspan="3" class="text-center" style="font-weight:bold; background:#f2f2f2;">
+                            <td colspan="8" class="text-center" style="font-weight:bold; background:#f2f2f2;">
                                 Recapitulation
                             </td>
                         </tr>
 
                         <tr>
-                            <th colspan="1" class="text-center"></th>
-                            <th colspan="1" class="text-center">Stock No.</th>
+                            <th colspan="2" class="text-center">Stock No.</th>
+                            <th colspan="1" class="text-center">Unit</th>
                             <th colspan="1" class="text-center">Quantity</th>
-                            <th colspan="1" class="text-center"></th>
                             <th colspan="1" class="text-center"></th>
                             <th colspan="1" class="text-center">Unit Cost</th>
                             <th colspan="1" class="text-center">Total Cost</th>
@@ -341,10 +382,9 @@ $serial_no_prefix = $year . '-' . $month . '-';
                         </tr>
                         <?php foreach($recap as $stock_no => $data): ?>
                             <tr>
-                                <td colspan="1" class="text-center"></td>
-                                <td colspan="1" class="text-center">0<?= $stock_no; ?></td>
+                                <td colspan="2" class="text-center">0<?= $stock_no; ?></td>
+                                <td colspan="1" class="text-center"><?= $data['unit']; ?></td>
                                 <td colspan="1" class="text-center"><?= $data['qty']; ?></td> 
-                                <td colspan="1" class="text-center"></td>
                                 <td colspan="1" class="text-center"></td>
                                 <td colspan="1" class="text-center">₱<?= number_format($data['unit_cost'], 2); ?></td> 
                                 <td colspan="1" class="text-center">₱<?= number_format($data['total_cost'], 2); ?></td> 
@@ -353,7 +393,14 @@ $serial_no_prefix = $year . '-' . $month . '-';
                         <?php endforeach; ?>
                     <?php endif; ?>
 
-                    <?php for($i = 0; $i < $empty_rows; $i++): ?>
+                    <!-- Additional empty rows after recap -->
+                    <?php 
+                    $recap_rows = !empty($recap) ? count($recap) + 2 : 0; // +2 for recap header rows
+                    $total_rows_used = $num_items + $recap_rows;
+                    $remaining_empty_rows = max(0, 15 - $total_rows_used);
+                    ?>
+                    
+                    <?php for($i = 0; $i < $remaining_empty_rows; $i++): ?>
                         <tr>
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>
@@ -412,9 +459,20 @@ $serial_no_prefix = $year . '-' . $month . '-';
     <div class="col-md-4" style="padding: 10px; border-left: 1px solid #000;">
         <h5>Filter Report</h5>
         <div id="inline-datepicker"></div>
-        <button id="print" class="btn btn-success btn-block mt-2"><i class="fa-solid fa-print"></i> Print</button>
+        
+        <!-- Export Buttons Container -->
+        <div class="export-buttons">
+            <button id="print" class="btn btn-success btn-block">
+                <i class="fa-solid fa-print"></i> Generate RSMI
+            </button>
+            
+            <button id="export-word" class="btn btn-export btn-block">
+                <i class="fa-solid fa-file-word"></i> Export to Word
+            </button>
+        </div>
     </div>
 </div>
+
 
 <style>
     #inline-datepicker {
@@ -465,6 +523,9 @@ $serial_no_prefix = $year . '-' . $month . '-';
         .no-border th {
             border: none !important;
         }
+        .debug-info {
+            display: none !important;
+        }
     }
 
     table th:nth-child(1), table td:nth-child(1) { width: 15%; }
@@ -514,7 +575,7 @@ $(document).ready(function(){
         window.location.href = window.location.pathname + '?report_date=' + selectedDate + '&fund_cluster=' + selectedCluster;
     });
 
-    // Print button with validation
+    // Print button with validation - MODIFIED to always proceed to print_rsmi.php
     $('#print').click(function(){
         const signatoryName = $('#posted_by').val();
         
@@ -542,7 +603,7 @@ $(document).ready(function(){
         const reportDate = urlParams.get('report_date') || '';
         const fundCluster = $('#fund_cluster').val() || 'all';
 
-        // Build print URL with all parameters
+        // Build print URL with all parameters - ALWAYS go to print_rsmi.php
         let printUrl = 'print_rsmi.php?fund_cluster=' + fundCluster;
         
         if(reportDate){
@@ -558,22 +619,66 @@ $(document).ready(function(){
             printUrl += '&signatory_agency=' + encodeURIComponent(signatoryAgency);
         }
 
-        // Show success message before printing
-        Swal.fire({
-            icon: 'success',
-            title: 'Print Preview',
-            text: 'Your report is being prepared for printing.',
-            confirmButtonText: 'Continue',
-            confirmButtonColor: '#28a745',
-            showCancelButton: true,
-            cancelButtonText: 'Cancel'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // Open in a new tab
-                window.open(printUrl, '_blank');
-            }
-        });
+        // Always proceed to print_rsmi.php without confirmation
+        window.open(printUrl, '_blank');
     });
+
+   // Export to Word button
+$('#export-word').click(function(){
+    const signatoryName = $('#posted_by').val();
+    
+    // Check if signatory is selected
+    if (!signatoryName) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Signatory Required',
+            text: 'Please select a signatory before exporting to Word.',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#dc3545'
+        });
+        return false;
+    }
+
+    // Get other values
+    const signatoryPosition = $('#posted_by').find(':selected').data('position') || '';
+    const signatoryAgency = $('#posted_by').find(':selected').data('agency') || '';
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const reportDate = urlParams.get('report_date') || '';
+    const fundCluster = $('#fund_cluster').val() || 'all';
+
+    // Build export URL
+    let exportUrl = 'export_rsmi_word.php?fund_cluster=' + fundCluster;
+    
+    if(reportDate){
+        exportUrl += '&report_date=' + reportDate;
+    }
+    if(signatoryName){
+        exportUrl += '&signatory_name=' + encodeURIComponent(signatoryName);
+    }
+    if(signatoryPosition){
+        exportUrl += '&signatory_position=' + encodeURIComponent(signatoryPosition);
+    }
+    if(signatoryAgency){
+        exportUrl += '&signatory_agency=' + encodeURIComponent(signatoryAgency);
+    }
+
+    // Show loading confirmation
+    Swal.fire({
+        title: 'Exporting to Word',
+        text: 'Preparing your document for download...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    // Trigger download
+    setTimeout(() => {
+        window.location.href = exportUrl;
+        Swal.close();
+    }, 1000);
+});
 
     // Set calendar to current selected date if any
     const urlParams = new URLSearchParams(window.location.search);

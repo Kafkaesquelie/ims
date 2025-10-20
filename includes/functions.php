@@ -14,11 +14,17 @@ function real_escape($str){
 /*--------------------------------------------------------------*/
 /* Function for Remove html characters
 /*--------------------------------------------------------------*/
-function remove_junk($str){
+function remove_junk($str) {
+  // Ensure the input is a string
+  if (!is_string($str)) {
+    $str = '';
+  }
+
+  $str = htmlspecialchars(strip_tags($str), ENT_QUOTES);
   $str = nl2br($str);
-  $str = htmlspecialchars(strip_tags($str, ENT_QUOTES));
   return $str;
 }
+
 /*--------------------------------------------------------------*/
 /* Function for Uppercase first character
 /*--------------------------------------------------------------*/

@@ -4,7 +4,7 @@ require_once('includes/load.php');
 page_require_level(1);
 
 // Fetch all available items
-$all_items = find_all('items'); // replace with your actual query
+$all_items = find_all('items');
 
 // ✅ Get helper functions
 function get_unit_name($unit_id)
@@ -54,9 +54,29 @@ function get_users_table()
     return $users;
 }
 
+// Get employees WITHOUT user accounts
+function get_employees_without_users()
+{
+    global $db;
+    $sql = "SELECT * FROM employees WHERE (user_id IS NULL OR user_id = 0) AND status = 1 ORDER BY last_name ASC, first_name ASC";
+    $result = $db->query($sql);
+    $employees = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $full_name = trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . $row['last_name']);
+            $employees[] = [
+                'id' => $row['id'],
+                'full_name' => $full_name,
+                'position' => $row['position'] ?? ''
+            ];
+        }
+    }
+    return $employees;
+}
+
 function get_requestors()
 {
-    // merge users and employees into a single array with 'source' so front-end can tell them apart
+    // Only include users and employees without user accounts
     $requestors = [];
     $users = get_users_table();
     foreach ($users as $u) {
@@ -67,7 +87,9 @@ function get_requestors()
             'position' => $u['position'] ?? ''
         ];
     }
-    $employees = get_employees();
+
+    // Only include employees without user accounts
+    $employees = get_employees_without_users();
     foreach ($employees as $e) {
         $requestors[] = [
             'source' => 'employees',
@@ -84,7 +106,6 @@ $requestors = get_requestors();
 
 // default selected requestor value (current logged user if present in users)
 $default_selected = 'users_' . ($current_user_id ?? '0');
-
 
 function is_ris_no_duplicate($ris_no)
 {
@@ -172,12 +193,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $qty_to_deduct = $qty;
         }
 
-        // ✅ Check stock availability
-        if ($qty_to_deduct > $item['quantity']) {
-            $all_ok = false;
-            $session->msg("d", "❌ Not enough stock for item: {$item['name']} (Requested {$qty} {$requested_unit_type}, Available {$item['quantity']} {$unit_name})");
-            break;
+     // ✅ Check stock availability
+if ($qty_to_deduct > $item['quantity']) {
+    $all_ok = false;
+
+    // Determine which unit to display available stock in based on what was requested
+    if ($is_requesting_base_unit && $conversion_rate > 1) {
+        // User requested base units, so show available in both units for clarity
+        $available_main = floor($item['quantity']);
+        $remaining_decimal = $item['quantity'] - $available_main;
+        $available_base = (int)($remaining_decimal * $conversion_rate); // Cast to int to remove decimals
+
+        if ($available_main > 0 && $available_base > 0) {
+            $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
+        } elseif ($available_main > 0) {
+            $available_display = $available_main . " " . $unit_name;
+        } else {
+            $available_display = $available_base . " " . $base_unit_name;
         }
+    } else {
+        // User requested main units or no conversion, show in main units
+        $available_main = floor($item['quantity']);
+        $remaining_decimal = $item['quantity'] - $available_main;
+        $available_base = (int)($remaining_decimal * $conversion_rate);
+        
+        if ($available_main > 0 && $available_base > 0) {
+            $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
+        } elseif ($available_main > 0) {
+            $available_display = $available_main . " " . $unit_name;
+        } else {
+            $available_display = $available_base . " " . $base_unit_name;
+        }
+    }
+
+    $session->msg("d", "❌ Not enough stock for item: {$item['name']} (Requested {$qty} {$requested_unit_type}, Available {$available_display})");
+    break;
+}
 
         // Compute price
         $unit_cost = (float)$item['unit_cost'];
@@ -232,11 +283,10 @@ function get_category_name($cat_id)
 
 $all_items = find_by_sql("SELECT * FROM items WHERE archived = 0");
 
-// FIXED: Enhanced function to calculate display quantity with proper unit conversion
 function calculate_display_quantity($item)
 {
-    $quantity = $item['quantity'];
-
+    $quantity = (float)$item['quantity'];
+    
     // If no conversion or conversion rate is 1, return simple quantity
     if ($item['conversion_rate'] <= 1 || $item['main_unit_name'] === $item['base_unit_name']) {
         return number_format($quantity, 2) . " " . $item['main_unit_name'];
@@ -244,15 +294,17 @@ function calculate_display_quantity($item)
 
     // Calculate full main units and remaining base units
     $full_main_units = floor($quantity);
-    $remaining_base_units = ($quantity - $full_main_units) * $item['conversion_rate'];
+    $remaining_main_decimal = $quantity - $full_main_units;
+    $remaining_base_units = $remaining_main_decimal * $item['conversion_rate'];
 
-    // Format the display
+    // Format the display - ensure whole numbers for main units
     if ($full_main_units > 0 && $remaining_base_units > 0) {
-        return $full_main_units . " " . $item['main_unit_name'] . " | " . number_format($remaining_base_units, 2) . " " . $item['base_unit_name'];
+        return $full_main_units . " " . $item['main_unit_name'] . " | " . 
+               (int)$remaining_base_units . " " . $item['base_unit_name'];
     } elseif ($full_main_units > 0) {
         return $full_main_units . " " . $item['main_unit_name'];
     } else {
-        return number_format($remaining_base_units, 2) . " " . $item['base_unit_name'];
+        return (int)$remaining_base_units . " " . $item['base_unit_name'];
     }
 }
 
@@ -285,6 +337,21 @@ foreach ($all_items as &$item) {
 
     // Calculate display quantity using the FIXED function
     $item['display_quantity'] = calculate_display_quantity($item);
+
+    // Determine stock status
+    $item['stock_status'] = 'good';
+    $item['stock_badge'] = '';
+    
+    if ($item['quantity'] == 0) {
+        $item['stock_status'] = 'out-of-stock';
+        $item['stock_badge'] = '<span class="badge bg-danger stock-badge"><i class="fas fa-times-circle"></i> Out of Stock</span>';
+    } elseif ($item['quantity'] <= 5) {
+        $item['stock_status'] = 'low-stock';
+        $item['stock_badge'] = '<span class="badge bg-warning text-dark stock-badge"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>';
+    } else {
+        $item['stock_status'] = 'good';
+        $item['stock_badge'] = '<span class="badge bg-success stock-badge"><i class="fas fa-check-circle"></i> In Stock</span>';
+    }
 }
 
 ?>
@@ -438,6 +505,66 @@ foreach ($all_items as &$item) {
         width: 100%;
         font-size: 0.8rem;
     }
+
+    /* Stock indicator styles */
+    .stock-badge {
+        font-size: 0.7em;
+        padding: 0.3em 0.6em;
+        margin-left: 5px;
+    }
+
+    .table-out-of-stock {
+        background-color: #f8d7da !important;
+    }
+
+    .table-low-stock {
+        background-color: #fff3cd !important;
+    }
+
+    .table-good-stock {
+        background-color: #e8f5e9 !important;
+    }
+
+    .stock-warning {
+        border-left: 4px solid #ffc107;
+    }
+
+    .stock-danger {
+        border-left: 4px solid #dc3545;
+    }
+
+    .stock-success {
+        border-left: 4px solid #28a745;
+    }
+
+    /* Quantity input styling based on stock */
+    .qty-input:disabled {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+
+    .stock-indicator {
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-left: 5px;
+    }
+
+    .indicator-out {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .indicator-low {
+        background-color: #ffc107;
+        color: #000;
+    }
+
+    .indicator-good {
+        background-color: #28a745;
+        color: white;
+    }
 </style>
 
 <!-- Header Card -->
@@ -528,6 +655,13 @@ foreach ($all_items as &$item) {
     <div class="card">
         <div class="card-header">
             <i class="fas fa-boxes me-2"></i> Available Items
+            <span class="float-end">
+                <small class="text-muted">
+                    <span class="badge bg-success">✓ In Stock</span>
+                    <span class="badge bg-warning text-dark">⚠ Low Stock</span>
+                    <span class="badge bg-danger">✗ Out of Stock</span>
+                </small>
+            </span>
         </div>
         <div class="card-body">
             <div class="table-responsive mb-3">
@@ -543,11 +677,37 @@ foreach ($all_items as &$item) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($all_items as $it): ?>
-                                <tr <?= $it['quantity'] == 0 ? 'class="table-secondary"' : '' ?>>
-                                    <td><?= htmlspecialchars($it['stock_card']); ?></td>
+                            <?php foreach ($all_items as $it): 
+                                $row_class = '';
+                                $indicator_class = '';
+                                $indicator_text = '';
+                                
+                                switch($it['stock_status']) {
+                                    case 'out-of-stock':
+                                        $row_class = 'table-out-of-stock stock-danger';
+                                        $indicator_class = 'indicator-out';
+                                        $indicator_text = 'Out of Stock';
+                                        break;
+                                    case 'low-stock':
+                                        $row_class = 'table-low-stock stock-warning';
+                                        $indicator_class = 'indicator-low';
+                                        $indicator_text = 'Low Stock';
+                                        break;
+                                    default:
+                                        $row_class = 'table-good-stock stock-success';
+                                        $indicator_class = 'indicator-good';
+                                        $indicator_text = 'In Stock';
+                                }
+                            ?>
+                                <tr class="<?= $row_class ?>">
                                     <td>
-                                        <strong><?= htmlspecialchars($it['name']); ?></strong><br>
+                                        <?= htmlspecialchars($it['stock_card']); ?>
+                                        <?= $it['stock_badge'] ?>
+                                    </td>
+                                    <td>
+                                        <strong><?= htmlspecialchars($it['name']); ?></strong>
+                                        <span class="stock-indicator <?= $indicator_class ?>"><?= $indicator_text ?></span>
+                                        <br>
                                         <small class="text-muted"><?= htmlspecialchars($it['cat_name']); ?></small>
                                     </td>
                                     <td class="text-center">
@@ -560,7 +720,8 @@ foreach ($all_items as &$item) {
                                             data-itemid="<?= (int)$it['id']; ?>"
                                             data-conversion="<?= $it['conversion_rate']; ?>"
                                             data-mainunit="<?= htmlspecialchars($it['main_unit_name']); ?>"
-                                            data-baseunit="<?= htmlspecialchars($it['base_unit_name']); ?>">
+                                            data-baseunit="<?= htmlspecialchars($it['base_unit_name']); ?>"
+                                            <?= $it['quantity'] == 0 ? 'disabled' : '' ?>>
                                             <?php if ($it['conversion_rate'] > 1 && $it['main_unit_name'] !== $it['base_unit_name']): ?>
                                                 <option value="<?= $it['main_unit_name']; ?>"><?= $it['main_unit_name']; ?></option>
                                                 <option value="<?= $it['base_unit_name']; ?>"><?= $it['base_unit_name']; ?></option>
@@ -573,7 +734,7 @@ foreach ($all_items as &$item) {
                                         <input type="number"
                                             name="qty[<?= (int)$it['id']; ?>]"
                                             min="0"
-                                            step="0"
+                                            step="1"
                                             value="0"
                                             class="form-control text-center border-success qty-input"
                                             style="max-width:120px;"
@@ -584,6 +745,11 @@ foreach ($all_items as &$item) {
                                             data-mainunit="<?= htmlspecialchars($it['main_unit_name']); ?>"
                                             data-baseunit="<?= htmlspecialchars($it['base_unit_name']); ?>"
                                             title="Available: <?= $it['display_quantity']; ?>">
+                                        <?php if ($it['quantity'] == 0): ?>
+                                            <small class="text-danger d-block mt-1">Not available</small>
+                                        <?php elseif ($it['quantity'] <= 5): ?>
+                                            <small class="text-warning d-block mt-1">Limited stock</small>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -678,15 +844,55 @@ foreach ($all_items as &$item) {
                 const qtyInput = document.querySelector(`input[name="qty[${itemId}]"]`);
                 const available = parseFloat(qtyInput.dataset.available) || 0;
 
-                // Update max value based on selected unit
+                // Update max value and step based on selected unit
                 if (this.value === baseUnit && conversion > 1) {
                     // Requesting in base units (pieces) - max is available * conversion rate
-                    qtyInput.max = Math.floor(available * conversion);
-                    qtyInput.title = `Available: ${available} ${mainUnit} (${Math.floor(available * conversion)} ${baseUnit})`;
+                    const availableMain = parseFloat(available) || 0;
+                    const fullMainUnits = Math.floor(availableMain);
+                    const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
+                    
+                    let availableText = '';
+                    if (fullMainUnits > 0 && remainingBaseUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
+                    } else if (fullMainUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit}`;
+                    } else {
+                        availableText = `${remainingBaseUnits} ${baseUnit}`;
+                    }
+                    
+                    qtyInput.max = Math.floor(availableMain * conversion);
+                    qtyInput.step = "1"; // Whole numbers only for base units
+                    qtyInput.title = `Available: ${availableText}`;
+                    
+                    // Auto-adjust quantity if needed
+                    const currentValue = parseInt(qtyInput.value) || 0;
+                    if (currentValue > qtyInput.max) {
+                        qtyInput.value = qtyInput.max;
+                    }
                 } else {
                     // Requesting in main units (boxes) - max is available
-                    qtyInput.max = available;
-                    qtyInput.title = `Available: ${available} ${mainUnit}`;
+                    const availableMain = parseFloat(available) || 0;
+                    const fullMainUnits = Math.floor(availableMain);
+                    const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
+                    
+                    let availableText = '';
+                    if (fullMainUnits > 0 && remainingBaseUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
+                    } else if (fullMainUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit}`;
+                    } else {
+                        availableText = `${remainingBaseUnits} ${baseUnit}`;
+                    }
+                    
+                    qtyInput.max = availableMain;
+                    qtyInput.step = "1"; // Whole numbers only for main units
+                    qtyInput.title = `Available: ${availableText}`;
+                    
+                    // Auto-adjust quantity if needed
+                    const currentValue = parseInt(qtyInput.value) || 0;
+                    if (currentValue > qtyInput.max) {
+                        qtyInput.value = qtyInput.max;
+                    }
                 }
             });
         });
@@ -694,6 +900,36 @@ foreach ($all_items as &$item) {
         // Trigger change event on page load to set initial max values
         document.querySelectorAll('.unit-select').forEach(select => {
             select.dispatchEvent(new Event('change'));
+        });
+
+        // Ensure whole numbers in quantity inputs
+        document.querySelectorAll('.qty-input').forEach(input => {
+            input.addEventListener('input', function() {
+                // Remove any decimal values and ensure whole numbers
+                const value = parseFloat(this.value) || 0;
+                if (!Number.isInteger(value)) {
+                    this.value = Math.floor(value);
+                }
+                
+                // Ensure value doesn't exceed max
+                const max = parseFloat(this.max) || 0;
+                if (value > max) {
+                    this.value = max;
+                }
+                
+                // Ensure value is not negative
+                if (value < 0) {
+                    this.value = 0;
+                }
+            });
+            
+            // Also handle blur event to clean up any invalid input
+            input.addEventListener('blur', function() {
+                const value = parseFloat(this.value) || 0;
+                if (!Number.isInteger(value) || value < 0) {
+                    this.value = Math.max(0, Math.floor(value));
+                }
+            });
         });
     });
 
@@ -722,7 +958,7 @@ foreach ($all_items as &$item) {
             document.getElementById('requestorSelect').selectedOptions[0].text +
             ' (' + document.getElementById('positionField').value + ')</p>';
 
-        receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th></tr></thead><tbody>';
+        receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Stock Status</th></tr></thead><tbody>';
         let hasItem = false;
 
         rows.forEach(row => {
@@ -735,6 +971,17 @@ foreach ($all_items as &$item) {
             const available = row.cells[2].innerText.trim();
             const unitSelect = row.querySelector('select[name^="unit_type"]');
             const selectedUnit = unitSelect.selectedOptions[0].text;
+            
+            // Get stock status from the row class
+            let stockStatus = 'In Stock';
+            let statusClass = 'text-success';
+            if (row.classList.contains('table-out-of-stock')) {
+                stockStatus = 'Out of Stock';
+                statusClass = 'text-danger';
+            } else if (row.classList.contains('table-low-stock')) {
+                stockStatus = 'Low Stock';
+                statusClass = 'text-warning';
+            }
 
             hasItem = true;
 
@@ -744,6 +991,7 @@ foreach ($all_items as &$item) {
                     <td>${qty}</td>
                     <td>${selectedUnit}</td>
                     <td>${available}</td>
+                    <td class="${statusClass}"><strong>${stockStatus}</strong></td>
                 </tr>`;
         });
 
@@ -863,7 +1111,14 @@ foreach ($all_items as &$item) {
             // Listen for any change or typing
             input.addEventListener('input', function() {
                 const max = parseFloat(this.max);
-                const val = parseFloat(this.value) || 0;
+                let val = parseFloat(this.value) || 0;
+                
+                // Ensure whole numbers only
+                if (!Number.isInteger(val)) {
+                    val = Math.floor(val);
+                    this.value = val;
+                }
+                
                 const unitSelect = document.querySelector(`select[name="unit_type[${this.dataset.itemid}]"]`);
                 const selectedUnit = unitSelect ? unitSelect.selectedOptions[0].text : '';
                 const conversion = parseFloat(this.dataset.conversion) || 1;
@@ -875,9 +1130,28 @@ foreach ($all_items as &$item) {
                     let availableText = '';
                     if (selectedUnit === baseUnit && conversion > 1) {
                         const availableMain = parseFloat(this.dataset.available) || 0;
-                        availableText = `${availableMain} ${mainUnit} (${Math.floor(availableMain * conversion)} ${baseUnit})`;
+                        const fullMainUnits = Math.floor(availableMain);
+                        const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
+                        
+                        if (fullMainUnits > 0 && remainingBaseUnits > 0) {
+                            availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
+                        } else if (fullMainUnits > 0) {
+                            availableText = `${fullMainUnits} ${mainUnit}`;
+                        } else {
+                            availableText = `${remainingBaseUnits} ${baseUnit}`;
+                        }
                     } else {
-                        availableText = `${max} ${selectedUnit}`;
+                        const availableMain = parseFloat(this.dataset.available) || 0;
+                        const fullMainUnits = Math.floor(availableMain);
+                        const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
+                        
+                        if (fullMainUnits > 0 && remainingBaseUnits > 0) {
+                            availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
+                        } else if (fullMainUnits > 0) {
+                            availableText = `${fullMainUnits} ${mainUnit}`;
+                        } else {
+                            availableText = `${remainingBaseUnits} ${baseUnit}`;
+                        }
                     }
 
                     Swal.fire({
@@ -888,7 +1162,7 @@ foreach ($all_items as &$item) {
                     });
 
                     // Reset to maximum allowed
-                    this.value = max;
+                    this.value = Math.floor(max);
                 } else if (val < 0) {
                     // prevent negative input
                     this.value = 0;
@@ -942,27 +1216,72 @@ foreach ($all_items as &$item) {
     // Real-time RIS number duplicate checking
     document.addEventListener('DOMContentLoaded', function() {
         const risNoField = document.getElementById('risNoField');
+        const reviewBtn = document.getElementById('reviewBtn');
         const risContainer = document.querySelector('.ris-container');
         const risPrefix = "<?= date('Y-m-'); ?>";
         let checkTimeout = null;
 
+        // Set max length to 4 for RIS number
+        risNoField.setAttribute('max', '9999');
+        risNoField.setAttribute('min', '0');
+
+        function updateReviewButtonState() {
+            const risNumber = risNoField.value.trim();
+
+            if (!risNumber) {
+                // No RIS number entered - disable button
+                reviewBtn.disabled = true;
+                reviewBtn.title = 'Please enter a RIS number';
+                reviewBtn.classList.add('disabled');
+                return;
+            }
+
+            if (risNoField.classList.contains('is-invalid')) {
+                // RIS number is duplicate - disable button
+                reviewBtn.disabled = true;
+                reviewBtn.title = 'RIS number is already used. Please choose a different number.';
+                reviewBtn.classList.add('disabled');
+                return;
+            }
+
+            if (risNoField.classList.contains('is-valid')) {
+                // RIS number is valid and not duplicate - enable button
+                reviewBtn.disabled = false;
+                reviewBtn.title = 'Review request';
+                reviewBtn.classList.remove('disabled');
+                return;
+            }
+
+            // Default case - waiting for validation, disable button
+            reviewBtn.disabled = true;
+            reviewBtn.title = 'Validating RIS number...';
+            reviewBtn.classList.add('disabled');
+        }
+
+        // Initialize button state on page load
+        updateReviewButtonState();
+
+        // Check RIS number on input
         risNoField.addEventListener('input', function() {
             clearTimeout(checkTimeout);
+
+            // Limit input to 4 digits
+            if (this.value.length > 4) {
+                this.value = this.value.slice(0, 4);
+            }
 
             const risNumber = this.value.trim();
             if (!risNumber) {
                 this.classList.remove('is-invalid', 'is-valid');
                 removeErrorMessage();
+                updateReviewButtonState();
                 return;
             }
 
-            // Validate length
-            if (risNumber.length > 4) {
-                this.value = risNumber.slice(0, 4);
-                return;
-            }
+            // Update button state immediately
+            updateReviewButtonState();
 
-            // Debounce the API call
+            // Debounce the duplicate check
             checkTimeout = setTimeout(() => {
                 checkRISDuplicate(risNumber);
             }, 500);
@@ -986,6 +1305,19 @@ foreach ($all_items as &$item) {
             risContainer.appendChild(errorDiv);
         }
 
+        function showSuccessMessage(message) {
+            // Remove any existing messages
+            removeErrorMessage();
+
+            const successDiv = document.createElement('div');
+            successDiv.className = 'ris-error-message valid-feedback';
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            successDiv.style.color = '#28a745';
+
+            risContainer.appendChild(successDiv);
+        }
+
         function checkRISDuplicate(risNumber) {
             const fullRIS = risPrefix + risNumber;
 
@@ -1002,17 +1334,25 @@ foreach ($all_items as &$item) {
                         risNoField.classList.add('is-invalid');
                         risNoField.classList.remove('is-valid');
                         showErrorMessage('RIS Number already used. Please choose a different number.');
-                        
-                        // Close modal if it's open
-                        closeModalIfOpen();
                     } else {
                         risNoField.classList.add('is-valid');
                         risNoField.classList.remove('is-invalid');
                         removeErrorMessage();
+                        showSuccessMessage('RIS Number is available');
+                        
+                        // Auto-remove success message after 2 seconds
+                        setTimeout(() => {
+                            removeErrorMessage();
+                        }, 2000);
                     }
+                    updateReviewButtonState();
                 })
                 .catch(error => {
                     console.error('Error checking RIS number:', error);
+                    // On error, remove validation states
+                    risNoField.classList.remove('is-invalid', 'is-valid');
+                    removeErrorMessage();
+                    updateReviewButtonState();
                 });
         }
 
@@ -1061,23 +1401,39 @@ foreach ($all_items as &$item) {
                         });
                         e.preventDefault();
                         risNoField.focus();
-                        
+
                         // Ensure modal is closed
                         closeModalIfOpen();
                     } else {
+                        // Show success message and proceed with review
+                        showSuccessMessage('RIS Number validated successfully!');
                         // Continue with normal review process
-                        proceedWithReview();
+                        setTimeout(() => {
+                            proceedWithReview();
+                        }, 500);
                     }
                 })
                 .catch(error => {
                     console.error('Error checking RIS number:', error);
-                    // Continue with review if check fails
-                    proceedWithReview();
+                    // Continue with review if check fails but show warning
+                    Swal.fire({
+                        title: 'Proceed with Review?',
+                        text: 'RIS number verification failed. Do you want to proceed anyway?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#28a745',
+                        cancelButtonColor: '#dc3545',
+                        confirmButtonText: 'Yes, proceed',
+                        cancelButtonText: 'Cancel'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            proceedWithReview();
+                        }
+                    });
                 });
         });
 
         function proceedWithReview() {
-            // Your existing review button code here
             const rows = document.querySelectorAll('#itemsTable tbody tr');
             let receiptHTML = '<p><strong>Requestor:</strong> ' +
                 document.getElementById('requestorSelect').selectedOptions[0].text +
@@ -1088,7 +1444,7 @@ foreach ($all_items as &$item) {
             const fullRIS = risPrefix + risNumber;
             receiptHTML += `<p><strong>RIS Number:</strong> ${fullRIS}</p>`;
 
-            receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th></tr></thead><tbody>';
+            receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Stock Status</th></tr></thead><tbody>';
             let hasItem = false;
 
             rows.forEach(row => {
@@ -1101,6 +1457,17 @@ foreach ($all_items as &$item) {
                 const available = row.cells[2].innerText.trim();
                 const unitSelect = row.querySelector('select[name^="unit_type"]');
                 const selectedUnit = unitSelect.selectedOptions[0].text;
+                
+                // Get stock status from the row class
+                let stockStatus = 'In Stock';
+                let statusClass = 'text-success';
+                if (row.classList.contains('table-out-of-stock')) {
+                    stockStatus = 'Out of Stock';
+                    statusClass = 'text-danger';
+                } else if (row.classList.contains('table-low-stock')) {
+                    stockStatus = 'Low Stock';
+                    statusClass = 'text-warning';
+                }
 
                 hasItem = true;
 
@@ -1110,6 +1477,7 @@ foreach ($all_items as &$item) {
                     <td>${qty}</td>
                     <td>${selectedUnit}</td>
                     <td>${available}</td>
+                    <td class="${statusClass}"><strong>${stockStatus}</strong></td>
                 </tr>`;
             });
 
@@ -1138,6 +1506,7 @@ foreach ($all_items as &$item) {
             risNoField.classList.remove('is-invalid', 'is-valid');
             removeErrorMessage();
             closeModalIfOpen();
+            updateReviewButtonState();
         });
 
         // Also check when modal final submit button is clicked (extra safety)
@@ -1178,26 +1547,41 @@ foreach ($all_items as &$item) {
                             text: 'This RIS Number is already used. Please choose a different number.',
                             confirmButtonColor: '#dc3545'
                         });
-                        
+
                         e.preventDefault();
                         closeModalIfOpen();
                         risNoField.focus();
                     } else {
-                        // Proceed with the SweetAlert confirmation
-                        Swal.fire({
-                            title: "Submit Request?",
-                            text: "Do you want to finalize and send this request?",
-                            icon: "question",
-                            showCancelButton: true,
-                            confirmButtonColor: "#28a745",
-                            cancelButtonColor: "#6c757d",
-                            confirmButtonText: "Yes, submit it",
-                            cancelButtonText: "Cancel"
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                document.getElementById('requestForm').submit();
-                            }
-                        });
+                        // Show success message before final submission
+                        showSuccessMessage('RIS Number validated! Submitting request...');
+                        
+                        // Proceed with the SweetAlert confirmation after a brief delay
+                        setTimeout(() => {
+                            Swal.fire({
+                                title: "Submit Request?",
+                                text: "Do you want to finalize and send this request?",
+                                icon: "question",
+                                showCancelButton: true,
+                                confirmButtonColor: "#28a745",
+                                cancelButtonColor: "#6c757d",
+                                confirmButtonText: "Yes, submit it",
+                                cancelButtonText: "Cancel"
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    // Show final success message before form submission
+                                    Swal.fire({
+                                        title: "Success!",
+                                        text: "Your request has been submitted successfully.",
+                                        icon: "success",
+                                        confirmButtonColor: "#28a745",
+                                        timer: 2000,
+                                        showConfirmButton: false
+                                    }).then(() => {
+                                        document.getElementById('requestForm').submit();
+                                    });
+                                }
+                            });
+                        }, 1000);
                     }
                 })
                 .catch(error => {
@@ -1214,12 +1598,20 @@ foreach ($all_items as &$item) {
                         cancelButtonText: "Cancel"
                     }).then((result) => {
                         if (result.isConfirmed) {
-                            document.getElementById('requestForm').submit();
+                            Swal.fire({
+                                title: "Success!",
+                                text: "Your request has been submitted successfully.",
+                                icon: "success",
+                                confirmButtonColor: "#28a745",
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                document.getElementById('requestForm').submit();
+                            });
                         }
                     });
                 });
-            
-            // Prevent the default form submission until we've checked
+
             e.preventDefault();
         });
     });

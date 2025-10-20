@@ -6,7 +6,20 @@ $current_user = current_user();
 $user_id = (int)$current_user['id'];
 
 $user = find_by_id('users', $user_id);
-$departments = find_all('departments');
+
+// Get all divisions and offices
+$divisions = find_all('divisions');
+$offices = find_all('offices');
+
+// Get offices by division for JavaScript
+$offices_by_division = array();
+foreach ($offices as $office) {
+    $division_id = $office['division_id'] ?? 0;
+    if (!isset($offices_by_division[$division_id])) {
+        $offices_by_division[$division_id] = array();
+    }
+    $offices_by_division[$division_id][] = $office;
+}
 
 if (!$user) {
     $session->msg("d", "User not found.");
@@ -15,13 +28,15 @@ if (!$user) {
 
 // Handle profile update
 if (isset($_POST['update_profile'])) {
-    $req_fields = array('name', 'username', 'department_id');
+    $req_fields = array('name', 'username');
     validate_fields($req_fields);
 
     if (empty($errors)) {
         $name     = remove_junk($db->escape($_POST['name']));
         $username = remove_junk($db->escape($_POST['username']));
-        $dep_id   = (int)$db->escape($_POST['department_id']);
+        $office_id   = (int)$db->escape($_POST['office_id']);
+        $position = remove_junk($db->escape($_POST['position'] ?? ''));
+        $division_id = (int)$db->escape($_POST['division_id'] ?? 0);
 
         $password_sql = "";
         if (!empty($_POST['password'])) {
@@ -31,7 +46,8 @@ if (isset($_POST['update_profile'])) {
         }
 
         $sql = "UPDATE users 
-                SET name='{$name}', username='{$username}', department='{$dep_id}' {$password_sql}
+                SET name='{$name}', username='{$username}', office='{$office_id}', 
+                    position='{$position}', division='{$division_id}' {$password_sql}
                 WHERE id='{$user_id}'";
 
         if ($db->query($sql)) {
@@ -39,7 +55,7 @@ if (isset($_POST['update_profile'])) {
             redirect('edit_prof.php', false);
             exit();
         } else {
-            $session->msg('d', 'Update profile failed.');
+            $session->msg('d', 'Update profile failed: ' . $db->error());
         }
     } else {
         $session->msg("d", $errors);
@@ -150,8 +166,6 @@ if (!empty($msg) && is_array($msg)):
         box-shadow: var(--hover-shadow);
         transform: translateY(-2px);
     }
-
-
 
     .card-header-custom i {
         color: var(--primary-yellow);
@@ -439,6 +453,43 @@ if (!empty($msg) && is_array($msg)):
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
+                                <label class="form-label">Division</label>
+                                <select name="division_id" id="divisionSelect" class="form-select w-100">
+                                    <option value=""> Select Division </option>
+                                    <?php foreach ($divisions as $division): ?>
+                                        <option value="<?php echo $division['id']; ?>"
+                                            <?php if ($user['division'] == $division['id']) echo 'selected'; ?>>
+                                            <?php echo remove_junk($division['division_name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select><br>
+                                <small class="text-muted">Your division within the office</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Office</label>
+                                <select name="office_id" id="officeSelect" class="form-select w-100" required>
+                                    <option value=""> Select Office </option>
+                                    <?php foreach ($offices as $office): ?>
+                                        <option value="<?php echo $office['id']; ?>"
+                                            data-division="<?php echo $office['division_id'] ?? 0; ?>"
+                                            <?php if ($user['office'] == $office['id']) echo 'selected'; ?>>
+                                            <?php echo remove_junk($office['office_name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select><br>
+                                <small class="text-muted">Your assigned office</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Position</label>
+                                <input type="text" name="position" class="form-control"
+                                    value="<?php echo remove_junk($user['position'] ?? ''); ?>"
+                                    placeholder="Enter your position">
+                                <small class="text-muted">Your job title or position</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
                                 <label class="form-label">New Password</label>
                                 <div class="input-group">
                                     <input type="password" name="password" class="form-control"
@@ -449,19 +500,6 @@ if (!empty($msg) && is_array($msg)):
                                 </div>
                                 <div class="password-strength strength-weak" id="passwordStrength"></div>
                                 <small class="text-muted">Leave blank to keep current password</small>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Department</label>
-                                <select name="department_id" class="form-select" required>
-                                    <option value="">-- Select Department --</option>
-                                    <?php foreach ($departments as $dep): ?>
-                                        <option value="<?php echo $dep['id']; ?>"
-                                            <?php if ($user['department'] == $dep['id']) echo 'selected'; ?>>
-                                            <?php echo remove_junk($dep['department']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <small class="text-muted">Your assigned department</small>
                             </div>
                         </div>
 
@@ -548,6 +586,52 @@ if (!empty($msg) && is_array($msg)):
                 }
             });
         }
+
+        // Office filtering based on division selection
+        const divisionSelect = document.getElementById('divisionSelect');
+        const officeSelect = document.getElementById('officeSelect');
+        const officeOptions = officeSelect.querySelectorAll('option');
+
+        function filterOffices() {
+            const selectedDivision = divisionSelect.value;
+            
+            // Show all options initially
+            officeOptions.forEach(option => {
+                option.style.display = '';
+            });
+
+            // If a division is selected, filter offices
+            if (selectedDivision) {
+                officeOptions.forEach(option => {
+                    if (option.value === '') {
+                        // Always show the "Select Office" option
+                        option.style.display = '';
+                    } else {
+                        const optionDivision = option.getAttribute('data-division');
+                        if (optionDivision === selectedDivision) {
+                            option.style.display = '';
+                        } else {
+                            option.style.display = 'none';
+                        }
+                    }
+                });
+
+                // Reset office selection if current selection doesn't belong to selected division
+                const selectedOffice = officeSelect.value;
+                if (selectedOffice) {
+                    const selectedOption = officeSelect.querySelector(`option[value="${selectedOffice}"]`);
+                    if (selectedOption && selectedOption.getAttribute('data-division') !== selectedDivision) {
+                        officeSelect.value = '';
+                    }
+                }
+            }
+        }
+
+        // Initial filter on page load
+        filterOffices();
+
+        // Add event listener for division changes
+        divisionSelect.addEventListener('change', filterOffices);
     });
 </script>
 

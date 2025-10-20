@@ -16,10 +16,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_offices' && isset($_GET['
     exit;
 }
 
-// Fetch departments
-$departments = find_by_sql("SELECT id, dpt FROM departments ORDER BY id ASC");
+
 // Fetch employees
-$employees = find_by_sql("SELECT * FROM employees ORDER BY id ASC");
+$employees = find_by_sql("
+    SELECT 
+        e.*, 
+        o.office_name, 
+        d.division_name
+    FROM employees e
+    LEFT JOIN offices o ON e.office = o.id
+    LEFT JOIN divisions d ON e.division = d.id
+    ORDER BY e.id ASC
+");
+
 
 // Handle Add Employee form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
@@ -31,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     $division    = $db->escape($_POST['division']);
     $office      = $db->escape($_POST['office']);
     $status      = $db->escape($_POST['status']);
-    $department  = $db->escape($_POST['department']);
 
 
     // Handle file upload
@@ -47,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     }
 
   $query  = "INSERT INTO employees 
-(user_id, first_name, last_name, middle_name, position, division, office, department, status, image, created_at, updated_at) 
+(user_id, first_name, last_name, middle_name, position, division, office, status, image, created_at, updated_at) 
 VALUES 
 ('{$user_id}', '{$first_name}', '{$last_name}', '{$middle_name}', '{$designation}', '{$division}', '{$office}', '{$department}', '{$status}', '{$image_name}', NOW(), NOW())";
 
@@ -135,7 +143,6 @@ if (!empty($msg) && is_array($msg)):
             <th>Middle Name</th>
             <th>Designation</th>
             <th>Division</th>
-            <th>Department</th>
             <th>Status</th>
             
             <th style="width: 120px;">Actions</th>
@@ -153,8 +160,8 @@ if (!empty($msg) && is_array($msg)):
               <td><?php echo $emp['last_name']; ?></td>
               <td><?php echo $emp['middle_name']; ?></td>
               <td><?php echo $emp['position']; ?></td>
-              <td><?php echo $emp['division']; ?></td>
-              <td><?php echo $emp['department']; ?></td>
+              <td><?php echo $emp['division_name']; ?></td>
+              <td><?php echo $emp['office_name']; ?></td>
               <td>
                 <span class="badge bg-<?php echo $emp['status'] === 'Active' ? 'success' : 'secondary'; ?>">
                   <?php echo $emp['status']; ?>

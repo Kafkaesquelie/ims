@@ -96,6 +96,7 @@ $ics_transactions = find_all_ics_transactions();
                   <a href="a_script.php?id=<?php echo (int)$req['id']; ?>"
                     class="btn btn-danger btn-md archive-btn"
                     data-id="<?php echo (int)$req['id']; ?>"
+                    data-ris="<?php echo remove_junk($req['ris_no']); ?>"
                     title="Archive">
                     <span><i class="fa-solid fa-file-zipper"></i></span>
                   </a>
@@ -248,26 +249,85 @@ $ics_transactions = find_all_ics_transactions();
       button.addEventListener('click', function(e) {
         e.preventDefault(); // stop normal link action
         const catId = this.dataset.id;
+        const risNo = this.dataset.ris;
         const url = this.getAttribute('href');
 
         Swal.fire({
-          title: 'Are you sure?',
-          text: "This request will be archived.",
+          title: 'Archive Request?',
+          html: `<strong>RIS No: ${risNo}</strong><br>Are you sure you want to archive this request?`,
           icon: 'warning',
           showCancelButton: true,
           confirmButtonColor: '#d33',
           cancelButtonColor: '#6c757d',
-          confirmButtonText: 'Yes, archive it!'
+          confirmButtonText: 'Yes, archive it!',
+          cancelButtonText: 'Cancel',
+          reverseButtons: true,
+          customClass: {
+            title: 'swal2-title-custom',
+            htmlContainer: 'swal2-html-custom'
+          }
         }).then((result) => {
           if (result.isConfirmed) {
-            // Redirect only if confirmed
+            // Show loading message
+            Swal.fire({
+              title: 'Archiving...',
+              text: 'Please wait while we archive the request.',
+              allowOutsideClick: false,
+              didOpen: () => {
+                Swal.showLoading();
+              }
+            });
+
+            // Redirect to archive script
             window.location.href = url;
           }
         });
       });
     });
+
+    // Check if archive was successful from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('archive') === 'success') {
+      Swal.fire({
+        title: 'Success!',
+        text: 'Request has been archived successfully.',
+        icon: 'success',
+        confirmButtonColor: '#28a745',
+        timer: 3000,
+        timerProgressBar: true
+      });
+      
+      // Clean URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+
+    // Check if archive failed
+    if (urlParams.get('archive') === 'failed') {
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to archive the request. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#dc3545'
+      });
+      
+      // Clean URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
   });
 </script>
+
+<style>
+.swal2-title-custom {
+  color: #dc3545 !important;
+  font-weight: 600;
+}
+.swal2-html-custom {
+  font-size: 16px;
+}
+</style>
+
 <?php include_once('layouts/footer.php'); ?>
 
 <!-- DataTables CSS & JS -->

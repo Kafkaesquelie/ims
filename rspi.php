@@ -275,19 +275,20 @@ $issued_items = find_by_sql("
     <thead>
       <tr>
         <th rowspan="2">DATE</th>
-        <th rowspan="2">ICS/RRSP No.</th>
-        <th rowspan="2">Semi-expandable Property No.</th>
+        <th colspan="2">REFERENCE</th>
         <th rowspan="2">ITEM DESCRIPTION</th>
         <th rowspan="2">Estimated Useful Life</th>
         <th colspan="2">ISSUED</th>
         <th colspan="2">RETURNED</th>
         <th colspan="2">RE-ISSUED</th>
-        <th>Balance</th>
-        <th>Amount</th>
-        <th>Fund Cluster</th>
+        <th colspan="1">Disposed</th>
+        <th colspan="1">Balance</th>
+        <th rowspan="2">Amount</th>
         <th rowspan="2">Remarks</th>
       </tr>
       <tr>
+        <th>ICS/RRSP No.</th>
+        <th>Semi-expandable Property No.</th>
         <th>QTY</th>
         <th>Officer</th>
         <th>QTY</th>
@@ -295,8 +296,7 @@ $issued_items = find_by_sql("
         <th>QTY</th>
         <th>Officer</th>
         <th>QTY</th>
-        <th>₱</th>
-        <th></th>
+        <th>QTY</th>
       </tr>
     </thead>
     <tbody>
@@ -306,7 +306,7 @@ $issued_items = find_by_sql("
         foreach ($issued_items as $item):
           $count++;
       ?>
-          <tr>
+          <tr data-fund-cluster="<?= htmlspecialchars($item['fund_cluster']); ?>" data-unit-cost="<?= $item['unit_cost']; ?>">
             <td><?= date('Y-m-d', strtotime($item['date'])); ?></td>
             <td><?= htmlspecialchars($item['ics_no']); ?></td>
             <td><?= htmlspecialchars($item['sep_inv_item_no']); ?></td>
@@ -318,9 +318,9 @@ $issued_items = find_by_sql("
             <td><?= $item['qty_returned'] > 0 ? htmlspecialchars($item['officer']) : ''; ?></td>
             <td><?= (int)$item['qty_re_issued']; ?></td>
             <td><?= $item['qty_re_issued'] > 0 ? htmlspecialchars($item['officer']) : ''; ?></td>
+            <td></td>
             <td><?= max(0, (int)$item['qty_issued'] - (int)$item['qty_returned']); ?></td>
             <td><?= number_format($item['unit_cost'], 2); ?></td>
-            <td><?= htmlspecialchars($item['fund_cluster']); ?></td>
             <td><?= nl2br(htmlspecialchars($item['remarks'])); ?></td>
           </tr>
       <?php endforeach;
@@ -361,28 +361,32 @@ $issued_items = find_by_sql("
 
       const propertyNo = row.cells[2].innerText.toLowerCase();
       const desc = row.cells[3].innerText.toLowerCase();
-      const fundText = row.cells[13]?.innerText.toLowerCase() || '';
-      const unitCost = parseFloat(row.cells[12]?.innerText.replace(/[₱,]/g, '')) || 0;
+      const fundText = row.dataset.fundCluster?.toLowerCase() || '';
+      
+      // Get unit cost from data attribute (more reliable than parsing formatted text)
+      const unitCost = parseFloat(row.dataset.unitCost) || 0;
 
       let show = true;
 
       if (search && !(propertyNo.includes(search) || desc.includes(search))) show = false;
       if (fund && !fundText.includes(fund)) show = false;
 
-      if (value === 'low' && unitCost > 5000) show = false;
-      if (value === 'high' && (unitCost <= 5000 || unitCost > 50000)) show = false;
+      // Fixed value filter logic
+      if (value === 'low') {
+        show = show && unitCost <= 5000;
+      } else if (value === 'high') {
+        show = show && unitCost > 5000 && unitCost <= 50000;
+      }
 
       row.style.display = show ? '' : 'none';
     });
   }
-
 
   // 🔄 Filter and update fund cluster field when dropdown changes
   fundSelect.addEventListener('change', () => {
     fundClusterField.textContent = fundSelect.value || '__________';
     filterTable();
   });
-
 
   searchInput.addEventListener('input', filterTable);
   valueFilter.addEventListener('change', filterTable);
@@ -393,33 +397,35 @@ $issued_items = find_by_sql("
       filterTable();
     }
   });
+
+  // Initial filter on page load
+  document.addEventListener('DOMContentLoaded', filterTable);
 </script>
 
 <script>
   document.getElementById('printPreviewBtn').addEventListener('click', () => {
-  const fund = fundSelect.value;
-  const value = valueFilter.value;
-  const search = searchInput.value;
+    const fund = fundSelect.value;
+    const value = valueFilter.value;
+    const search = searchInput.value;
 
-  // Gather currently visible table rows (after filtering)
-  const rows = [];
-  document.querySelectorAll('#reportTable tbody tr').forEach(row => {
-    if (row.style.display !== 'none' && row.cells[0]?.innerText.trim() !== '') {
-      const cells = Array.from(row.cells).map(td => td.innerText.trim());
-      rows.push(cells);
-    }
+    // Gather currently visible table rows (after filtering)
+    const rows = [];
+    document.querySelectorAll('#reportTable tbody tr').forEach(row => {
+      if (row.style.display !== 'none' && row.cells[0]?.innerText.trim() !== '') {
+        const cells = Array.from(row.cells).map(td => td.innerText.trim());
+        rows.push(cells);
+      }
+    });
+
+    // Fill form data
+    document.getElementById('formFundCluster').value = fund;
+    document.getElementById('formValueFilter').value = value;
+    document.getElementById('formSearch').value = search;
+    document.getElementById('formTableData').value = JSON.stringify(rows);
+
+    // Submit to open in new tab
+    document.getElementById('printForm').submit();
   });
-
-  // Fill form data
-  document.getElementById('formFundCluster').value = fund;
-  document.getElementById('formValueFilter').value = value;
-  document.getElementById('formSearch').value = search;
-  document.getElementById('formTableData').value = JSON.stringify(rows);
-
-  // Submit to open in new tab
-  document.getElementById('printForm').submit();
-});
-
 </script>
 
 <?php include_once('layouts/footer.php'); ?>

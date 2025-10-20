@@ -411,6 +411,12 @@ $user = current_user();
                                 <p>Reports & Analytics</p>
                             </a>
                         </li>
+                         <li class="nav-item">
+                            <a href="users_employees.php" class="nav-link">
+                                <i class="nav-icon fas fa-chart-line"></i>
+                                <p>Audit Trail/Records(Tentative)</p>
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a href="refs.php" class="nav-link">
                                 <i class="nav-icon fas fa-tags"></i>
@@ -451,7 +457,7 @@ $user = current_user();
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="it_archive.php" class="nav-link">
+                            <a href="archive.php" class="nav-link">
                                 <i class="nav-icon fa-solid fa-box-archive"></i>
                                 <p>Archive</p>
                             </a>

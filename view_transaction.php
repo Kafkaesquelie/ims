@@ -12,7 +12,7 @@ $sql = "
         t.*,
         CONCAT(e.first_name, ' ', e.middle_name, ' ', e.last_name) AS employee_name,
         e.position,
-        e.office,
+        o.office_name,
         p.inv_item_no,
         p.item,
         p.item_description,
@@ -20,6 +20,7 @@ $sql = "
         p.unit_cost
     FROM transactions t
     LEFT JOIN employees e ON t.employee_id = e.id
+    LEFT JOIN offices o ON e.office = o.id
     LEFT JOIN semi_exp_prop p ON t.item_id = p.id
     WHERE t.id = '{$transaction_id}'
     LIMIT 1
@@ -310,7 +311,7 @@ if (!$transaction) {
                         </div>
                         <div class="mb-0">
                             <div class="info-label">Office/Department</div>
-                            <div class="info-value"><?= remove_junk($transaction['office']); ?></div>
+                            <div class="info-value"><?= remove_junk($transaction['office_name']); ?></div>
                         </div>
                     </div>
                 </div>

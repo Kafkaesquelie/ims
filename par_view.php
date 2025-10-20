@@ -52,6 +52,7 @@ if (!$par) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <style>
+/* Your existing CSS styles here */
 body {
     font-family: 'Times New Roman', Times, serif;
     margin: 0;
@@ -63,7 +64,6 @@ body {
     gap: 25px;
 }
 
-/* 🟩 Form Container */
 .par-form {
     max-width: 800px;
     background: white;
@@ -72,7 +72,6 @@ body {
     border: 1px solid #ddd;
 }
 
-/* 🟦 Header */
 .header {
     text-align: center;
     margin-bottom: 20px;
@@ -83,7 +82,6 @@ body {
     padding: 0;
 }
 
-/* 🟩 Title */
 .receipt-title {
     text-align: center;
     font-size: 18px;
@@ -95,7 +93,6 @@ body {
     margin-bottom: 20px;
 }
 
-/* 🟩 Table */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -113,10 +110,8 @@ th {
     font-weight: bold;
 }
 
-/* 🟩 Signature */
 .empty-row { height: 25px; }
 
-/* 🟩 Buttons beside form */
 .button-panel {
     display: flex;
     flex-direction: column;
@@ -126,7 +121,6 @@ th {
     height: fit-content;
 }
 
-/* Circular buttons */
 .btn-circle {
     width: 50px;
     height: 50px;
@@ -139,17 +133,15 @@ th {
     cursor: pointer;
     font-size: 18px;
     transition: transform 0.2s, background-color 0.2s;
+    text-decoration: none;
 }
 
-/* Colors */
 .btn-print { background-color: #007bff; }
 .btn-word  { background-color: #28a745; }
 .btn-back  { background-color: #6c757d; }
 
-/* Hover */
 .btn-circle:hover { transform: scale(1.1); }
 
-/* Hide buttons when printing */
 @media print {
     .button-panel { display: none; }
     body { background: white; }
@@ -166,16 +158,16 @@ th {
         <i class="fa-solid fa-print"></i>
     </button>
 
-    <button class="btn-circle btn-word" onclick="saveAsWord()" title="Save as Word">
+    <a href="export_par.php?id=<?php echo $par['id']; ?>" class="btn-circle btn-word" title="Export using Template">
         <i class="fa-solid fa-file-word"></i>
-    </button>
+    </a>
 
     <a href="logs.php" class="btn-circle btn-back" title="Back">
         <i class="fa-solid fa-arrow-left"></i>
     </a>
 </div>
 
-<!-- 🟩 Form -->
+<!-- 🟩 Form Content -->
 <div class="par-form" id="par-content">
     <div class="header">
         <h6>Republic of the Philippines</h6>
@@ -217,49 +209,28 @@ th {
             <?php endfor; ?>
         </tbody>
 
-        <!-- Signatures -->
         <tr>
             <td colspan="3" style="padding:10px;">
                 <strong>Received by:</strong><br><br>
-                <div style="border-bottom:1px solid #000; width:200px; margin:auto;"><?php echo strtoupper($par['employee_name']); ?></div>
+                <div style="border-bottom:1px solid #000; width:200px; margin:auto;text-align:center"><?php echo strtoupper($par['employee_name']); ?></div>
                 <div style="text-align:center; font-size:11px;">Signature over Printed Name</div>
-                <div style="border-bottom:1px solid #000; width:150px; margin:auto;"><?php echo $par['position']; ?></div>
+                <div style="border-bottom:1px solid #000; width:150px; margin:auto;text-align:center"><?php echo $par['position']; ?></div>
                 <div style="text-align:center; font-size:11px;">Position/Office</div>
-                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;text-align:center"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
                 <div style="text-align:center; font-size:11px;">Date</div>
             </td>
             <td colspan="3" style="padding:10px;">
                 <strong>Issued by:</strong><br><br>
-                <div style="border-bottom:1px solid #000; width:200px; margin:auto;"><?php echo strtoupper($current_user['name']); ?></div>
+                <div style="border-bottom:1px solid #000; width:200px; margin:auto;text-align:center"><?php echo strtoupper($current_user['name']); ?></div>
                 <div style="text-align:center; font-size:11px;">Signature over Printed Name</div>
-                <div style="border-bottom:1px solid #000; width:150px; margin:auto;"><?php echo $current_user['position'] ?? 'Position'; ?></div>
+                <div style="border-bottom:1px solid #000; width:150px; margin:auto;text-align:center"><?php echo $current_user['position'] ?? 'Position'; ?></div>
                 <div style="text-align:center; font-size:11px;">Position/Office</div>
-                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;text-align:center"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
                 <div style="text-align:center; font-size:11px;">Date</div>
             </td>
         </tr>
     </table>
 </div>
-
-<script>
-function saveAsWord() {
-    const content = document.getElementById('par-content').innerHTML;
-    const wordContent = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office'
-              xmlns:w='urn:schemas-microsoft-com:office:word'
-              xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><meta charset='utf-8'><title>PAR_<?php echo $par['par_no']; ?></title></head>
-        <body>${content}</body>
-        </html>`;
-    const blob = new Blob(['\ufeff', wordContent], { type: 'application/msword' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'PAR_<?php echo $par['par_no']; ?>.doc';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-</script>
 
 </body>
 </html>
