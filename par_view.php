@@ -4,9 +4,16 @@ require_once('includes/load.php');
 page_require_level(1);
 
 $current_user = current_user();
-$par_id = (int)$_GET['id'];
 
-// 🟩 Fetch transaction details
+// Get the PAR number from URL parameter
+$par_no = isset($_GET['par_no']) ? trim($db->escape($_GET['par_no'])) : null;
+
+if (!$par_no) {
+    $session->msg("d", "No PAR number provided.");
+    redirect('logs.php');
+}
+
+// 🟩 Fetch transaction details using PAR number
 $sql = "
     SELECT 
         t.id,
@@ -30,7 +37,7 @@ $sql = "
     FROM transactions t
     LEFT JOIN properties p ON t.item_id = p.id
     LEFT JOIN employees e ON t.employee_id = e.id
-    WHERE t.id = '{$par_id}'
+    WHERE t.par_no = '{$par_no}'
     LIMIT 1
 ";
 
@@ -38,7 +45,7 @@ $par = find_by_sql($sql);
 $par = !empty($par) ? $par[0] : null;
 
 if (!$par) {
-    $session->msg("d", "PAR record not found.");
+    $session->msg("d", "PAR record not found for PAR No: {$par_no}");
     redirect('logs.php');
 }
 ?>
@@ -52,11 +59,16 @@ if (!$par) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <style>
-/* Your existing CSS styles here */
+/* A4 Size with 1-inch margins */
+@page {
+    size: A4;
+    margin: 1in;
+}
+
 body {
     font-family: 'Times New Roman', Times, serif;
     margin: 0;
-    padding: 20px;
+    padding: 0;
     background-color: #f8f9fa;
     display: flex;
     justify-content: center;
@@ -65,11 +77,13 @@ body {
 }
 
 .par-form {
-    max-width: 800px;
+    width: 8.5in; /* A4 width minus 2 inches for margins */
+    min-height: 11in; /* A4 height minus 2 inches for margins */
     background: white;
-    padding: 30px;
+    padding: 1in; /* 1 inch margin */
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
     border: 1px solid #ddd;
+    box-sizing: border-box;
 }
 
 .header {
@@ -82,27 +96,45 @@ body {
     padding: 0;
 }
 
+.header h6 {
+    font-size: 12px;
+    margin-bottom: 2px;
+}
+
+.header h5 {
+    font-size: 13px;
+    margin-bottom: 2px;
+}
+
+.header h4 {
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
 .receipt-title {
     text-align: center;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
     text-transform: uppercase;
     background-color: #8bde99ff;
     color: #000;
-    padding: 5px;
-    margin-bottom: 20px;
+    padding: 8px;
+    margin: 20px 0;
+    border: 1px solid #000;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
-    margin-bottom: 25px;
+    font-size: 11px;
+    margin-bottom: 20px;
+    table-layout: fixed;
 }
 th, td {
     border: 1px solid black;
     padding: 6px;
     vertical-align: top;
+    word-wrap: break-word;
 }
 th {
     background-color: #f0f0f0;
@@ -110,7 +142,21 @@ th {
     font-weight: bold;
 }
 
-.empty-row { height: 25px; }
+/* Fixed column widths for better layout */
+th:nth-child(1), td:nth-child(1) { width: 8%; }  /* Qty */
+th:nth-child(2), td:nth-child(2) { width: 8%; }  /* Unit */
+th:nth-child(3), td:nth-child(3) { width: 35%; } /* Description */
+th:nth-child(4), td:nth-child(4) { width: 15%; } /* Property No */
+th:nth-child(5), td:nth-child(5) { width: 14%; } /* Date Acquired */
+th:nth-child(6), td:nth-child(6) { width: 20%; } /* Amount */
+
+.empty-row { 
+    height: 20px; 
+}
+
+.empty-row td {
+    border: 1px solid black;
+}
 
 .button-panel {
     display: flex;
@@ -142,10 +188,74 @@ th {
 
 .btn-circle:hover { transform: scale(1.1); }
 
+/* Print Styles */
 @media print {
-    .button-panel { display: none; }
-    body { background: white; }
-    .par-form { box-shadow: none; border: none; }
+    @page {
+        size: A4;
+        margin: 1in;
+    }
+    
+    body {
+        background: white;
+        margin: 0;
+        padding: 0;
+        display: block;
+    }
+    
+    .button-panel { 
+        display: none; 
+    }
+    
+    .par-form {
+        width: auto;
+        min-height: auto;
+        margin: 0;
+        padding: 1in;
+        box-shadow: none;
+        border: none;
+        page-break-after: always;
+    }
+    
+    .receipt-title {
+        background-color: #8bde99ff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    th {
+        background-color: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/* Ensure proper spacing for signatures */
+.signature-section {
+    padding: 5px;
+}
+
+.signature-line {
+    border-bottom: 1px solid #000;
+    width: 180px;
+    margin: 3px auto;
+    padding-top: 15px;
+    text-align: center;
+}
+
+.signature-label {
+    font-size: 10px;
+    margin-top: 2px;
+    text-align: center;
+}
+
+/* Fund cluster and PAR number styling */
+.doc-info {
+    margin-bottom: 15px;
+    font-size: 12px;
+}
+
+.doc-info strong {
+    font-size: 12px;
 }
 </style>
 </head>
@@ -158,7 +268,7 @@ th {
         <i class="fa-solid fa-print"></i>
     </button>
 
-    <a href="export_par.php?id=<?php echo $par['id']; ?>" class="btn-circle btn-word" title="Export using Template">
+    <a href="export_par.php?par_no=<?php echo urlencode($par['par_no']); ?>" class="btn-circle btn-word" title="Export using Template">
         <i class="fa-solid fa-file-word"></i>
     </a>
 
@@ -167,7 +277,7 @@ th {
     </a>
 </div>
 
-<!-- 🟩 Form Content -->
+<!-- 🟩 Form Content - A4 Size with 1-inch margins -->
 <div class="par-form" id="par-content">
     <div class="header">
         <h6>Republic of the Philippines</h6>
@@ -179,7 +289,7 @@ th {
 
     <div class="receipt-title">Property Acknowledgment Receipt</div>
 
-    <div style="margin-bottom: 10px;">
+    <div class="doc-info">
         <strong>Fund Cluster:</strong> <?php echo $par['fund_cluster']; ?>
         <span style="float:right;"><strong>PAR No.:</strong> <?php echo $par['par_no']; ?></span>
     </div>
@@ -199,9 +309,14 @@ th {
             <tr>
                 <td align="center"><?php echo $par['quantity']; ?></td>
                 <td align="center"><?php echo $par['unit']; ?></td>
-                <td><?php echo $par['item_name'] . ' - ' . $par['description']; ?></td>
+                <td>
+                    <strong><?php echo $par['item_name']; ?></strong>
+                    <?php if (!empty($par['description'])): ?>
+                        <br><small><?php echo $par['description']; ?></small>
+                    <?php endif; ?>
+                </td>
                 <td align="center"><?php echo $par['property_no']; ?></td>
-                <td align="center"><?php echo date('M d, Y', strtotime($par['date_acquired'])); ?></td>
+                <td align="center"><?php echo !empty($par['date_acquired']) ? date('M d, Y', strtotime($par['date_acquired'])) : 'N/A'; ?></td>
                 <td align="right">₱<?php echo number_format($par['unit_cost'] * $par['quantity'], 2); ?></td>
             </tr>
             <?php for ($i=0; $i<12; $i++): ?>
@@ -210,23 +325,23 @@ th {
         </tbody>
 
         <tr>
-            <td colspan="3" style="padding:10px;">
+            <td colspan="3" class="signature-section">
                 <strong>Received by:</strong><br><br>
-                <div style="border-bottom:1px solid #000; width:200px; margin:auto;text-align:center"><?php echo strtoupper($par['employee_name']); ?></div>
-                <div style="text-align:center; font-size:11px;">Signature over Printed Name</div>
-                <div style="border-bottom:1px solid #000; width:150px; margin:auto;text-align:center"><?php echo $par['position']; ?></div>
-                <div style="text-align:center; font-size:11px;">Position/Office</div>
-                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;text-align:center"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
-                <div style="text-align:center; font-size:11px;">Date</div>
+                <div class="signature-line"><?php echo strtoupper($par['employee_name']); ?></div>
+                <div class="signature-label">Signature over Printed Name</div>
+                <div class="signature-line"><?php echo $par['position']; ?></div>
+                <div class="signature-label">Position/Office</div>
+                <div class="signature-line"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div class="signature-label">Date</div>
             </td>
-            <td colspan="3" style="padding:10px;">
+            <td colspan="3" class="signature-section">
                 <strong>Issued by:</strong><br><br>
-                <div style="border-bottom:1px solid #000; width:200px; margin:auto;text-align:center"><?php echo strtoupper($current_user['name']); ?></div>
-                <div style="text-align:center; font-size:11px;">Signature over Printed Name</div>
-                <div style="border-bottom:1px solid #000; width:150px; margin:auto;text-align:center"><?php echo $current_user['position'] ?? 'Position'; ?></div>
-                <div style="text-align:center; font-size:11px;">Position/Office</div>
-                <div style="border-bottom:1px solid #000; width:120px; margin:8px auto;text-align:center"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
-                <div style="text-align:center; font-size:11px;">Date</div>
+                <div class="signature-line"><?php echo strtoupper($current_user['name']); ?></div>
+                <div class="signature-label">Signature over Printed Name</div>
+                <div class="signature-line"><?php echo $current_user['position'] ?? 'Position'; ?></div>
+                <div class="signature-label">Position/Office</div>
+                <div class="signature-line"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div class="signature-label">Date</div>
             </td>
         </tr>
     </table>

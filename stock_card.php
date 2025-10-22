@@ -39,75 +39,6 @@ $fund_clusters = find_by_sql("
 ");
 
 // =====================
-// Stock card (leave unchanged)
-// =====================
-// Fetch all approved items (for dropdown search autocomplete if needed)
-$all_items = find_by_sql("
-    SELECT DISTINCT i.*
-    FROM items i
-    JOIN request_items ri ON i.id = ri.item_id
-    JOIN requests r ON ri.req_id = r.id
-    WHERE r.status = 'Completed'
-    ORDER BY i.name ASC
-");
-
-// Get stock info
-$stock = null;
-$stock_id = null;
-
-// Stock search improvement
-if ($stock_card_input) {
-  // Try by ID first
-  $stock = find_by_id('items', $stock_card_input);
-  $stock_id = $stock['id'] ?? null;
-
-  // If not found, try by stock_card OR name
-  if (!$stock) {
-    $stock_result = find_by_sql("
-            SELECT * FROM items 
-            WHERE stock_card = '{$db->escape($stock_card_input)}' 
-               OR name LIKE '%{$db->escape($stock_card_input)}%' 
-            LIMIT 1
-        ");
-    $stock = $stock_result[0] ?? null;
-    $stock_id = $stock['id'] ?? null;
-  }
-}
-
-// Fetch transactions for selected stock_id
-$transactions = [];
-if ($stock_id) {
-  $sql = "
-       SELECT 
-    r.id AS req_id,
-    r.ris_no,
-    r.date AS request_date,
-    COALESCE(CONCAT(e.first_name, ' ', e.last_name), u.name) AS requested_by,
-    ri.qty AS issue_qty,
-    i.unit_cost,
-    (ri.qty * i.unit_cost) AS issue_total_cost,
-    i.name,
-    i.description,
-    un.name AS UOM,
-    i.stock_card,
-    COALESCE(ofc.office_name, ofc_user.office_name) AS office,
-    i.quantity AS balance_qty
-FROM request_items ri
-JOIN requests r ON ri.req_id = r.id
-JOIN items i ON ri.item_id = i.id
-JOIN users u ON r.requested_by = u.id
-LEFT JOIN employees e ON u.id = e.user_id
-LEFT JOIN units un ON i.unit_id = un.id
-LEFT JOIN offices ofc ON e.office = ofc.id
-LEFT JOIN offices ofc_user ON u.office = ofc_user.id
-WHERE r.status = 'Completed' 
-  AND i.id = '{$db->escape($stock_id)}'
-ORDER BY r.date ASC
-    ";
-  $transactions = find_by_sql($sql);
-}
-
-// =====================
 // Fetch all semi-expendable items (filtered)
 // =====================
 $where_sql = implode(' AND ', $where_conditions);
@@ -125,9 +56,7 @@ $sql_items = "
 ";
 $smpi_items = find_by_sql($sql_items);
 
-// =====================
-// Fetch transactions linked to those items
-// =====================
+
 $smpi_transactions = [];
 if (!empty($smpi_items)) {
   foreach ($smpi_items as $item) {
@@ -141,9 +70,8 @@ if (!empty($smpi_items)) {
           t.quantity AS issued_qty,
           s.unit_cost,
           (t.quantity * s.unit_cost) AS total_cost,
-          t.PAR_No,
           t.ICS_No,
-          t.RRSP_No,
+          ri.RRSP_No,  -- Changed from t.RRSP_No to ri.RRSP_No
           CONCAT(e.first_name, ' ', e.last_name) AS officer,
           s.item AS item_name,
           s.item_description AS item_description,
@@ -154,6 +82,7 @@ if (!empty($smpi_items)) {
       FROM transactions t
       LEFT JOIN semi_exp_prop s ON t.item_id = s.id
       LEFT JOIN employees e ON t.employee_id = e.id
+      LEFT JOIN return_items ri ON t.id = ri.transaction_id  -- Added join to return_items table
       WHERE t.item_id = '{$db->escape($item_id)}'
       ORDER BY t.transaction_date ASC
     ";
@@ -173,7 +102,6 @@ if (!empty($smpi_items)) {
         'issued_qty' => 0,
         'unit_cost' => $item['unit_cost'],
         'total_cost' => 0,
-        'PAR_No' => null,
         'ICS_No' => null,
         'RRSP_No' => null,
         'officer' => null,
@@ -187,6 +115,7 @@ if (!empty($smpi_items)) {
     }
   }
 }
+
 ?>
 
 
@@ -535,9 +464,9 @@ if (!empty($smpi_items)) {
     </div>
 
     
-<button class="print-btn" onclick="openPrintPage('smpi')">
-  <i class="fa-solid fa-print"></i> Print Preview
-</button>
+    <button class="print-btn" onclick="openPrintPage('smpi')">
+      <i class="fa-solid fa-print"></i> Print Preview
+    </button>
   </div>
 
   <!-- Semi-Expendable Property Card Tab -->
@@ -656,10 +585,10 @@ if (!empty($smpi_items)) {
     const stockCard = encodeURIComponent("<?= $stock_card_input ?? '' ?>");
     const fundCluster = encodeURIComponent("<?= $fund_cluster_filter ?? '' ?>");
     const valueFilter = encodeURIComponent("<?= $value_filter ?? '' ?>");
-    
+
     if (tab === 'sc') {
       // For Stock Card, open in new tab
-      window.open(`print_stock_card.php?stock_card=${stockCard}&tab=${tab}&fund_cluster=${fundCluster}&value_filter=${valueFilter}`, '_blank');
+      window.open(`print_stock_card.php?stock_card=${stockCard}&fund_cluster=${fundCluster}&value_filter=${valueFilter}`, '_blank');
     } else {
       // For SMPI, open in new tab
       window.open(`print_smpi.php?stock_card=${stockCard}&fund_cluster=${fundCluster}&value_filter=${valueFilter}`, '_blank');
@@ -671,11 +600,11 @@ if (!empty($smpi_items)) {
       // Print stock card from current page
       const printContent = document.getElementById('print-area').innerHTML;
       const originalContent = document.body.innerHTML;
-      
+
       document.body.innerHTML = printContent;
       window.print();
       document.body.innerHTML = originalContent;
-      
+
       // Reload to restore functionality
       window.location.reload();
     } else {
@@ -685,11 +614,11 @@ if (!empty($smpi_items)) {
   }
 
   // Tab navigation handling
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', function () {
     const tabLinks = document.querySelectorAll('.nav-tab-link');
 
     tabLinks.forEach(link => {
-      link.addEventListener('click', function(e) {
+      link.addEventListener('click', function (e) {
         // Remove active class from all tabs
         tabLinks.forEach(tab => tab.classList.remove('active'));
 
@@ -728,4 +657,4 @@ if (!empty($smpi_items)) {
     }); 
     }); 
 
-</script>
+</script> 

@@ -95,7 +95,7 @@ $total_employees = count($employees_summary);
                                     <p class="card-subtitle mb-0"><?php echo remove_junk($employee['position']); ?></p>
                                     <div class="mt-1">
                                         <?php if ($employee['user_id']): ?>
-                                            <span class="badge bg-info">Has User Account</span>
+                                            <span class="badge bg-warning">Has User Account</span>
                                         <?php endif; ?>
                                        
                                     </div>

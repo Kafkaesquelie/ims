@@ -405,12 +405,12 @@ $user = current_user();
                         
 
                         <li class="nav-header">ADMINISTRATION</li>
-                        <li class="nav-item">
+                        <!-- <li class="nav-item">
                             <a href="#" class="nav-link">
                                 <i class="nav-icon fas fa-chart-line"></i>
                                 <p>Reports & Analytics</p>
                             </a>
-                        </li>
+                        </li> -->
                          <li class="nav-item">
                             <a href="users_employees.php" class="nav-link">
                                 <i class="nav-icon fas fa-chart-line"></i>

@@ -192,15 +192,15 @@ if (!empty($smpi_items)) {
         
         /* Adjust table column widths for legal landscape */
         .date-col {
-            width: 10% !important;
+            width: 8% !important;
         }
         
         .reference-col {
-            width: 12% !important;
+            width: 10% !important;
         }
         
         .receipt-col {
-            width: 8% !important;
+            width: 7% !important;
         }
         
         .issue-col {
@@ -208,11 +208,11 @@ if (!empty($smpi_items)) {
         }
         
         .balance-col {
-            width: 10% !important;
+            width: 5% !important;
         }
         
         .amount-col {
-            width: 12% !important;
+            width: 10% !important;
         }
         
         /* Ensure proper scaling for legal paper */

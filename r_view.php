@@ -702,70 +702,65 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
                     </div>
 
                     <!-- Items Table -->
-                    <div class="table-responsive">
-                        <table class="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Stock No.</th>
-                                    <th>Unit</th>
-                                    <th>Item Description</th>
-                                    <th>Quantity</th>
-                                    <th colspan="2">Stock Available</th>
-                                    <th>Issue Quantity</th>
-                                    <th>Remarks</th>
-                                </tr>
-                                <tr>
-                                    <th></th>
-                                    <th></th>
-                                    <th></th>
-                                    <th></th>
-                                    <th>Yes</th>
-                                    <th>No</th>
-                                    <th></th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($items as $item): 
-                                    $item_stock = find_by_id('items', $item['item_id']);
-                                    $stock_available = $item_stock ? ($item_stock['quantity'] >= $item['qty']) : false;
-                                ?>
-                                <tr>
-                                    <td><strong>0<?= (int)$item['stock_card'] ?></strong></td>
-                                    <td><?= remove_junk($item['unit']) ?></td>
-                                    <td><?= remove_junk($item['item_name']) ?></td>
-                                    <td><strong><?= (float)$item['qty'] ?></strong></td>
-                                    <td>
-                                        <?php if ($stock_available): ?>
-                                            <span class="stock-check stock-yes">✔</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if (!$stock_available): ?>
-                                            <span class="stock-check stock-no">✘</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><strong><?= (float)$item['qty'] ?></strong></td>
-                                    <td><small><?= remove_junk($item['remarks']) ?: '-' ?></small></td>
-                                </tr>
-                                <?php endforeach; ?>
-                                
-                                <!-- Empty rows for additional items -->
-                                <?php for ($i = 0; $i < 3; $i++): ?>
-                                <tr>
-                                    <td>&nbsp;</td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                                <?php endfor; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                    <!-- Items Table -->
+<div class="table-responsive">
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Stock No.</th>
+                <th>Unit</th>
+                <th>Item Description</th>
+                <th>Quantity</th>
+                <th colspan="2">Stock Available</th>
+                <th>Issue Quantity</th>
+                <th>Remarks</th>
+            </tr>
+            <tr>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th>Yes</th>
+                <th>No</th>
+                <th></th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($items as $item): ?>
+                <tr>
+                    <td><strong>0<?= (int)$item['stock_card'] ?></strong></td>
+                    <td><?= remove_junk($item['unit']) ?></td>
+                    <td><?= remove_junk($item['item_name']) ?></td>
+                    <td><strong><?= (float)$item['qty'] ?></strong></td>
+                    <td>
+                        <!-- ✅ ALWAYS SHOW YES - Users can't request if no stock -->
+                        <span class="stock-check stock-yes">✔</span>
+                    </td>
+                    <td>
+                        <!-- ❌ NEVER SHOW NO - Empty column -->
+                    </td>
+                    <td><strong><?= (float)$item['qty'] ?></strong></td>
+                    <td><small><?= remove_junk($item['remarks']) ?: '-' ?></small></td>
+                </tr>
+            <?php endforeach; ?>
+            
+            <!-- Empty rows for additional items -->
+            <?php for ($i = 0; $i < 3; $i++): ?>
+            <tr>
+                <td>&nbsp;</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>
+            <?php endfor; ?>
+        </tbody>
+    </table>
+</div>
 
                     <!-- Signatures Section -->
                     <div class="signatures-grid">

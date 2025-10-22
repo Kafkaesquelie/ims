@@ -60,6 +60,9 @@ if (isset($_GET['issued'])) {
         $is_user = $user_check ? true : false;
         $is_employee = !$is_user;
 
+        // ✅ MODIFIED: Check if current user is admin (level 1)
+        $current_user_is_admin = ($current_user['user_level'] == 1);
+
         // ✅ Get all items from the request
         $req_items = find_by_sql("SELECT item_id, qty, unit FROM request_items WHERE req_id = '{$request_id}'");
 
@@ -156,21 +159,18 @@ if (isset($_GET['issued'])) {
             ");
         }
 
-               //  Determine new status - Employees are automatically completed, users stay as Issued
-        if ($is_employee) {
-            // Employee requests: mark as Completed immediately
+        // ✅ MODIFIED: Determine new status - Admin and Employees are automatically completed, regular users stay as Issued
+        if ($current_user_is_admin || $is_employee) {
+            // Admin or Employee requests: mark as Completed immediately
             $new_status = 'Completed';
             $date_field = "date_completed = NOW()";
         } else {
-            // User requests: mark as Issued (for confirmation)
+            // Regular user requests: mark as Issued (for confirmation)
             $new_status = 'Issued';
             $date_field = "date_issued = NOW()";
         }
 
-        //  Update request status
-        $db->query("UPDATE requests SET status = '{$new_status}', {$date_field} WHERE id = '{$request_id}'");
-
-        //  Update request status
+        // Update request status
         $db->query("UPDATE requests SET status = '{$new_status}', {$date_field} WHERE id = '{$request_id}'");
 
         $db->query("COMMIT");
@@ -184,8 +184,7 @@ if (isset($_GET['issued'])) {
     exit;
 }
 
-
-// Simple fix: Use a custom query to get requests with office and division names
+// ✅ MODIFIED: Exclude completed requests from the query
 $sql = "
     SELECT 
         r.*,
@@ -202,10 +201,12 @@ $sql = "
     -- Join with divisions table for employees  
     LEFT JOIN divisions ed ON e.division = ed.id
     -- Join with offices table for users
-    LEFT JOIN offices uo ON u.office= uo.id
+    LEFT JOIN offices uo ON u.office = uo.id
     -- Join with offices table for employees
     LEFT JOIN offices eo ON e.office = eo.id
-    WHERE r.status != 'archived'
+    WHERE r.status != 'archived' 
+    AND r.status != 'completed'  -- ✅ ADDED: Exclude completed requests
+    AND LOWER(r.status) != 'completed'  -- ✅ ADDED: Case-insensitive check
     ORDER BY r.date DESC
 ";
 
@@ -578,10 +579,10 @@ body {
     <div class="card-custom">
         <div class="card-header-custom d-flex justify-content-between align-items-center">
             <h5 class="card-title">
-                <i class="fas fa-clipboard-list"></i> Stock Requests Management
+                <i class="fas fa-clipboard-list"></i> Active Stock Requests
             </h5>
             <div class="stats-counter">
-                <i class="fas fa-chart-line me-2"></i>Total: <?php echo count($requests); ?> requests
+                <i class="fas fa-chart-line me-2"></i>Active: <?php echo count($requests); ?> requests
             </div>
         </div>
         
@@ -669,8 +670,8 @@ body {
             <?php else: ?>
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <h5>No Requests Found</h5>
-                    <p>There are currently no stock requests in the system. Start by creating a new request.</p>
+                    <h5>No Active Requests</h5>
+                    <p>There are currently no active stock requests in the system. Start by creating a new request.</p>
                     <a href="checkout.php" class="btn btn-success btn-lg px-4 py-3 rounded-pill shadow">
                         <i class="fas fa-plus-circle me-2"></i>Create New Request
                     </a>
@@ -695,9 +696,22 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const url = this.getAttribute('href');
 
+            // ✅ MODIFIED: Check if current user is admin (user_level = 1)
+            const isAdmin = <?php echo ($current_user['user_level'] == 1) ? 'true' : 'false'; ?>;
+            
+            let confirmText, successText;
+            
+            if (isAdmin) {
+                confirmText = "This will mark the request as 'Completed' immediately and update stock.";
+                successText = "completed";
+            } else {
+                confirmText = "This will mark the request as 'For Confirmation' and notify the requester.";
+                successText = "issued for confirmation";
+            }
+
             Swal.fire({
                 title: 'Issue Items?',
-                text: "This will mark the request as 'For Confirmation' and notify the requester.",
+                text: confirmText,
                 icon: 'info',
                 showCancelButton: true,
                 confirmButtonColor: '#ffc107',
@@ -724,7 +738,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (data.success) {
                                 Swal.fire({
                                     icon: 'success',
-                                    title: 'Issued!',
+                                    title: 'Success!',
                                     text: data.message,
                                     confirmButtonText: 'OK',
                                     background: '#ffffff'

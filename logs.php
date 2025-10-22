@@ -5,12 +5,54 @@ page_require_level(1);
 
 // Fetch all approved/rejected requests
 $requests = find_all_req_logs();
-// Fetch supply & equipment transactions
 
-$par_transactions = find_all_par_transactions();
+// Fetch and group ICS transactions by ICS number
+$ics_grouped = [];
 $ics_transactions = find_all_ics_transactions();
+foreach ($ics_transactions as $ics) {
+  $ics_no = $ics['ics_no'];
+  if (!isset($ics_grouped[$ics_no])) {
+    $ics_grouped[$ics_no] = [
+      'ics_no' => $ics_no,
+      'employee_name' => $ics['employee_name'],
+      'department' => $ics['department'],
+      'image' => $ics['image'],
+      'transaction_date' => $ics['transaction_date'],
+      'items' => [],
+      'total_quantity' => 0,
+      'status' => $ics['status']
+    ];
+  }
+  $ics_grouped[$ics_no]['items'][] = [
+    'item_name' => $ics['item_name'],
+    'quantity' => $ics['quantity']
+  ];
+  $ics_grouped[$ics_no]['total_quantity'] += $ics['quantity'];
+}
 
-
+// Fetch and group PAR transactions by PAR number
+$par_grouped = [];
+$par_transactions = find_all_par_transactions();
+foreach ($par_transactions as $par) {
+  $par_no = $par['par_no'];
+  if (!isset($par_grouped[$par_no])) {
+    $par_grouped[$par_no] = [
+      'par_no' => $par_no,
+      'employee_name' => $par['employee_name'],
+      'department' => $par['department'],
+      'image' => $par['image'],
+      'transaction_date' => $par['transaction_date'],
+      'items' => [],
+      'total_quantity' => 0,
+      'status' => $par['status']
+    ];
+  }
+  $par_grouped[$par_no]['items'][] = [
+    'item_name' => $par['item_name'],
+    'quantity' => $par['quantity']
+  ];
+  $par_grouped[$par_no]['total_quantity'] += $par['quantity'];
+}
 ?>
 
 <?php include_once('layouts/header.php'); ?>
@@ -29,8 +71,6 @@ $ics_transactions = find_all_ics_transactions();
       </ol>
     </div>
   </div>
-
-
 
   <!-- Logs Table -->
   <div class="card">
@@ -91,7 +131,6 @@ $ics_transactions = find_all_ics_transactions();
                     title="View Request">
                     <i class="fa fa-eye"></i>
                   </a>
-                  
 
                   <a href="a_script.php?id=<?php echo (int)$req['id']; ?>"
                     class="btn btn-danger btn-md archive-btn"
@@ -110,8 +149,6 @@ $ics_transactions = find_all_ics_transactions();
   </div>
 </div>
 
-
-
 <!-- 🟦 ICS Transactions Table -->
 <div class="card">
   <div class="card-header" style="border-top: 5px solid #28a745; border-radius: 10px;">
@@ -126,18 +163,17 @@ $ics_transactions = find_all_ics_transactions();
             <th>Profile</th>
             <th>Employee</th>
             <th>Office</th>
-            <th>Item</th>
-            <th>Quantity</th>
+            <th>Items</th>
+            <th>Total Qty</th>
             <th>Date Issued</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <?php foreach ($ics_transactions as $ics): ?>
+          <?php foreach ($ics_grouped as $ics): ?>
             <tr>
               <td><strong><?php echo remove_junk($ics['ics_no']); ?></strong></td>
-              </td>
               <td class="text-center">
                 <img src="uploads/users/<?php echo remove_junk($ics['image']); ?>"
                   alt="Profile"
@@ -146,8 +182,20 @@ $ics_transactions = find_all_ics_transactions();
               </td>
               <td><strong><?php echo remove_junk($ics['employee_name']); ?></strong></td>
               <td><?php echo remove_junk($ics['department']); ?></td>
-              <td><?php echo remove_junk($ics['item_name']); ?></td>
-              <td><?php echo (int)$ics['quantity']; ?></td>
+              <td>
+                <div class="items-list">
+                  <?php
+                  $items_display = [];
+                  foreach ($ics['items'] as $item) {
+                    $items_display[] = $item['item_name'] . ' (' . $item['quantity'] . ')';
+                  }
+                  echo remove_junk(implode('<br>', $items_display));
+                  ?>
+                </div>
+              </td>
+              <td class="text-center">
+                <span class="badge bg-primary"><?php echo $ics['total_quantity']; ?></span>
+              </td>
               <td><?php echo date('M d, Y', strtotime($ics['transaction_date'])); ?></td>
               <td>
                 <?php if ($ics['status'] == 'Returned'): ?>
@@ -161,14 +209,18 @@ $ics_transactions = find_all_ics_transactions();
                 <?php endif; ?>
               </td>
               <td class="text-center">
-                <a href="ics_view.php?id=<?php echo (int)$ics['id']; ?>"
-                  class="btn btn-success btn-sm" title="View ICS">
-                  <i class="fa fa-eye"></i>
-                </a>
 
+                <a href="view_logs.php?ics_no=<?php echo urlencode($ics_no); ?>" class="btn btn-success btn-sm" title="View">
+                  <i class="fa fa-eye"></i>
+
+                </a>
+                <a href="ics_view.php?ics_no=<?php echo urlencode($ics['ics_no']); ?>"
+                  class="btn btn-primary btn-sm" title="View ICS">
+                  <i class="fa-solid fa-print"></i>
+                </a>
               </td>
             </tr>
-          <?php endforeach; ?> 
+          <?php endforeach; ?>
         </tbody>
       </table>
     </div>
@@ -189,18 +241,17 @@ $ics_transactions = find_all_ics_transactions();
             <th>Profile</th>
             <th>Employee</th>
             <th>Office</th>
-            <th>Item</th>
-            <th>Quantity</th>
+            <th>Items</th>
+            <th>Total Qty</th>
             <th>Date Issued</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <?php foreach ($par_transactions as $par): ?>
+          <?php foreach ($par_grouped as $par): ?>
             <tr>
               <td><strong><?php echo remove_junk($par['par_no']); ?></strong></td>
-              </td>
               <td class="text-center">
                 <img src="uploads/users/<?php echo remove_junk($par['image']); ?>"
                   alt="Profile"
@@ -209,8 +260,20 @@ $ics_transactions = find_all_ics_transactions();
               </td>
               <td><strong><?php echo remove_junk($par['employee_name']); ?></strong></td>
               <td><?php echo remove_junk($par['department']); ?></td>
-              <td><?php echo remove_junk($par['item_name']); ?></td>
-              <td><?php echo (int)$par['quantity']; ?></td>
+              <td>
+                <div class="items-list">
+                  <?php
+                  $items_display = [];
+                  foreach ($par['items'] as $item) {
+                    $items_display[] = $item['item_name'] . ' (' . $item['quantity'] . ')';
+                  }
+                  echo remove_junk(implode('<br>', $items_display));
+                  ?>
+                </div>
+              </td>
+              <td class="text-center">
+                <span class="badge bg-primary"><?php echo $par['total_quantity']; ?></span>
+              </td>
               <td><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></td>
               <td>
                 <?php if ($par['status'] == 'Returned'): ?>
@@ -224,12 +287,8 @@ $ics_transactions = find_all_ics_transactions();
                 <?php endif; ?>
               </td>
               <td class="text-center">
-                <a href="par_view.php?id=<?php echo (int)$par['id']; ?>"
-                  class="btn btn-success btn-sm" title="View PAR">
-                  <i class="fa fa-eye"></i>
-                </a>
-                 
-
+                <a href="par_view.php?par_no=<?php echo urlencode($par['par_no']); ?>" class="btn btn-success btn-word btn-sm" title="Export using Template">                  <i class="fa fa-eye"></i>
+</a>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -239,15 +298,13 @@ $ics_transactions = find_all_ics_transactions();
   </div>
 </div>
 
-
-
-
+<!-- Rest of your JavaScript code remains the same -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.archive-btn').forEach(function(button) {
       button.addEventListener('click', function(e) {
-        e.preventDefault(); // stop normal link action
+        e.preventDefault();
         const catId = this.dataset.id;
         const risNo = this.dataset.ris;
         const url = this.getAttribute('href');
@@ -268,7 +325,6 @@ $ics_transactions = find_all_ics_transactions();
           }
         }).then((result) => {
           if (result.isConfirmed) {
-            // Show loading message
             Swal.fire({
               title: 'Archiving...',
               text: 'Please wait while we archive the request.',
@@ -277,15 +333,12 @@ $ics_transactions = find_all_ics_transactions();
                 Swal.showLoading();
               }
             });
-
-            // Redirect to archive script
             window.location.href = url;
           }
         });
       });
     });
 
-    // Check if archive was successful from URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('archive') === 'success') {
       Swal.fire({
@@ -296,13 +349,10 @@ $ics_transactions = find_all_ics_transactions();
         timer: 3000,
         timerProgressBar: true
       });
-      
-      // Clean URL
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
     }
 
-    // Check if archive failed
     if (urlParams.get('archive') === 'failed') {
       Swal.fire({
         title: 'Error!',
@@ -310,8 +360,6 @@ $ics_transactions = find_all_ics_transactions();
         icon: 'error',
         confirmButtonColor: '#dc3545'
       });
-      
-      // Clean URL
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
     }
@@ -319,13 +367,20 @@ $ics_transactions = find_all_ics_transactions();
 </script>
 
 <style>
-.swal2-title-custom {
-  color: #dc3545 !important;
-  font-weight: 600;
-}
-.swal2-html-custom {
-  font-size: 16px;
-}
+  .swal2-title-custom {
+    color: #dc3545 !important;
+    font-weight: 600;
+  }
+
+  .swal2-html-custom {
+    font-size: 16px;
+  }
+
+  .items-list {
+    max-height: 100px;
+    overflow-y: auto;
+    font-size: 0.9rem;
+  }
 </style>
 
 <?php include_once('layouts/footer.php'); ?>
@@ -334,25 +389,22 @@ $ics_transactions = find_all_ics_transactions();
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
-
 <script>
   $(document).ready(function() {
     $('#datatable').DataTable({
       "pageLength": 5,
       "lengthMenu": [5, 10, 25, 50, 100],
       "order": [
-        [4, "desc"]
+        [5, "desc"]
       ],
-
-      // ✅ Fix column widths
       "columnDefs": [{
           "width": "14%",
           "targets": 0
-        }, // #
+        },
         {
           "width": "10%",
           "targets": 1
-        }, // Requested By       
+        },
         {
           "width": "15%",
           "targets": 2
@@ -378,42 +430,22 @@ $ics_transactions = find_all_ics_transactions();
           "targets": 7
         }
       ],
-      "autoWidth": false // Important: disables automatic resizing
-
-    });
-  });
-</script>
-
-<script>
-  $(document).ready(function() {
-    $('#transactionsTable').DataTable({
-      "pageLength": 5,
-      "lengthMenu": [5, 10, 25, 50, 100],
-      "order": [
-        [4, "desc"]
-      ],
-
-
-
+      "autoWidth": false
     });
 
-  });
-</script>
-
-<script>
-  $(document).ready(function() {
-    $('#parTable').DataTable({
-      "pageLength": 5,
-      "lengthMenu": [5, 10, 25, 50, 100],
-      "order": [
-        [5, "desc"]
-      ],
-    });
     $('#icsTable').DataTable({
       "pageLength": 5,
       "lengthMenu": [5, 10, 25, 50, 100],
       "order": [
-        [5, "desc"]
+        [6, "desc"]
+      ],
+    });
+
+    $('#parTable').DataTable({
+      "pageLength": 5,
+      "lengthMenu": [5, 10, 25, 50, 100],
+      "order": [
+        [6, "desc"]
       ],
     });
   });

@@ -3,7 +3,6 @@ $page_title = 'Printable Stock Card';
 require_once('includes/load.php');
 page_require_level(1);
 
-
 $stock_card_input = $_GET['stock_card'] ?? null;
 $stock = null;
 
@@ -49,6 +48,17 @@ if ($stock) {
     ";
     $transactions = find_by_sql($sql);
 }
+
+// Prepare data for Word export
+$word_data = [
+    'stock_number' => $stock['stock_card'] ?? 'N/A',
+    'item_name' => strtoupper($stock['name'] ?? 'N/A'),
+    'description' => $stock['description'] ?? 'N/A',
+    'unit_of_measurement' => $stock['UOM'] ?? 'N/A',
+    'fund_cluster' => $stock['fund_cluster'] ?? 'N/A',
+    'reorder_point' => $stock['reorder_point'] ?? '',
+    'transactions' => $transactions
+];
 ?>
 
 <!DOCTYPE html>
@@ -59,7 +69,7 @@ if ($stock) {
 <link rel="stylesheet" href="path/to/bootstrap.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-     <link rel="icon" type="image/png"  href="uploads/other/imslogo.png">
+<link rel="icon" type="image/png"  href="uploads/other/imslogo.png">
 
 <style>
 #stock-card {
@@ -69,38 +79,73 @@ if ($stock) {
     padding: 15px;
 }
 
+.button-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.action-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Times New Roman', serif;
+}
+
 .print-btn {
     background: #190361ff;
     color: white;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0px 3px 6px rgba(0,0,0,0.2);
-    font-size: 20px;
-    transition: background 0.3s ease;
-    float:right;
-    margin-right:40px;
-    font-family:'Times New Roman', serif;
-    
 }
+
+.print-btn:hover {
+    background: #220184ff;
+    transform: translateY(-2px);
+}
+
+.word-btn {
+    background: #1d6f42;
+    color: white;
+}
+
+.word-btn:hover {
+    background: #155c33;
+    transform: translateY(-2px);
+}
+
+.close-btn {
+    background: #6c757d;
+    color: white;
+}
+
+.close-btn:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+}
+
 .footer{
     font-family:'Times New Roman', serif;
     font-size:10px;
-}
-.print-btn:hover {
-    background: #220184ff;
 }
 
 table {
     width: 100%;         
     table-layout: fixed;
-    
 }
 
 @media print {
     body {
         margin: 10px;
     }
-    .print-btn {
+    .button-container {
         display: none;
     }
     #stock-card {
@@ -125,15 +170,22 @@ table.table-bordered td {
 table.table-bordered thead th {
     border-bottom: 2px solid #000;
 }
-
 </style>
-
 
 </head>
 <body>
 
-<button class="print-btn" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button>
-
+<div class="button-container">
+    <button class="action-btn print-btn" onclick="window.print()">
+        <i class="fa-solid fa-print"></i> Print
+    </button>
+    <button class="action-btn word-btn" onclick="exportToWord()">
+        <i class="fa-solid fa-file-word"></i> Export to Word
+    </button>
+    <button class="action-btn close-btn" onclick="closeWindow()">
+        <i class="fa-solid fa-times"></i> Close
+    </button>
+</div>
 
 <div id="print-area">
 <div id="stock-card">
@@ -161,8 +213,6 @@ table.table-bordered thead th {
     </div>
 
   </div>
-
-
 
   <!-- Item Details -->
   <?php if($stock): ?>
@@ -211,11 +261,9 @@ table.table-bordered thead th {
           <?= $stock['UOM'] ?? 'N/A'; ?>
         </span>
       </td>
-     
     </tr>
   </table>
 <?php endif; ?>
-
 
   <!-- Stock Card Table -->
   <table class="table table-bordered text-center w-100 ;">
@@ -299,10 +347,79 @@ table.table-bordered thead th {
   </table>
 </div>
 </div>
-</div>
- 
-<p class="text-center text-muted footer"> This form was generated electronically by the School Inventory Mangement System</p>
-</div>
+
+<p class="text-center text-muted footer"> This form was generated electronically by the School Inventory Management System</p>
+
+<script>
+function closeWindow() {
+    if (window.opener) {
+        window.close();
+    } else {
+        window.history.back();
+    }
+}
+
+function exportToWord() {
+    // Create a temporary form to submit data to Word template
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'export_stock_card.php';
+    form.target = '_blank';
+    
+    // Add data as hidden inputs with template reference
+    const data = <?= json_encode($word_data); ?>;
+    
+    // Add template reference
+    const templateInput = document.createElement('input');
+    templateInput.type = 'hidden';
+    templateInput.name = 'template';
+    templateInput.value = 'STOCKCARD_Template';
+    form.appendChild(templateInput);
+    
+    // Add all data fields
+    for (const key in data) {
+        if (key === 'transactions') {
+            // Handle transactions array
+            data[key].forEach((transaction, index) => {
+                for (const field in transaction) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = `transactions[${index}][${field}]`;
+                    input.value = transaction[field];
+                    form.appendChild(input);
+                }
+            });
+        } else {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = data[key];
+            form.appendChild(input);
+        }
+    }
+    
+    // Add calculated fields
+    const currentDateInput = document.createElement('input');
+    currentDateInput.type = 'hidden';
+    currentDateInput.name = 'current_date';
+    currentDateInput.value = new Date().toISOString().split('T')[0];
+    form.appendChild(currentDateInput);
+    
+    const generationDateInput = document.createElement('input');
+    generationDateInput.type = 'hidden';
+    generationDateInput.name = 'generation_date';
+    generationDateInput.value = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    form.appendChild(generationDateInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+}
+</script>
 
 </body>
 </html>

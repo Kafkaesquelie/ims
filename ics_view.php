@@ -4,9 +4,14 @@ require_once('includes/load.php');
 page_require_level(1);
 
 $current_user = current_user();
-$ics_id = (int)$_GET['id'];
+$ics_no = isset($_GET['ics_no']) ? trim($db->escape($_GET['ics_no'])) : null;
 
-// 🟩 Fetch specific ICS transaction
+if (!$ics_no) {
+    $session->msg("d", "No ICS number provided.");
+    redirect('logs.php');
+}
+
+// 🟩 Fetch ALL transactions with the same ICS number
 $sql = "
     SELECT 
         t.id,
@@ -30,17 +35,29 @@ $sql = "
     FROM transactions t
     LEFT JOIN semi_exp_prop p ON t.item_id = p.id
     LEFT JOIN employees e ON t.employee_id = e.id
-    WHERE t.id = '{$ics_id}'
-    LIMIT 1
+    WHERE t.ICS_No = '{$ics_no}'
+      AND t.transaction_type = 'issue'
+    ORDER BY p.item ASC
 ";
 
-$ics = find_by_sql($sql);
-$ics = !empty($ics) ? $ics[0] : null;
+$transactions = find_by_sql($sql);
 
-if (!$ics) {
-    $session->msg("d", "ICS record not found.");
+if (empty($transactions)) {
+    $session->msg("d", "No transactions found for ICS: {$ics_no}");
     redirect('logs.php');
 }
+
+$first_transaction = $transactions[0];
+
+// Calculate total cost for all items
+$total_cost_all = 0;
+foreach ($transactions as $trans) {
+    $total_cost_all += ($trans['unit_cost'] ?? 0) * ($trans['quantity'] ?? 0);
+}
+
+// 🟩 FIX: Handle empty fund_cluster
+$fund_cluster_display = !empty($first_transaction['fund_cluster']) ? $first_transaction['fund_cluster'] : 'General Fund';
+
 ?>
 
 <!DOCTYPE html>
@@ -51,7 +68,7 @@ if (!$ics) {
 <!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
-<title>Inventory Custodian Slip - <?php echo $ics['ics_no']; ?></title>
+<title>Inventory Custodian Slip - <?php echo $ics_no; ?></title>
 <style>
     body {
         font-family: 'Times New Roman', Times, serif;
@@ -90,8 +107,8 @@ if (!$ics) {
         font-size: 18px;
         font-weight: bold;
         text-transform: uppercase;
-        color: black;
-        background-color: #a4a4a4ff;
+        color: green;
+        background-color: #83ff81ff;
         padding: 3px;
     }
 
@@ -135,6 +152,10 @@ if (!$ics) {
     .col-useful-life { width: 15%; }
 
     .empty-row { height: 20px; }
+    .total-row {
+        background-color: #f8f9fa;
+        font-weight: bold;
+    }
 
     .signature-section {
         padding: 10px;
@@ -174,6 +195,11 @@ if (!$ics) {
         }
         th {
             background-color: #f0f0f0 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .total-row {
+            background-color: #f8f9fa !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -220,7 +246,6 @@ if (!$ics) {
         display: none;
     }
 }
-
 </style>
 </head>
 <body>
@@ -231,9 +256,9 @@ if (!$ics) {
         <i class="fa-solid fa-print"></i>
     </button>
 
-    <button class="btn-circle btn-word" onclick="saveAsWord()" title="Save as Word">
+    <a href="export_ics.php?ics_no=<?php echo urlencode($ics_no); ?>" class="btn-circle btn-word" title="Export using Template">
         <i class="fa-solid fa-file-word"></i>
-    </button>
+    </a>
 
     <a href="logs.php" class="btn-circle btn-back d-flex align-items-center justify-content-center" title="Back">
         <i class="fa-solid fa-arrow-left"></i>
@@ -255,16 +280,21 @@ if (!$ics) {
 
     <!-- Fund Cluster and ICS No -->
     <div class="form-info">
-        <div><strong>Fund Cluster:</strong> <?php echo $ics['fund_cluster']; ?></div>
-        <div style="float:right; margin-top: -20px;"><strong>ICS No.:</strong> <?php echo $ics['ics_no']; ?></div>
-        <div style="clear:both;"></div>
+        <div style="text-align: right;">
+            <div style="margin-bottom: 8px;">
+                <strong>Fund Cluster:</strong> <?php echo $fund_cluster_display; ?>
+            </div>
+            <div>
+                <strong>ICS No.:</strong> <?php echo $ics_no; ?>
+            </div>
+        </div>
     </div>
 
     <!-- Table -->
     <table>
         <thead>
             <tr>
-                <th class="col-qty" rowspan="2">Qty</th>
+                <th class="col-qty" rowspan="2">Quantity</th>
                 <th class="col-unit" rowspan="2">Unit</th>
                 <th colspan="2">Amount</th>
                 <th class="col-description" rowspan="2">Description</th>
@@ -277,23 +307,37 @@ if (!$ics) {
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td class="col-qty" style="text-align: center;"><?php echo $ics['quantity']; ?></td>
-                <td class="col-unit" style="text-align: center;"><?php echo $ics['unit']; ?></td>
-                <td class="col-unit-cost" style="text-align: right;">₱<?php echo number_format($ics['unit_cost'], 2); ?></td>
-                <td class="col-total-cost" style="text-align: right;">₱<?php echo number_format($ics['unit_cost'] * $ics['quantity'], 2); ?></td>
-                <td class="col-description">
-                    <strong><?php echo $ics['item_name']; ?></strong>
-                    <?php if (!empty($ics['description'])): ?>
-                        <br><small><?php echo $ics['description']; ?></small>
-                    <?php endif; ?>
-                </td>
-                <td class="col-inv-no" style="text-align: center;"><?php echo $ics['inv_item_no']; ?></td>
-                <td class="col-useful-life" style="text-align: center;"><?php echo $ics['estimated_use']; ?></td>
-            </tr>
+            <?php 
+            $displayed_items = 0;
+            $max_items_per_page = 13;
+            
+            foreach ($transactions as $transaction): 
+                $displayed_items++;
+                $total_cost = ($transaction['unit_cost'] ?? 0) * ($transaction['quantity'] ?? 0);
+            ?>
+                <tr>
+                    <td class="col-qty" style="text-align: center;"><?php echo $transaction['quantity']; ?></td>
+                    <td class="col-unit" style="text-align: center;"><?php echo $transaction['unit']; ?></td>
+                    <td class="col-unit-cost" style="text-align: right;">₱<?php echo number_format($transaction['unit_cost'], 2); ?></td>
+                    <td class="col-total-cost" style="text-align: right;">₱<?php echo number_format($total_cost, 2); ?></td>
+                    <td class="col-description">
+                        <strong><?php echo $transaction['item_name']; ?></strong>
+                        <?php if (!empty($transaction['description'])): ?>
+                            <br><small><?php echo $transaction['description']; ?></small>
+                        <?php endif; ?>
+                    </td>
+                    <td class="col-inv-no" style="text-align: center;"><?php echo $transaction['inv_item_no']; ?></td>
+                    <td class="col-useful-life" style="text-align: center;"><?php echo $transaction['estimated_use']; ?></td>
+                </tr>
+            <?php endforeach; ?>
 
-            <!-- Empty Rows -->
-            <?php for ($i = 0; $i < 12; $i++): ?>
+
+            <!-- Empty Rows (fill remaining space) -->
+            <?php 
+            $remaining_rows = $max_items_per_page - $displayed_items - 1;
+            if ($remaining_rows > 0) {
+                for ($i = 0; $i < $remaining_rows; $i++): 
+            ?>
                 <tr class="empty-row">
                     <td class="col-qty"></td>
                     <td class="col-unit"></td>
@@ -303,7 +347,10 @@ if (!$ics) {
                     <td class="col-inv-no"></td>
                     <td class="col-useful-life"></td>
                 </tr>
-            <?php endfor; ?>
+            <?php 
+                endfor; 
+            }
+            ?>
         </tbody>
 
         <!-- Signatures -->
@@ -321,24 +368,24 @@ if (!$ics) {
                 <div class="signature-label">Position/Office</div>
 
                 <div class="signature-line">
-                    <?php echo date('M d, Y', strtotime($ics['transaction_date'])); ?>
+                    <?php echo date('M d, Y', strtotime($first_transaction['transaction_date'])); ?>
                 </div>
                 <div class="signature-label">Date</div>
             </td>
             <td colspan="3" class="signature-section">
                 <div style="text-align: left; margin-bottom: 8px;"><strong>Received by:</strong></div>
                 <div class="signature-line">
-                    <strong><?php echo strtoupper($ics['employee_name']); ?></strong> 
+                    <strong><?php echo strtoupper($first_transaction['employee_name']); ?></strong> 
                 </div>
                 <div class="signature-label">Signature over Printed Name</div>
 
                 <div class="signature-line">
-                    <?php echo $ics['position']; ?>
+                    <?php echo $first_transaction['position']; ?>
                 </div>
                 <div class="signature-label">Position/Office</div>
 
                 <div class="signature-line">
-                    <?php echo date('M d, Y', strtotime($ics['transaction_date'])); ?>
+                    <?php echo date('M d, Y', strtotime($first_transaction['transaction_date'])); ?>
                 </div>
                 <div class="signature-label">Date</div>
             </td>
@@ -350,14 +397,13 @@ if (!$ics) {
 function saveAsWord() {
     const content = document.getElementById('ics-content').innerHTML;
     
-    // Create Word document with proper styling
     const wordContent = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' 
               xmlns:w='urn:schemas-microsoft-com:office:word' 
               xmlns='http://www.w3.org/TR/REC-html40'>
         <head>
             <meta charset="utf-8">
-            <title>ICS_<?php echo $ics['ics_no']; ?></title>
+            <title>ICS_<?php echo $ics_no; ?></title>
             <style>
                 body { 
                     font-family: 'Times New Roman', Times, serif; 
@@ -405,6 +451,10 @@ function saveAsWord() {
                     font-size: 11px; 
                     margin-top: 2px;
                 }
+                .total-row {
+                    background-color: #f8f9fa !important;
+                    font-weight: bold;
+                }
             </style>
         </head>
         <body>
@@ -417,7 +467,7 @@ function saveAsWord() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'ICS_<?php echo $ics['ics_no']; ?>.doc';
+    link.download = 'ICS_<?php echo $ics_no; ?>.doc';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

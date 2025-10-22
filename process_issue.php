@@ -1,6 +1,6 @@
 <?php
 require_once('includes/load.php');
-page_require_level(2);
+page_require_level(1);
 header('Content-Type: application/json');
 
 $response = [
@@ -39,7 +39,7 @@ if ($doc_type === 'ics') {
 } elseif ($doc_type === 'par') {
     $item_table = 'properties';
     $doc_field  = 'PAR_No';
-    $qty_field  = 'qty_left'; // Actual remaining quantity column in properties
+    $qty_field  = 'qty'; // Use qty for PPE properties (not qty_left)
 } else {
     $response['message'] = 'Invalid document type.';
     echo json_encode($response);
@@ -54,8 +54,13 @@ if (!$item) {
     exit;
 }
 
-// Stock validation
-$available_qty = isset($item[$qty_field]) ? (int)$item[$qty_field] : 0;
+// Stock validation - use correct field based on item type
+if ($doc_type === 'ics') {
+    $available_qty = isset($item['qty_left']) ? (int)$item['qty_left'] : 0;
+} else { // par
+    $available_qty = isset($item['qty']) ? (int)$item['qty'] : 0;
+}
+
 if ($issue_qty > $available_qty) {
     $response['message'] = 'Issued quantity exceeds available stock.';
     echo json_encode($response);
@@ -65,16 +70,23 @@ if ($issue_qty > $available_qty) {
 // Generate document number
 $yearMonth = date('Y-m');
 $fullDocNo = "{$yearMonth}-" . str_pad($doc_number, 4, '0', STR_PAD_LEFT);
-$return_due = date('Y-m-d', strtotime($issue_date . ' +3 years'));
+
+// Calculate return due date (3 years from issue date for PPE, 1 year for semi-expendable)
+$return_due_date = '';
+if ($doc_type === 'ppe') {
+    $return_due_date = null;
+} else {
+    $return_due_date = date('Y-m-d', strtotime($issue_date . ' +3 years'));
+
+}
 
 // Start transaction
 $db->query("START TRANSACTION");
 
 try {
-    // Insert transaction
     $insert_sql = sprintf("
         INSERT INTO transactions 
-        (employee_id, item_id, quantity, %s, transaction_type, transaction_date, status, remarks, return_date)
+        (employee_id, item_id, quantity, %s, transaction_type, transaction_date, status, remarks,return_due_date)
         VALUES ('%d', '%d', '%d', '%s', 'issue', '%s', 'Issued', '%s', '%s')
     ",
         $doc_field,
@@ -84,19 +96,26 @@ try {
         $db->escape($fullDocNo),
         $db->escape($issue_date),
         $db->escape($remarks),
-        $db->escape($return_due)
+        $db->escape($return_due_date)
     );
 
     if (!$db->query($insert_sql)) {
-        throw new Exception('Failed to record transaction.');
+        throw new Exception('Failed to record transaction: ' . $db->error());
     }
 
-    // Update remaining quantity properly
+    // Update remaining quantity properly based on item type
     $new_qty = $available_qty - $issue_qty;
-    $update_sql = "UPDATE {$item_table} SET {$qty_field} = '{$new_qty}' WHERE id = '{$item_id}'";
+    
+    if ($doc_type === 'ics') {
+        // For semi-expendable, update qty_left
+        $update_sql = "UPDATE {$item_table} SET qty_left = '{$new_qty}' WHERE id = '{$item_id}'";
+    } else {
+        // For PPE, update qty
+        $update_sql = "UPDATE {$item_table} SET qty = '{$new_qty}' WHERE id = '{$item_id}'";
+    }
 
     if (!$db->query($update_sql)) {
-        throw new Exception('Failed to update stock quantity.');
+        throw new Exception('Failed to update stock quantity: ' . $db->error());
     }
 
     // Commit
@@ -105,6 +124,7 @@ try {
     $response['success'] = true;
     $response['message'] = strtoupper($doc_type) . " issuance recorded successfully.";
     $response['document_number'] = $fullDocNo;
+    $response['return_due_date'] = $return_due_date;
 
 } catch (Exception $e) {
     $db->query("ROLLBACK");
