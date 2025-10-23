@@ -39,7 +39,50 @@ $fund_clusters = find_by_sql("
 ");
 
 // =====================
-// Fetch all semi-expendable items (filtered)
+// STOCK CARD DATA - Fetch requests data
+// =====================
+$requests = [];
+$stock_item = null;
+
+if (!empty($stock_card_input)) {
+    // Fetch requests based on stock number search
+    $requests_sql = "
+    SELECT 
+        r.id AS request_id,
+        r.date,
+        r.date_issued,
+        r.status,
+        ri.item_id,
+        ri.qty AS request_qty,
+        i.name AS item_name,
+        i.stock_card AS stock_number,
+        i.unit_cost,
+        i.fund_cluster,
+        ui.name AS unit_name,
+        i.description,
+        o.office_name,
+        (ri.qty * i.unit_cost) AS total_cost
+    FROM requests r
+    LEFT JOIN request_items ri ON r.id = ri.req_id
+    LEFT JOIN items i ON ri.item_id = i.id
+    LEFT JOIN users u ON r.requested_by = u.id
+    LEFT JOIN units ui ON i.unit_id = ui.id
+    LEFT JOIN offices o ON u.office = o.id  
+    WHERE i.stock_card LIKE '%{$db->escape($stock_card_input)}%' 
+       OR i.name LIKE '%{$db->escape($stock_card_input)}%'
+    ORDER BY r.date DESC
+";
+    
+    $requests = find_by_sql($requests_sql);
+    
+    // Get the first item details for header
+    if (!empty($requests)) {
+        $stock_item = $requests[0];
+    }
+}
+
+// =====================
+// PROPERTY CARD DATA - Fetch semi-expendable items (filtered)
 // =====================
 $where_sql = implode(' AND ', $where_conditions);
 $sql_items = "
@@ -56,7 +99,9 @@ $sql_items = "
 ";
 $smpi_items = find_by_sql($sql_items);
 
-
+// =====================
+// PROPERTY CARD - Fetch transactions for issued items
+// =====================
 $smpi_transactions = [];
 if (!empty($smpi_items)) {
   foreach ($smpi_items as $item) {
@@ -71,7 +116,7 @@ if (!empty($smpi_items)) {
           s.unit_cost,
           (t.quantity * s.unit_cost) AS total_cost,
           t.ICS_No,
-          ri.RRSP_No,  -- Changed from t.RRSP_No to ri.RRSP_No
+          ri.RRSP_No,
           CONCAT(e.first_name, ' ', e.last_name) AS officer,
           s.item AS item_name,
           s.item_description AS item_description,
@@ -82,7 +127,7 @@ if (!empty($smpi_items)) {
       FROM transactions t
       LEFT JOIN semi_exp_prop s ON t.item_id = s.id
       LEFT JOIN employees e ON t.employee_id = e.id
-      LEFT JOIN return_items ri ON t.id = ri.transaction_id  -- Added join to return_items table
+      LEFT JOIN return_items ri ON t.id = ri.transaction_id
       WHERE t.item_id = '{$db->escape($item_id)}'
       ORDER BY t.transaction_date ASC
     ";
@@ -115,9 +160,7 @@ if (!empty($smpi_items)) {
     }
   }
 }
-
 ?>
-
 
 <?php include_once('layouts/header.php'); ?>
 
@@ -289,8 +332,6 @@ if (!empty($smpi_items)) {
         <div class="col-md-6 text-end">
           <form method="GET" action="" class="d-flex justify-content-end align-items-center">
             <input type="hidden" name="tab" value="sc">
-            <input type="hidden" name="fund_cluster" value="<?= $fund_cluster_filter ?>">
-            <input type="hidden" name="value_filter" value="<?= $value_filter ?>">
             <div style="position: relative; width:250px;">
               <input type="text" class="form-control" name="stock_card" id="searchInput"
                 placeholder="Search by stock number or item name"
@@ -329,24 +370,23 @@ if (!empty($smpi_items)) {
       </div>
 
       <!-- Item Details -->
-      <?php if ($stock): ?>
+      <?php if ($stock_item): ?>
         <table class="mb-2 w-100" style="border-collapse: collapse;">
           <tr>
             <td>
-              <strong style="font-size:12px;">Fund Cluster: <?= $stock['fund_cluster'] ?? 'N/A'; ?></strong>
+              <strong style="font-size:12px;">Fund Cluster: <?= $stock_item['fund_cluster'] ?? 'N/A'; ?></strong>
             </td>
           </tr>
           <tr>
             <td>
               <strong style="font-size:12px;">STOCK NUMBER:</strong>
               <strong><span style="margin-left:60px;font-size:12px; display:inline-block; border-bottom:1px solid #000; min-width:200px;text-align:center;">
-                  <?= $stock['stock_card'] ?? 'N/A'; ?>
+                  <?= $stock_item['stock_number'] ?? 'N/A'; ?>
                 </span></strong>
             </td>
             <td class="text-end">
               <strong style="font-size:12px;">Re-order Point:</strong>
-              <input type="text" name="reorder_point"
-                value="<?= $stock['reorder_point'] ?? '' ?>"
+              <input type="text" name="reorder_point" value=""
                 style="margin-left:15px; border:none; border-bottom:1px solid #000; outline:none; min-width:150px; text-align:center;">
             </td>
           </tr>
@@ -354,7 +394,7 @@ if (!empty($smpi_items)) {
             <td colspan="2">
               <strong style="font-size:12px;">ITEM:</strong>
               <strong><span style="margin-left:120px;font-size:12px; display:inline-block; border-bottom:1px solid #000; min-width:200px;text-align:center;">
-                  <?= strtoupper($stock['name'] ?? 'N/A'); ?>
+                  <?= strtoupper($stock_item['item_name'] ?? 'N/A'); ?>
                 </span></strong>
             </td>
           </tr>
@@ -362,7 +402,7 @@ if (!empty($smpi_items)) {
             <td colspan="2">
               <strong style="font-size:12px;">DESCRIPTION:</strong>
               <span style="margin-left:72px;font-size:12px; display:inline-block; border-bottom:1px solid #000; min-width:200px;text-align:center;">
-                <?= $stock['description'] ?? 'N/A'; ?>
+                <?= $stock_item['description'] ?? 'N/A'; ?>
               </span>
             </td>
           </tr>
@@ -370,7 +410,7 @@ if (!empty($smpi_items)) {
             <td>
               <strong style="font-size:12px;margin:0">UNIT OF MEASUREMENT:</strong>
               <span style="margin-left:15px;font-size:12px; display:inline-block; border-bottom:1px solid #000; min-width:200px;text-align:center;">
-                <?= $stock['UOM'] ?? 'N/A'; ?>
+                <?= $stock_item['unit_name'] ?? 'N/A'; ?>
               </span>
             </td>
           </tr>
@@ -401,45 +441,45 @@ if (!empty($smpi_items)) {
           </tr>
         </thead>
         <tbody style="font-size:13px">
-          <?php if (!empty($transactions)): ?>
+          <?php if (!empty($requests)): ?>
             <?php
-            $starting_qty = $stock['qty'] ?? 0;
-            $balance_qty = $starting_qty;
-            $balance_total = $balance_qty * ($stock['unit_cost'] ?? 0);
-
-            foreach ($transactions as $trx):
-              $issue_qty = $trx['issue_qty'];
-              $unit_cost = $trx['unit_cost'];
-              $issue_total = $trx['issue_total_cost'];
-              $balance_qty -= $issue_qty;
-              $balance_total -= $issue_total;
+            $balance_qty = 0;
+            $balance_total = 0;
+            
+            foreach ($requests as $request):
+              $request_qty = $request['request_qty'] ?? 0;
+              $unit_cost = $request['unit_cost'] ?? 0;
+              $request_total = $request_qty * $unit_cost;
+              $balance_qty += $request_qty;
+              $balance_total += $request_total;
             ?>
               <tr>
-                <td><?= date("m/d/Y", strtotime($trx['request_date'])) ?></td>
-                <td><?= !empty($trx['ris_no']) ? $trx['ris_no'] : ("REQ-" . $trx['req_id']); ?></td>
+                <td><?= date("m/d/Y", strtotime($request['date_issued'])) ?></td>
+                <td>REQ-<?= $request['request_id'] ?></td>
+                <td><?= $request_qty ?></td>
+                <td><?= number_format($unit_cost, 2) ?></td>
                 <td>0</td>
-                <td><?= number_format($unit_cost, 2) ?></td>
-                <td><?= $issue_qty ?></td>
-                <td><?= number_format($unit_cost, 2) ?></td>
-                <td><?= number_format($issue_total, 2) ?></td>
-                <td><?= $trx['office'] ?></td>
-                <td><?= $trx['balance_qty'] ?></td>
-                <td><?= number_format($trx['balance_qty'] * $trx['unit_cost'], 2) ?></td>
+                <td>0.00</td>
+                <td>0.00</td>
+                <td><?= $request['office_name'] ?></td>
+                <td><?= $balance_qty ?></td>
+                <td><?= number_format($balance_total, 2) ?></td>
                 <td></td>
-                <td></td>
+                <td><?= $request['status'] ?></td>
               </tr>
             <?php endforeach; ?>
           <?php else: ?>
             <tr>
               <td colspan="12" class="text-muted" style="font-size:35px; padding:5px"> 
-                <i class="fa-solid fa-chalkboard-user"></i> No transactions found.
+                <i class="fa-solid fa-chalkboard-user"></i> 
+                <?= $stock_card_input ? 'No requests found for this search.' : 'Enter a stock number or item name to search.' ?>
               </td>
             </tr>
           <?php endif; ?>
         </tbody>
         <tbody>
           <?php
-          $count = !empty($transactions) ? count($transactions) : 0;
+          $count = !empty($requests) ? count($requests) : 0;
           $empty_rows = 5 - $count;
           if ($empty_rows > 0):
             for ($i = 0; $i < $empty_rows; $i++): ?>
@@ -463,8 +503,7 @@ if (!empty($smpi_items)) {
       </table>
     </div>
 
-    
-    <button class="print-btn" onclick="openPrintPage('smpi')">
+    <button class="print-btn" onclick="openPrintPage('sc')">
       <i class="fa-solid fa-print"></i> Print Preview
     </button>
   </div>
@@ -478,7 +517,6 @@ if (!empty($smpi_items)) {
           <h5 class="mb-3"><i class="nav-icon fas fa-tools"></i> Semi-Expendable Property Card - Filters</h5>
           <form method="GET" action="" class="row g-3 align-items-end">
             <input type="hidden" name="tab" value="smpi">
-
 
             <div class="col-md-3">
               <label class="form-label"><strong>Fund Cluster</strong></label><br>
@@ -563,9 +601,6 @@ if (!empty($smpi_items)) {
       </div>
     <?php endif; ?>
 
-
-           
-
     <?php if (empty($smpi_items)): ?>
       <div class="alert alert-warning text-center">
         <i class="fa-solid fa-exclamation-triangle me-2"></i>
@@ -574,7 +609,7 @@ if (!empty($smpi_items)) {
     <?php endif; ?>
 
     <!-- Single Print Button for SMPI -->
-    <button class="print-btn" onclick="openPrintPage()">
+    <button class="print-btn" onclick="openPrintPage('smpi')">
       <i class="fa-solid fa-print"></i> Print Preview
     </button>
   </div>
@@ -588,28 +623,10 @@ if (!empty($smpi_items)) {
 
     if (tab === 'sc') {
       // For Stock Card, open in new tab
-      window.open(`print_stock_card.php?stock_card=${stockCard}&fund_cluster=${fundCluster}&value_filter=${valueFilter}`, '_blank');
+      window.open(`print_stock_card.php?stock_card=${stockCard}`, '_blank');
     } else {
       // For SMPI, open in new tab
       window.open(`print_smpi.php?stock_card=${stockCard}&fund_cluster=${fundCluster}&value_filter=${valueFilter}`, '_blank');
-    }
-  }
-
-  function printCurrentTab(tab) {
-    if (tab === 'sc') {
-      // Print stock card from current page
-      const printContent = document.getElementById('print-area').innerHTML;
-      const originalContent = document.body.innerHTML;
-
-      document.body.innerHTML = printContent;
-      window.print();
-      document.body.innerHTML = originalContent;
-
-      // Reload to restore functionality
-      window.location.reload();
-    } else {
-      // For SMPI, use the dedicated print page in new tab
-      openPrintPage('smpi');
     }
   }
 
@@ -652,9 +669,5 @@ if (!empty($smpi_items)) {
       autoWidth: false,
       fixedColumns: true
     });
-    $('#searchInput').on('keyup', function() {
-      table.search(this.value).draw();
-    }); 
-    }); 
-
-</script> 
+  }); 
+</script>
