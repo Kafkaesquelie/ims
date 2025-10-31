@@ -1,15 +1,21 @@
 <?php
-$page_title = 'View Request';
+$page_title = 'Print RIS';
 require_once('includes/load.php');
 page_require_level(1);
 
-$request_id = (int)$_GET['id'];
+// Check if request ID is provided
+if (!isset($_GET['ris_no']) || empty($_GET['ris_no'])) {
+    $session->msg("d", "No request ID provided.");
+    redirect('logs.php');
+}
+
+$request_id = (int)$_GET['ris_no'];
 
 // Fetch request info
 $request = find_by_id('requests', $request_id);
 if (!$request) {
     $session->msg("d", "Request not found.");
-    redirect('requests.php');
+    redirect('logs.php');
 }
 
 // Fetch requestor info from users & employees table
@@ -23,12 +29,12 @@ $requestor_position = $employee ? $employee['position'] ?? $employee['position']
 $requestor_division = $employee ? $employee['division'] ?? '________________' : '________________';
 $requestor_office   = $employee ? $employee['office'] ?? '________________' : '________________';
 
-// Fetch requested items with unit directly from request_items
+// Fetch requested items with availability status based on request status
 $items = find_by_sql("
     SELECT 
         ri.item_id,
         ri.qty,
-        ri.unit,  -- This is the actual unit used in the request
+        ri.unit,
         ri.remarks,
         i.name as item_name,
         i.stock_card,
@@ -38,246 +44,308 @@ $items = find_by_sql("
     WHERE ri.req_id = '{$request_id}'
 ");
 
+// Get the request remarks (use the first item's remarks or request-level remarks)
+$request_remarks = '';
+if (!empty($items) && !empty($items[0]['remarks'])) {
+    $request_remarks = $items[0]['remarks'];
+} elseif (!empty($request['remarks'])) {
+    $request_remarks = $request['remarks'];
+}
+
 // Current logged-in user (for approved by/issued by)
 $current_user = current_user();
 $current_user_name = $current_user ? remove_junk($current_user['name']) : "System User";
 $current_user_position = isset($current_user['position']) ? remove_junk($current_user['position']) : "";
 
-// Dark mode flag
-$is_dark = isset($_SESSION['dark_mode']) && $_SESSION['dark_mode'];
+// Determine availability based on request status
+// If request was completed, items were available. If rejected, items were not available.
+$request_status = $request['status'];
+$all_items_available = ($request_status == 'Completed');
+
 ?>
-<!-- Bootstrap CSS -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
-<!-- Font Awesome -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
-
-<style>
-    body {
-        font-family: Arial, sans-serif;
-    }
-
-    .ris-container {
-        width: 100%;
-        margin: 0 auto;
-    }
-
-    .ris-copy {
-        width: 100%;
-        margin-bottom: 20px;
-        page-break-inside: avoid;
-    }
-
-    .ris-header {
-        text-align: center;
-        margin-bottom: 10px;
-        font-weight: bold;
-        font-size: 16px;
-    }
-
-    .entity-info {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-    }
-
-    .ris-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 10px;
-    }
-
-    .ris-table th,
-    .ris-table td {
-        border: 1px solid #000;
-        padding: 5px;
-        font-size: 12px;
-    }
-
-    .ris-table th {
-        background-color: #f0f0f0;
-    }
-
-    .empty-row td {
-        height: 15px;
-        /* makes the empty row visible */
-        border: 1px solid #000;
-        /* ensures border is visible */
-    }
-
-    /* Purpose cell adjustments */
-    .purpose-cell {
-        text-align: left;
-        /* align purpose text to right */
-        vertical-align: top;
-    }
-
-    .entity-info {
-        font-size: 13px;
-    }
-
-    @page {
-        size: 8.5in 13in;
-        /* Long bond paper size */
-        margin: 0.5in;
-        /* Adjust margin as needed */
-    }
-
-    body {
-        font-family: Arial, sans-serif;
-        background: white;
-        margin: 0;
-        padding: 0;
-    }
-
-    .ris-container {
-        width: 100%;
-        margin: 0 auto;
-    }
-
-    .card {
-        width: 8.5in;
-        min-height: 13in;
-        margin: auto;
-        padding: 0.5in;
-        box-sizing: border-box;
-        border: 1px solid #000;
-    }
-
-    .ris-copy {
-        width: 100%;
-        page-break-after: always;
-    }
-
-    /* Adjust text and table sizing */
-    .ris-table th,
-    .ris-table td {
-        padding: 4px;
-        font-size: 11px;
-        border: 1px solid #000;
-    }
-
-    .ris-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .ris-header {
-        text-align: center;
-        font-weight: bold;
-        font-size: 16px;
-        margin-bottom: 10px;
-    }
-
-    .entity-info {
-        display: flex;
-        justify-content: space-between;
-        font-size: 12px;
-        margin-bottom: 10px;
-    }
-
-    .purpose-cell {
-        text-align: left;
-        vertical-align: top;
-    }
-
-    /* --- Text alignment fix --- */
-    td.text-center,
-    th.text-center,
-    .text-center {
-        text-align: center !important;
-        vertical-align: middle !important;
-    }
-
-    td.text-start,
-    th.text-start,
-    .text-start {
-        text-align: left !important;
-        vertical-align: middle !important;
-    }
-
-    td.text-end,
-    th.text-end,
-    .text-end {
-        text-align: right !important;
-        vertical-align: middle !important;
-    }
-
-    /* --- Signatory section styling --- */
-    .signatory-section td {
-        height: 25px;
-        vertical-align: middle !important;
-    }
-
-    .signatory-section strong {
-        font-size: 11px;
-    }
-
-    /* Optional: make all signatory columns equal width for perfect alignment */
-    .signatory-section td:nth-child(3),
-    .signatory-section td:nth-child(4),
-    .signatory-section td:nth-child(5),
-    .signatory-section td:nth-child(6),
-    .signatory-section td:nth-child(7),
-    .signatory-section td:nth-child(8) {
-        width: 12.5%;
-    }
-
-    @media print {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print RIS - <?php echo isset($request['ris_no']) ? $request['ris_no'] : 'Request'; ?></title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    
+    <style>
         body {
-            margin: 0;
-            padding: 0;
-            font-size: 10px;
+            font-family: Arial, sans-serif;
         }
 
-        .no-print {
-            display: none;
+        .ris-container {
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .ris-copy {
+            width: 100%;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+
+        .ris-header {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .entity-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .ris-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        .ris-table th,
+        .ris-table td {
+            border: 1px solid #000;
+            padding: 5px;
+            font-size: 12px;
+        }
+
+        .ris-table th {
+            background-color: #f0f0f0;
+        }
+
+        .empty-row td {
+            height: 15px;
+            border: 1px solid #000;
+        }
+
+        .purpose-cell {
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .entity-info {
+            font-size: 13px;
+        }
+
+        @page {
+            size: 8.5in 13in;
+            margin: 0.5in;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: white;
+            margin: 0;
+            padding: 0;
+        }
+
+        .ris-container {
+            width: 100%;
+            margin: 0 auto;
         }
 
         .card {
             width: 8.5in;
             min-height: 13in;
-            border: none;
-            box-shadow: none;
-            padding: 0.4in;
+            margin: auto;
+            padding: 0.5in;
+            box-sizing: border-box;
+            border: 1px solid #000;
         }
 
         .ris-copy {
+            width: 100%;
             page-break-after: always;
         }
 
-        .no-print {
-            display: none !important;
+        .ris-table th,
+        .ris-table td {
+            padding: 4px;
+            font-size: 11px;
+            border: 1px solid #000;
         }
-    }
-</style>
 
-<div class="container-fluid my-2 d-flex">
-    <!-- Sidebar Icon Buttons -->
-    <div class="no-print d-flex flex-column align-items-center me-3" style="gap:12px;">
-        <!-- Print Button -->
-        <button onclick="window.print()"
-            class="btn btn-outline-primary rounded-circle shadow-sm"
-            style="width: 50px; height: 50px;"
-            title="Print">
-            <i class="fa-solid fa-print"></i>
-        </button>
+        .ris-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
 
-        <!-- Back Button -->
-        <a href="logs.php"
-            class="btn btn-outline-secondary rounded-circle shadow-sm"
-            style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;"
-            title="Back">
-            <i class="fa-solid fa-arrow-left"></i>
-        </a>
-    </div>
+        .ris-header {
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .entity-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .purpose-cell {
+            text-align: left;
+            vertical-align: top;
+        }
+
+        td.text-center,
+        th.text-center,
+        .text-center {
+            text-align: center !important;
+            vertical-align: middle !important;
+        }
+
+        td.text-start,
+        th.text-start,
+        .text-start {
+            text-align: left !important;
+            vertical-align: middle !important;
+        }
+
+        td.text-end,
+        th.text-end,
+        .text-end {
+            text-align: right !important;
+            vertical-align: middle !important;
+        }
+
+        .signatory-section td {
+            height: 25px;
+            vertical-align: middle !important;
+        }
+
+        .signatory-section strong {
+            font-size: 11px;
+        }
+
+        .signatory-section td:nth-child(3),
+        .signatory-section td:nth-child(4),
+        .signatory-section td:nth-child(5),
+        .signatory-section td:nth-child(6),
+        .signatory-section td:nth-child(7),
+        .signatory-section td:nth-child(8) {
+            width: 12.5%;
+        }
+
+        .action-buttons {
+            position: fixed;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1000;
+        }
+
+        .action-buttons .btn {
+            width: 50px;
+            height: 50px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+                font-size: 10px;
+            }
+
+            .no-print {
+                display: none;
+            }
+
+            .card {
+                width: 8.5in;
+                min-height: 13in;
+                border: none;
+                box-shadow: none;
+                padding: 0.4in;
+            }
+
+            .ris-copy {
+                page-break-after: always;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .action-buttons {
+                display: none !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .action-buttons {
+                position: relative;
+                left: 0;
+                top: 0;
+                transform: none;
+                display: flex;
+                justify-content: center;
+                margin-bottom: 20px;
+            }
+            
+            .action-buttons .btn {
+                margin: 0 5px;
+            }
+            
+            .container-fluid {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Action Buttons - Fixed on the left side -->
+<div class="action-buttons no-print">
+    <!-- Print Button -->
+    <button onclick="window.print()"
+        class="btn btn-outline-primary rounded-circle shadow-sm"
+        title="Print">
+        <i class="fa-solid fa-print"></i>
+    </button>
+
+    <!-- Excel Export Button -->
+  <a href="export_ris_excel.php?ris_no=<?php echo $request_id; ?>" 
+   class="btn btn-outline-success rounded-circle shadow-sm"
+   title="Export to Excel">
+    <i class="fa-solid fa-file-excel"></i>
+</a>
 
 
+    <!-- Word Export Button -->
+    <button onclick="exportToWord()"
+        class="btn btn-outline-info rounded-circle shadow-sm"
+        title="Export to Word">
+        <i class="fa-solid fa-file-word"></i>
+    </button>
 
-    <!-- Main Form -->
-    <div class="row flex-grow-1">
-        <div class="col-md-10 mx-auto">
+    <!-- Back Button -->
+    <a href="logs.php"
+        class="btn btn-outline-secondary rounded-circle shadow-sm"
+        title="Back">
+        <i class="fa-solid fa-arrow-left"></i>
+    </a>
+</div>
+
+<!-- Main Form -->
+<div class="container-fluid my-2">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
 
             <div class="card shadow-sm border-light 
                   <?php echo $is_dark ? 'bg-dark text-light' : 'bg-white text-dark'; ?>">
@@ -330,18 +398,20 @@ $is_dark = isset($_SESSION['dark_mode']) && $_SESSION['dark_mode'];
                                 </thead>
 
                                 <tbody>
-                                    <?php foreach ($items as $item):
-                                        $stock_available = isset($item['current_stock']) ? ($item['qty'] <= $item['current_stock']) : true;
-                                    ?>
+                                    <?php foreach ($items as $index => $item): ?>
                                         <tr class="text-center">
                                             <td><?php echo (int)$item['stock_card']; ?></td>
-                                            <td><?php echo remove_junk($item['unit']); ?></td> <!-- Direct from request_items -->
+                                            <td><?php echo remove_junk($item['unit']); ?></td>
                                             <td><?php echo remove_junk($item['item_name']); ?></td>
                                             <td><?php echo (float)$item['qty']; ?></td>
-                                            <td><?php echo $stock_available ? '✔' : ''; ?></td>
-                                            <td><?php echo !$stock_available ? '✔' : ''; ?></td>
-                                            <td><?php echo (float)$item['qty']; ?></td>
-                                            <td><?php echo remove_junk($item['remarks']); ?></td>
+                                            <td><?php echo $all_items_available ? '✔' : ''; ?></td>
+                                            <td><?php echo !$all_items_available ? '✔' : ''; ?></td>
+                                            <td><?php echo $all_items_available ? (float)$item['qty'] : '0'; ?></td>
+                                            <td>
+                                                <?php if ($index === 0 && !empty($request_remarks)): ?>
+                                                    <?php echo remove_junk($request_remarks); ?>
+                                                <?php endif; ?>
+                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
 
@@ -406,8 +476,12 @@ $is_dark = isset($_SESSION['dark_mode']) && $_SESSION['dark_mode'];
                         </div>
                     <?php endfor; ?>
                 </div>
-
             </div>
         </div>
     </div>
 </div>
+
+
+
+</body>
+</html>

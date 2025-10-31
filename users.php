@@ -23,7 +23,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_offices' && isset($_GET['
 $all_users = find_all_user();
 
 // Fetch departments and roles
-$departments = find_all('departments');
 $roles = find_all('user_groups');
 // Fetch divisions and offices
 $divisions = find_all('divisions');
@@ -34,7 +33,6 @@ if(isset($_POST['add_user'])){
     $name = $db->escape($_POST['name']);
     $username = $db->escape($_POST['username']);
     $password = $db->escape($_POST['password']);
-    $dep_id = (int)$db->escape($_POST['dep_id']); // matches your form
     $pos = $db->escape($_POST['position']);
     $role_id = (int)$db->escape($_POST['role_id']);
     $status = isset($_POST['status']) ? 1 : 0;
@@ -51,8 +49,8 @@ if(isset($_POST['add_user'])){
             $user_level = (int)$group['group_level'];
             $password_hash = sha1($password);
 
-          $sql = "INSERT INTO users (name, username, password, department, division, office, position, user_level, status)
-        VALUES ('{$name}', '{$username}', '{$password_hash}', '{$dep_id}', '{$db->escape($_POST['division'])}', '{$db->escape($_POST['office'])}', '{$pos}', '{$user_level}', '{$status}')";
+          $sql = "INSERT INTO users (name, username, password,  division, office, position, user_level, status)
+        VALUES ('{$name}', '{$username}', '{$password_hash}', '{$db->escape($_POST['division'])}', '{$db->escape($_POST['office'])}', '{$pos}', '{$user_level}', '{$status}')";
 
 
             if($db->query($sql)){
@@ -166,13 +164,7 @@ if (!empty($msg) && is_array($msg)):
     <div class="col-sm-6"> 
         <!-- <h3 class="mb-0">Manage Users</h3>  -->
     </div> 
-    <div class="col-sm-6"> 
-        <ol class="breadcrumb float-sm-right"> 
-            <li class="breadcrumb-item"><a href="admin.php">Home</a></li> 
-            <li class="breadcrumb-item active" aria-current="page"> Manage User</li> 
-        </ol> 
-    </div> 
-</div>
+   
 
 <!-- Search and Add User Section -->
 <div class="row mb-3 align-items-center">
@@ -249,15 +241,7 @@ if (!empty($msg) && is_array($msg)):
     </div>
 
     <div class="row">
-      <div class="col-md-6 mb-3">
-        <label for="dep_id" class="form-label">Department</label>
-        <select name="dep_id" id="dep_id" class="form-select" required>
-          <option value="">Select Department</option>
-          <?php foreach($departments as $dep): ?>
-            <option value="<?php echo (int)$dep['id']; ?>"><?php echo remove_junk($dep['department']); ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
+
       <div class="col-md-6 mb-3">
         <label for="role_id" class="form-label">Role</label>
         <select name="role_id" id="role_id" class="form-select" required>

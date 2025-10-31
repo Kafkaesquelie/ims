@@ -385,7 +385,7 @@ if (!empty($msg) && is_array($msg)):
           </thead>
           <tbody>
             <?php foreach($all_items as $it): ?>
-            <tr <?= $it['quantity'] == 0 ? 'class="table-secondary"' : '' ?>>
+            <tr <?= $it['quantity'] == 0 ? 'class="table-danger"' : '' ?>>
               <td><?= htmlspecialchars($it['stock_card']); ?></td>         
               <td>
                 <strong><?= htmlspecialchars($it['name']); ?></strong><br>

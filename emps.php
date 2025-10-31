@@ -3,7 +3,7 @@ $page_title = 'Employees';
 require_once('includes/load.php');
 page_require_level(2);
 
-//  Handle AJAX request for offices by division
+// Handle AJAX request for offices by division
 if (isset($_GET['action']) && $_GET['action'] === 'get_offices' && isset($_GET['division_id'])) {
     $division_id = (int)$_GET['division_id'];
     $sql = "SELECT id, office_name FROM offices WHERE division_id = '{$division_id}' ORDER BY office_name ASC";
@@ -15,7 +15,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_offices' && isset($_GET['
     echo json_encode($offices);
     exit;
 }
-
 
 // Fetch employees
 $employees = find_by_sql("
@@ -29,18 +28,16 @@ $employees = find_by_sql("
     ORDER BY e.id ASC
 ");
 
-
 // Handle Add Employee form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     $user_id     = $db->escape($_POST['user_id']);
     $first_name  = $db->escape($_POST['first_name']);
     $last_name   = $db->escape($_POST['last_name']);
     $middle_name = $db->escape($_POST['middle_name']);
-    $designation = $db->escape($_POST['position']);
+    $position    = $db->escape($_POST['position']);
     $division    = $db->escape($_POST['division']);
     $office      = $db->escape($_POST['office']);
     $status      = $db->escape($_POST['status']);
-
 
     // Handle file upload
     $image_name = '';
@@ -54,11 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
         move_uploaded_file($_FILES["image"]["tmp_name"], $target_file);
     }
 
-  $query  = "INSERT INTO employees 
-(user_id, first_name, last_name, middle_name, position, division, office, status, image, created_at, updated_at) 
-VALUES 
-('{$user_id}', '{$first_name}', '{$last_name}', '{$middle_name}', '{$designation}', '{$division}', '{$office}', '{$department}', '{$status}', '{$image_name}', NOW(), NOW())";
-
+    $query  = "INSERT INTO employees 
+    (user_id, first_name, last_name, middle_name, position, division, office, status, image, created_at, updated_at) 
+    VALUES 
+    ('{$user_id}', '{$first_name}', '{$last_name}', '{$middle_name}', '{$position}', '{$division}', '{$office}', '{$status}', '{$image_name}', NOW(), NOW())";
 
     if ($db->query($query)) {
         $session->msg("s","Employee added successfully.");
@@ -68,7 +64,6 @@ VALUES
 
     redirect('emps.php', false);
 }
-
 ?>
 
 <?php include_once('layouts/header.php'); 
@@ -111,6 +106,96 @@ if (!empty($msg) && is_array($msg)):
     transform: translateY(-50%);
     color: var(--secondary);
   }
+
+  .profile-image-container {
+    text-align: center;
+    padding: 20px;
+    border-right: 2px solid #e9ecef;
+    background: #f8f9fa;
+    border-radius: 10px 0 0 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+  }
+
+  .profile-image-preview {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 5px solid #28a745;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #6c757d;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .profile-image-preview.has-image {
+    background: #fff;
+  }
+
+  .profile-upload-btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+    width: 100%;
+    max-width: 200px;
+  }
+
+  .profile-upload-btn input[type="file"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+
+  .form-content {
+    padding: 20px;
+  }
+
+  .form-section {
+    margin-bottom: 25px;
+  }
+
+  .form-section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #28a745;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #28a745;
+  }
+
+  .no-image-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  .no-image-placeholder i {
+    font-size: 48px;
+    color: #6c757d;
+    margin-bottom: 10px;
+  }
+
+  .no-image-placeholder span {
+    font-size: 14px;
+    color: #6c757d;
+    text-align: center;
+  }
 </style>
 
 <div class="container-fluid mt-3">
@@ -125,7 +210,6 @@ if (!empty($msg) && is_array($msg)):
     <i class="fa-solid fa-user-plus"></i> Add Employee
   </button>
 </div>
-
 
   <!-- Employees Table -->
   <div id="employeeTableWrapper" class="card" style="border-top: 5px solid #28a745; border-radius: 10px;">
@@ -143,8 +227,8 @@ if (!empty($msg) && is_array($msg)):
             <th>Middle Name</th>
             <th>Designation</th>
             <th>Division</th>
+            <th>Office</th>
             <th>Status</th>
-            
             <th style="width: 120px;">Actions</th>
           </tr>
         </thead>
@@ -153,8 +237,15 @@ if (!empty($msg) && is_array($msg)):
             <tr>
               <td><?php echo $emp['user_id']; ?></td>
               <td class="text-center">
-                <img src="uploads/users/<?php echo !empty($emp['image']) ? $emp['image'] : 'no_image.jpg'; ?>" 
-                     class="img-thumbnail" style="width:60px;height:60px;border-radius:50%">
+                <?php if (!empty($emp['image']) && file_exists('uploads/users/' . $emp['image'])): ?>
+                  <img src="uploads/users/<?php echo $emp['image']; ?>" 
+                       class="img-thumbnail" style="width:60px;height:60px;border-radius:50%">
+                <?php else: ?>
+                  <div class="img-thumbnail d-inline-flex align-items-center justify-content-center" 
+                       style="width:60px;height:60px;border-radius:50%; background:#f8f9fa; border:1px solid #dee2e6;">
+                    <i class="fa-solid fa-user text-muted"></i>
+                  </div>
+                <?php endif; ?>
               </td>
               <td><?php echo $emp['first_name']; ?></td>
               <td><?php echo $emp['last_name']; ?></td>
@@ -184,93 +275,130 @@ if (!empty($msg) && is_array($msg)):
     <h3 class="card-title text-success"><i class="fa-solid fa-user-plus"></i> Add New Employee</h3>
   </div>
   <form action="" method="POST" enctype="multipart/form-data">
-    <div class="row p-3">
-
-      <div class="col-md-4 mb-3">
-        <label>First Name</label>
-        <input type="text" name="first_name" class="form-control" required>
-      </div>
-      <div class="col-md-4 mb-3">
-        <label>Last Name</label>
-        <input type="text" name="last_name" class="form-control" required>
-      </div>
-      <div class="col-md-4 mb-3">
-        <label>Middle Name</label>
-        <input type="text" name="middle_name" class="form-control">
-      </div>
-
-      <div class="col-md-3 mb-3">
-        <label>User ID</label>
-        <input type="number" name="user_id" class="form-control">
-      </div>
-
-      <div class="col-md-3 mb-3">
-        <label>Designation</label>
-        <input type="text" name="designation" class="form-control" required>
+    <div class="row no-gutters">
+      <!-- Profile Image Section - Left Side -->
+      <div class="col-md-3">
+        <div class="profile-image-container">
+          <div id="imagePreview" class="profile-image-preview">
+            <div class="no-image-placeholder">
+              <i class="fa-solid fa-user"></i>
+              <span>No Image Selected</span>
+            </div>
+          </div>
+          <div class="profile-upload-btn">
+            <button type="button" class="btn btn-outline-success btn-block">
+              <i class="fa-solid fa-camera"></i> Choose Profile Image
+            </button>
+            <input type="file" name="image" id="imageInput" accept="image/*">
+          </div>
+          <small class="text-muted mt-2 d-block">Recommended: 200x200px, JPG/PNG</small>
+        </div>
       </div>
 
-      <!-- Division Dropdown -->
-      <div class="col-md-3 mb-3">
-        <label>Division</label>
-        <select name="division" class="form-control"  id="divisionSelect">
-          <option value="">Select Division</option>
-          <?php
-            $divisions = find_by_sql("SELECT id, division_name FROM divisions ORDER BY division_name ASC");
-            foreach ($divisions as $div):
-          ?>
-            <option value="<?php echo $div['id']; ?>"><?php echo $div['division_name']; ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
+      <!-- Form Fields Section - Right Side -->
+      <div class="col-md-9">
+        <div class="form-content">
+          <!-- Personal Information Section -->
+          <div class="form-section">
+            <div class="form-section-title">
+              <i class="fa-solid fa-user"></i> Personal Information
+            </div>
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label">First Name <span class="text-danger">*</span></label>
+                <input type="text" name="first_name" class="form-control" required>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                <input type="text" name="last_name" class="form-control" required>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Middle Name</label>
+                <input type="text" name="middle_name" class="form-control">
+              </div>
+            </div>
+          </div>
 
-      <!-- Office Dropdown -->
-      <div class="col-md-3 mb-3">
-        <label>Office</label>
-        <select name="office" class="form-control"  id="officeSelect">
-          <option value="">Select Office</option>
-          <?php
-            $offices = find_by_sql("SELECT id, office_name FROM offices ORDER BY office_name ASC");
-            foreach ($offices as $off):
-          ?>
-            <option value="<?php echo $off['id']; ?>"><?php echo $off['office_name']; ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
+          <!-- Employment Details Section -->
+          <div class="form-section">
+            <div class="form-section-title">
+              <i class="fa-solid fa-briefcase"></i> Employment Details
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">User ID</label>
+                <input type="number" name="user_id" class="form-control" placeholder="Enter user ID">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Designation <span class="text-danger">*</span></label>
+                <input type="text" name="position" class="form-control" required placeholder="Enter designation">
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Division <span class="text-danger">*</span></label>
+                <select name="division" class="form-control" id="divisionSelect" required>
+                  <option value="">Select Division</option>
+                  <?php
+                    $divisions = find_by_sql("SELECT id, division_name FROM divisions ORDER BY division_name ASC");
+                    foreach ($divisions as $div):
+                  ?>
+                    <option value="<?php echo $div['id']; ?>"><?php echo $div['division_name']; ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Office <span class="text-danger">*</span></label>
+                <select name="office" class="form-control" id="officeSelect" required>
+                  <option value="">Select Office</option>
+                  <?php
+                    $offices = find_by_sql("SELECT id, office_name FROM offices ORDER BY office_name ASC");
+                    foreach ($offices as $off):
+                  ?>
+                    <option value="<?php echo $off['id']; ?>"><?php echo $off['office_name']; ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+          </div>
 
-      <!-- Department Dropdown -->
-      <div class="col-md-4 mb-3">
-        <label>Department</label>
-        <select name="department" class="form-control" required>
-          <option value="">Select Department</option>
-          <?php foreach ($departments as $dept): ?>
-            <option value="<?php echo $dept['dpt']; ?>"><?php echo $dept['dpt']; ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
+          <!-- Status Section -->
+          <div class="form-section">
+            <div class="form-section-title">
+              <i class="fa-solid fa-circle-info"></i> Status Information
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Employment Status <span class="text-danger">*</span></label>
+                <select name="status" class="form-control" required>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+          </div>
 
-      <div class="col-md-4 mb-3">
-        <label>Status</label>
-        <select name="status" class="form-control" required>
-          <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
-        </select>
-      </div>
-
-      <div class="col-md-4 mb-3">
-        <label>Image</label>
-        <input type="file" name="image" class="form-control">
-      </div>
-
-      <div class="col-md-12 mt-3">
-        <button type="submit" class="btn btn-success">Save Employee</button>
-        <button type="button" id="btnCancel" class="btn btn-secondary ml-3">Cancel</button>
+          <!-- Action Buttons -->
+          <div class="form-section">
+            <div class="row">
+              <div class="col-md-12">
+                <button type="submit" class="btn btn-success btn-lg">
+                  <i class="fa-solid fa-floppy-disk"></i> Save Employee
+                </button>
+                <button type="button" id="btnCancel" class="btn btn-secondary btn-lg ml-3">
+                  <i class="fa-solid fa-times"></i> Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </form>
 </div>
 
 </div>
-
+<?php include_once('layouts/footer.php'); ?>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
@@ -278,7 +406,43 @@ document.addEventListener("DOMContentLoaded", function() {
   const cancelBtn = document.getElementById('btnCancel');
   const addForm = document.getElementById('addEmployeeForm');
   const tableWrapper = document.getElementById('employeeTableWrapper');
+  const imageInput = document.getElementById('imageInput');
+  const imagePreview = document.getElementById('imagePreview');
 
+  // Image preview functionality
+  imageInput.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        // Create image element and replace the placeholder
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.className = 'profile-image-preview has-image';
+        img.alt = 'Profile Preview';
+        img.style.objectFit = 'cover';
+        imagePreview.innerHTML = '';
+        imagePreview.appendChild(img);
+      }
+      reader.readAsDataURL(file);
+    } else {
+      // Reset to placeholder if no file selected
+      resetImagePreview();
+    }
+  });
+
+  // Function to reset image preview to placeholder
+  function resetImagePreview() {
+    imagePreview.innerHTML = `
+      <div class="no-image-placeholder">
+        <i class="fa-solid fa-user"></i>
+        <span>No Image Selected</span>
+      </div>
+    `;
+    imagePreview.className = 'profile-image-preview';
+  }
+
+  // Show/hide form
   addBtn.addEventListener('click', () => {
     addForm.style.display = 'block';
     tableWrapper.style.display = 'none';
@@ -289,6 +453,9 @@ document.addEventListener("DOMContentLoaded", function() {
     addForm.style.display = 'none';
     tableWrapper.style.display = 'block';
     addBtn.style.display = 'inline-block';
+    // Reset form and image preview
+    document.querySelector('form').reset();
+    resetImagePreview();
   });
 });
 </script>
@@ -352,7 +519,7 @@ document.addEventListener("DOMContentLoaded", function() {
           officeSelect.innerHTML = '<option value="">Select Office</option>';
           data.forEach(office => {
             const option = document.createElement('option');
-            option.value = office.office_name; // you can also store office.id if you prefer
+            option.value = office.id;
             option.textContent = office.office_name;
             officeSelect.appendChild(option);
           });
@@ -366,6 +533,3 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 });
 </script>
-
-
-<?php include_once('layouts/footer.php'); ?>

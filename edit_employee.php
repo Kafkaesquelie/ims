@@ -45,7 +45,7 @@ if (isset($_POST['submit_image'])) {
 
 // ✅ Update employee info
 if (isset($_POST['update_employee'])) {
-    $req_fields = array('first_name','last_name','position','department','division','office','status');
+    $req_fields = array('first_name','last_name','position','division','office','status');
     validate_fields($req_fields);
 
     if (empty($errors)) {
@@ -54,7 +54,6 @@ if (isset($_POST['update_employee'])) {
         $last_name   = remove_junk($db->escape($_POST['last_name']));
         $middle_name = remove_junk($db->escape($_POST['middle_name']));
         $designation = remove_junk($db->escape($_POST['position']));
-        $department  = remove_junk($db->escape($_POST['department']));
         $division    = remove_junk($db->escape($_POST['division']));
         $office      = remove_junk($db->escape($_POST['office']));
         $status      = remove_junk($db->escape($_POST['status']));
@@ -64,7 +63,6 @@ if (isset($_POST['update_employee'])) {
                     last_name='{$last_name}', 
                     middle_name='{$middle_name}', 
                     position='{$designation}', 
-                    department='{$department}',
                     division='{$division}', 
                     office='{$office}', 
                     status='{$status}', 
@@ -137,28 +135,17 @@ if (isset($_POST['update_employee'])) {
               </div>
 
               <div class="row mt-3">
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <label>User ID</label>
                   <input type="number" name="user_id" class="form-control" 
                          value="<?php echo remove_junk($edit_emp['user_id']); ?>">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <label>Designation</label>
                   <input type="text" name="position" class="form-control" 
                          value="<?php echo remove_junk($edit_emp['position']); ?>" required>
                 </div>
-                <div class="col-md-4">
-                  <label>Department</label>
-                  <select name="department" class="form-control" required>
-                    <option value="">-- Select Department --</option>
-                    <?php foreach ($departments as $dept): ?>
-                      <option value="<?php echo $dept['dpt']; ?>" 
-                        <?php if ($edit_emp['department'] == $dept['dpt']) echo 'selected'; ?>>
-                        <?php echo $dept['dpt']; ?>
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
-                </div>
+           
               </div>
 
               <div class="row mt-3">

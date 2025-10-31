@@ -521,7 +521,7 @@ $user_levels = [
 </div>
 
 <!-- System Management Section -->
-<div class="row mt-4">
+<!-- <div class="row mt-4">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
@@ -566,7 +566,7 @@ $user_levels = [
             </div>
         </div>
     </div>
-</div>
+</div> -->
 
 <!-- DataTables JS -->
 <script>

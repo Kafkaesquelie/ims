@@ -115,6 +115,11 @@ function is_ris_no_duplicate($ris_no)
     return $db->num_rows($result) > 0;
 }
 
+// Get current year and admin-set middle part
+$current_year = date("Y");
+// Get admin-set middle part from settings or use default
+$admin_middle = '0000'; // Default, will be updated via AJAX
+
 // ---------- Form submission handling ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     global $db;
@@ -149,7 +154,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $db->query("START TRANSACTION");
-    $ris_no = date("Y-m-") . remove_junk($db->escape($_POST['ris_no'] ?? '0000'));
+    
+    // Get RIS number parts
+    $year_part = $_POST['ris_year'] ?? $current_year;
+    $middle_part = $_POST['ris_middle'] ?? '0000';
+    $employee_part = $_POST['ris_employee'] ?? '0000';
+    
+    // Build complete RIS number
+    $ris_no = $year_part . '-' . $middle_part . '-' . $employee_part;
 
     $query_request = "INSERT INTO requests (requested_by, date, status, ris_no)
                       VALUES ('{$rid}', NOW(), 'Pending', '{$ris_no}')";
@@ -470,11 +482,6 @@ foreach ($all_items as &$item) {
         margin-bottom: 20px;
     }
 
-    .is-valid {
-        border-color: #28a745 !important;
-        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
-    }
-
     .is-invalid {
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
@@ -489,11 +496,18 @@ foreach ($all_items as &$item) {
     }
 
     /* RIS number field specific styling */
-    #risNoField {
-        transition: all 0.3s ease;
+    .ris-input {
+        text-align: center;
+        font-weight: bold;
+        letter-spacing: 1px;
     }
 
-    /* RIS number container styling for proper error message placement */
+    .ris-separator {
+        font-weight: bold;
+        color: #006205;
+        margin: 0 5px;
+    }
+
     .ris-container {
         position: relative;
     }
@@ -565,6 +579,28 @@ foreach ($all_items as &$item) {
         background-color: #28a745;
         color: white;
     }
+
+    /* RIS number display styling */
+    .ris-display {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .ris-part {
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+        min-width: 80px;
+        text-align: center;
+    }
+
+    .ris-part.editable {
+        background-color: white;
+        border-color: #006205;
+    }
 </style>
 
 <!-- Header Card -->
@@ -585,6 +621,10 @@ foreach ($all_items as &$item) {
 </div>
 
 <form id="requestForm" method="post" action="">
+    <!-- Hidden fields for RIS number parts -->
+    <input type="hidden" name="ris_year" id="risYear" value="<?= $current_year ?>">
+    <input type="hidden" name="ris_middle" id="risMiddle" value="">
+    <input type="hidden" name="ris_employee" id="risEmployee" value="">
 
     <!-- Requestor Information Card -->
     <div class="card">
@@ -592,12 +632,6 @@ foreach ($all_items as &$item) {
             <i class="fas fa-user me-2"></i> Requestor Information
         </div>
         <div class="card-body">
-            <?php
-            $year = date("Y");
-            $month = date("m");
-            $ris_prefix = $year . '-' . $month . '-';
-            ?>
-
             <!-- Labels Row -->
             <div class="row mb-1 text-muted fw-bold">
                 <div class="col-md-4">Requestor's Name:</div>
@@ -618,7 +652,7 @@ foreach ($all_items as &$item) {
                             $val = $req['source'] . '_' . $req['id'];
                             $sel = ($val === $default_selected) ? 'selected' : '';
                         ?>
-                            <option value="<?= $val; ?>" <?= $sel; ?>>
+                            <option value="<?= $val; ?>" <?= $sel; ?> data-employee-id="<?= $req['id']; ?>">
                                 <?= htmlspecialchars($req['full_name']); ?>
                             </option>
                         <?php endforeach; ?>
@@ -636,13 +670,28 @@ foreach ($all_items as &$item) {
                 <!-- RIS No -->
                 <div class="col-md-4">
                     <div class="ris-container position-relative">
-                        <div class="d-flex align-items-center">
-                            <span class="me-1 text-success fw-bold" style="margin-left:10px"><?= $ris_prefix; ?></span>
-                            <input type="number" name="ris_no" id="risNoField"
-                                class="form-control text-success border-success"
-                                placeholder="0000"
+                        <div class="ris-display">
+                            <!-- Year Part (Fixed) -->
+                            <div class="ris-part">
+                                <?= $current_year ?>
+                            </div>
+                            <span class="ris-separator">-</span>
+                            
+                            <!-- Middle Part (Editable) -->
+                            <input type="text" 
+                                name="ris_middle_input" 
+                                id="risMiddleInput"
+                                class="form-control ris-input ris-part editable border-success"
                                 maxlength="4"
-                                style="background: transparent; width: 50%;" required>
+                                placeholder="0000"
+                                style="width: 80px;"
+                                required>
+                            <span class="ris-separator">-</span>
+                            
+                            <!-- Employee Part (Auto-filled) -->
+                            <div class="ris-part" id="risEmployeeDisplay">
+                                0000
+                            </div>
                         </div>
                         <!-- Error message will be inserted here by JavaScript -->
                     </div>
@@ -706,7 +755,6 @@ foreach ($all_items as &$item) {
                                     </td>
                                     <td>
                                         <strong><?= htmlspecialchars($it['name']); ?></strong>
-                                        <span class="stock-indicator <?= $indicator_class ?>"><?= $indicator_text ?></span>
                                         <br>
                                         <small class="text-muted"><?= htmlspecialchars($it['cat_name']); ?></small>
                                     </td>
@@ -813,21 +861,55 @@ foreach ($all_items as &$item) {
         </div>
     </div>
 </div>
+<?php include_once('layouts/footer.php'); ?>
 
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
 <script>
     // Pass PHP requestors to JS
     const requestors = <?= json_encode($requestors); ?>;
     const defaultSelected = "<?= $default_selected; ?>";
+    const currentYear = "<?= $current_year; ?>";
+
+    // Initialize DataTable
+    $(document).ready(function() {
+        $('#itemsTable').DataTable({
+            pageLength: 5,
+            lengthMenu: [5, 10, 25, 50],
+            ordering: true,
+            searching: true,
+            autoWidth: false,
+            fixedColumns: true,
+            language: {
+                search: "Search items:",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ items",
+                infoEmpty: "Showing 0 to 0 of 0 items",
+                infoFiltered: "(filtered from _MAX_ total items)"
+            }
+        });
+    });
 
     // Populate position field based on selected option
     function updatePositionFieldFromSelect() {
-        const sel = document.getElementById('requestorSelect').value;
-        const [source, idStr] = sel.split('_');
+        const sel = document.getElementById('requestorSelect');
+        const selectedOption = sel.options[sel.selectedIndex];
+        const employeeId = selectedOption.getAttribute('data-employee-id') || '0000';
+        
+        // Update employee part of RIS number
+        document.getElementById('risEmployeeDisplay').textContent = employeeId.padStart(4, '0');
+        document.getElementById('risEmployee').value = employeeId.padStart(4, '0');
+        
+        // Update position field
+        const [source, idStr] = sel.value.split('_');
         const id = parseInt(idStr || '0', 10);
         const found = requestors.find(r => r.source === source && parseInt(r.id, 10) === id);
         document.getElementById('positionField').value = found ? (found.position || '') : '';
+        
+        // Trigger RIS validation when requestor changes
+        validateRIS();
     }
 
     // Set initial position after page load / default
@@ -931,18 +1013,56 @@ foreach ($all_items as &$item) {
                 }
             });
         });
+
+        // RIS Middle Input validation - only numbers and max 4 digits
+        document.getElementById('risMiddleInput').addEventListener('input', function() {
+            // Remove any non-digit characters
+            this.value = this.value.replace(/\D/g, '');
+            
+            // Limit to 4 digits
+            if (this.value.length > 4) {
+                this.value = this.value.slice(0, 4);
+            }
+            
+            // Update hidden field
+            document.getElementById('risMiddle').value = this.value.padStart(4, '0');
+            
+            // Real-time validation
+            validateRIS();
+        });
+
+        // Get admin-set middle part on page load
+        fetchAdminMiddlePart();
     });
+
+    // Fetch admin-set middle part from server
+    function fetchAdminMiddlePart() {
+        fetch('get_ris_mid.php')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.middlePart) {
+                    document.getElementById('risMiddleInput').value = data.middlePart;
+                    document.getElementById('risMiddle').value = data.middlePart.padStart(4, '0');
+                    // Validate after setting the middle part
+                    setTimeout(validateRIS, 100);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching RIS middle part:', error);
+                // Set default value if fetch fails
+                document.getElementById('risMiddleInput').value = '0001';
+                document.getElementById('risMiddle').value = '0001';
+                setTimeout(validateRIS, 100);
+            });
+    }
 
     // On change for requestor select
     document.getElementById('requestorSelect').addEventListener('change', updatePositionFieldFromSelect);
-
-    // Search filter for the items table
-    document.getElementById('searchInput').addEventListener('input', function() {
-        const filter = this.value.toLowerCase();
-        document.querySelectorAll('#itemsTable tbody tr').forEach(row => {
-            row.style.display = row.innerText.toLowerCase().includes(filter) ? '' : 'none';
-        });
-    });
 
     // Create (single) Bootstrap Modal instance and use it for show/hide
     let receiptModalEl = document.getElementById('receiptModal');
@@ -951,12 +1071,131 @@ foreach ($all_items as &$item) {
         receiptModal = new bootstrap.Modal(receiptModalEl);
     }
 
+    // Real-time RIS validation function
+    let risValidationTimeout;
+    function validateRIS() {
+        clearTimeout(risValidationTimeout);
+        
+        risValidationTimeout = setTimeout(() => {
+            const risMiddle = document.getElementById('risMiddleInput').value.trim();
+            const reviewBtn = document.getElementById('reviewBtn');
+            const risMiddleInput = document.getElementById('risMiddleInput');
+
+            // Remove previous validation states
+            risMiddleInput.classList.remove('is-invalid');
+            removeRISErrorMessage();
+
+            if (!risMiddle || risMiddle.length !== 4) {
+                // RIS middle part not complete
+                reviewBtn.disabled = true;
+                reviewBtn.title = 'Please enter a complete 4-digit RIS middle part';
+                reviewBtn.classList.add('disabled');
+                return;
+            }
+
+            // Build complete RIS number for validation
+            const yearPart = document.getElementById('risYear').value;
+            const middlePart = risMiddle.padStart(4, '0');
+            const employeePart = document.getElementById('risEmployee').value;
+            const fullRIS = yearPart + '-' + middlePart + '-' + employeePart;
+
+            // Check for duplicate RIS number
+            checkRISDuplicate(fullRIS, function(isDuplicate) {
+                if (isDuplicate) {
+                    risMiddleInput.classList.add('is-invalid');
+                    reviewBtn.disabled = true;
+                    reviewBtn.title = 'RIS number is already used. Please choose a different middle part.';
+                    reviewBtn.classList.add('disabled');
+                    showRISErrorMessage('RIS Number already used. Please choose a different number.');
+                } else {
+                    // REMOVED: No checkmark validation, just enable the button
+                    reviewBtn.disabled = false;
+                    reviewBtn.title = 'Review request';
+                    reviewBtn.classList.remove('disabled');
+                    removeRISErrorMessage(); // Remove any existing error messages
+                }
+            });
+        }, 500);
+    }
+
+    // RIS message handling functions
+    function removeRISErrorMessage() {
+        const risContainer = document.querySelector('.ris-container');
+        const existingError = risContainer.querySelector('.ris-error-message');
+        if (existingError) {
+            existingError.remove();
+        }
+    }
+
+    function showRISErrorMessage(message) {
+        removeRISErrorMessage();
+        const risContainer = document.querySelector('.ris-container');
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'ris-error-message invalid-feedback';
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        risContainer.appendChild(errorDiv);
+    }
+
     // Review button: build receipt HTML and show modal via the instance
     document.getElementById('reviewBtn').addEventListener('click', function() {
+        const risMiddle = document.getElementById('risMiddleInput').value.trim();
+        if (!risMiddle || risMiddle.length !== 4) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'RIS Number Required',
+                text: 'Please enter a complete 4-digit RIS middle part.',
+                confirmButtonColor: '#dc3545'
+            });
+            document.getElementById('risMiddleInput').focus();
+            return;
+        }
+
+        // Build complete RIS number for validation
+        const yearPart = document.getElementById('risYear').value;
+        const middlePart = risMiddle.padStart(4, '0');
+        const employeePart = document.getElementById('risEmployee').value;
+        const fullRIS = yearPart + '-' + middlePart + '-' + employeePart;
+
+        // Final validation before review
+        if (document.getElementById('risMiddleInput').classList.contains('is-invalid')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Duplicate RIS Number',
+                text: 'This RIS Number is already used. Please choose a different middle part.',
+                confirmButtonColor: '#dc3545'
+            });
+            document.getElementById('risMiddleInput').focus();
+            return;
+        }
+
+        // Check for duplicate RIS number one more time
+        checkRISDuplicate(fullRIS, function(isDuplicate) {
+            if (isDuplicate) {
+                document.getElementById('risMiddleInput').classList.add('is-invalid');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Duplicate RIS Number',
+                    text: 'This RIS Number is already used. Please choose a different middle part.',
+                    confirmButtonColor: '#dc3545'
+                });
+                document.getElementById('risMiddleInput').focus();
+                return;
+            }
+
+            // Proceed with review if not duplicate
+            proceedWithReview(fullRIS);
+        });
+    });
+
+    function proceedWithReview(fullRIS) {
         const rows = document.querySelectorAll('#itemsTable tbody tr');
         let receiptHTML = '<p><strong>Requestor:</strong> ' +
             document.getElementById('requestorSelect').selectedOptions[0].text +
             ' (' + document.getElementById('positionField').value + ')</p>';
+
+        // Add RIS number to receipt
+        receiptHTML += `<p><strong>RIS Number:</strong> ${fullRIS}</p>`;
 
         receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Stock Status</th></tr></thead><tbody>';
         let hasItem = false;
@@ -1013,11 +1252,45 @@ foreach ($all_items as &$item) {
 
         // Show modal
         if (receiptModal) receiptModal.show();
-    });
+    }
 
     // Final submit -> submit the form
     document.getElementById('finalSubmitBtn').addEventListener('click', function() {
-        document.getElementById('requestForm').submit();
+        const yearPart = document.getElementById('risYear').value;
+        const middlePart = document.getElementById('risMiddleInput').value.padStart(4, '0');
+        const employeePart = document.getElementById('risEmployee').value;
+        const fullRIS = yearPart + '-' + middlePart + '-' + employeePart;
+
+        // Final duplicate check before submission
+        checkRISDuplicate(fullRIS, function(isDuplicate) {
+            if (isDuplicate) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Duplicate RIS Number',
+                    text: 'This RIS Number is already used. Please choose a different middle part.',
+                    confirmButtonColor: '#dc3545'
+                });
+                if (receiptModal) receiptModal.hide();
+                document.getElementById('risMiddleInput').focus();
+                return;
+            }
+
+            // Show confirmation dialog
+            Swal.fire({
+                title: "Submit Request?",
+                text: "Do you want to finalize and send this request?",
+                icon: "question",
+                showCancelButton: true,
+                confirmButtonColor: "#28a745",
+                cancelButtonColor: "#6c757d",
+                confirmButtonText: "Yes, submit it",
+                cancelButtonText: "Cancel"
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('requestForm').submit();
+                }
+            });
+        });
     });
 
     // Fallback: ensure cancel and X buttons hide the modal
@@ -1033,150 +1306,12 @@ foreach ($all_items as &$item) {
             }
         });
     });
-</script>
 
-<?php include_once('layouts/footer.php'); ?>
-
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
-<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
-<script>
-    $(document).ready(function() {
-        var table = $('#itemsTable').DataTable({
-            pageLength: 5,
-            lengthMenu: [5, 10, 25, 50],
-            ordering: true,
-            searching: false,
-            autoWidth: true,
-        });
-        $('#searchInput').on('keyup', function() {
-            table.search(this.value).draw();
-        });
-    });
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const searchInput = document.getElementById("searchInput");
-        const table = document.getElementById("itemsTable");
-        const rows = table.getElementsByTagName("tr");
-
-        searchInput.addEventListener("keyup", function() {
-            const filter = this.value.toLowerCase();
-
-            // Loop through table rows (skip header)
-            for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].getElementsByTagName("td");
-                let match = false;
-
-                // Check every cell for a match
-                for (let j = 0; j < cells.length; j++) {
-                    const cellText = cells[j].textContent || cells[j].innerText;
-                    if (cellText.toLowerCase().indexOf(filter) > -1) {
-                        match = true;
-                        break;
-                    }
-                }
-
-                // Show or hide the row based on match
-                rows[i].style.display = match ? "" : "none";
-            }
-        });
-    });
-</script>
-
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.getElementById('finalSubmitBtn').addEventListener('click', function() {
-        Swal.fire({
-            title: "Submit Request?",
-            text: "Do you want to finalize and send this request?",
-            icon: "question",
-            showCancelButton: true,
-            confirmButtonColor: "#28a745",
-            cancelButtonColor: "#6c757d",
-            confirmButtonText: "Yes, submit it",
-            cancelButtonText: "Cancel"
-        }).then((result) => {
-            if (result.isConfirmed) {
-                document.getElementById('requestForm').submit();
-            }
-        });
-    });
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // Select all quantity input fields
-        document.querySelectorAll('.qty-input').forEach(input => {
-            // Listen for any change or typing
-            input.addEventListener('input', function() {
-                const max = parseFloat(this.max);
-                let val = parseFloat(this.value) || 0;
-                
-                // Ensure whole numbers only
-                if (!Number.isInteger(val)) {
-                    val = Math.floor(val);
-                    this.value = val;
-                }
-                
-                const unitSelect = document.querySelector(`select[name="unit_type[${this.dataset.itemid}]"]`);
-                const selectedUnit = unitSelect ? unitSelect.selectedOptions[0].text : '';
-                const conversion = parseFloat(this.dataset.conversion) || 1;
-                const mainUnit = this.dataset.mainunit;
-                const baseUnit = this.dataset.baseunit;
-
-                // If user input exceeds available quantity
-                if (val > max) {
-                    let availableText = '';
-                    if (selectedUnit === baseUnit && conversion > 1) {
-                        const availableMain = parseFloat(this.dataset.available) || 0;
-                        const fullMainUnits = Math.floor(availableMain);
-                        const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                        
-                        if (fullMainUnits > 0 && remainingBaseUnits > 0) {
-                            availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
-                        } else if (fullMainUnits > 0) {
-                            availableText = `${fullMainUnits} ${mainUnit}`;
-                        } else {
-                            availableText = `${remainingBaseUnits} ${baseUnit}`;
-                        }
-                    } else {
-                        const availableMain = parseFloat(this.dataset.available) || 0;
-                        const fullMainUnits = Math.floor(availableMain);
-                        const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                        
-                        if (fullMainUnits > 0 && remainingBaseUnits > 0) {
-                            availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
-                        } else if (fullMainUnits > 0) {
-                            availableText = `${fullMainUnits} ${mainUnit}`;
-                        } else {
-                            availableText = `${remainingBaseUnits} ${baseUnit}`;
-                        }
-                    }
-
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Quantity Exceeded',
-                        text: `Only ${availableText} available in stock.`,
-                        confirmButtonColor: '#28a745',
-                    });
-
-                    // Reset to maximum allowed
-                    this.value = Math.floor(max);
-                } else if (val < 0) {
-                    // prevent negative input
-                    this.value = 0;
-                }
-            });
-        });
-    });
-</script>
-
-<script>
+    // Clear form functionality
     document.getElementById('clearBtn').addEventListener('click', function() {
         Swal.fire({
             title: "Clear Form?",
-            text: "This will reset all quantities, requestor, and RIS number.",
+            text: "This will reset all quantities and RIS middle part.",
             icon: "warning",
             showCancelButton: true,
             confirmButtonColor: "#dc3545",
@@ -1185,12 +1320,11 @@ foreach ($all_items as &$item) {
             cancelButtonText: "Cancel"
         }).then((result) => {
             if (result.isConfirmed) {
-                // Reset requestor
-                document.getElementById('requestorSelect').value = "";
-                document.getElementById('positionField').value = "";
-
-                // Clear RIS number
-                document.getElementById('risNoField').value = "";
+                // Clear RIS middle part
+                document.getElementById('risMiddleInput').value = '';
+                document.getElementById('risMiddle').value = '';
+                document.getElementById('risMiddleInput').classList.remove('is-invalid');
+                removeRISErrorMessage();
 
                 // Reset all quantities
                 document.querySelectorAll('.qty-input').forEach(input => {
@@ -1202,6 +1336,15 @@ foreach ($all_items as &$item) {
                     select.selectedIndex = 0;
                 });
 
+                // Clear remarks
+                document.getElementById('remarksField').value = '';
+
+                // Close modal if open
+                if (receiptModal) receiptModal.hide();
+
+                // Re-fetch admin middle part
+                fetchAdminMiddlePart();
+
                 Swal.fire({
                     icon: 'success',
                     title: 'Form Cleared',
@@ -1211,408 +1354,28 @@ foreach ($all_items as &$item) {
             }
         });
     });
-</script>
-<script>
-    // Real-time RIS number duplicate checking
-    document.addEventListener('DOMContentLoaded', function() {
-        const risNoField = document.getElementById('risNoField');
-        const reviewBtn = document.getElementById('reviewBtn');
-        const risContainer = document.querySelector('.ris-container');
-        const risPrefix = "<?= date('Y-m-'); ?>";
-        let checkTimeout = null;
 
-        // Set max length to 4 for RIS number
-        risNoField.setAttribute('max', '9999');
-        risNoField.setAttribute('min', '0');
-
-        function updateReviewButtonState() {
-            const risNumber = risNoField.value.trim();
-
-            if (!risNumber) {
-                // No RIS number entered - disable button
-                reviewBtn.disabled = true;
-                reviewBtn.title = 'Please enter a RIS number';
-                reviewBtn.classList.add('disabled');
-                return;
+    // RIS duplicate checking function
+    function checkRISDuplicate(fullRIS, callback) {
+        fetch('check_ris_duplicate.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'ris_no=' + encodeURIComponent(fullRIS)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
             }
-
-            if (risNoField.classList.contains('is-invalid')) {
-                // RIS number is duplicate - disable button
-                reviewBtn.disabled = true;
-                reviewBtn.title = 'RIS number is already used. Please choose a different number.';
-                reviewBtn.classList.add('disabled');
-                return;
-            }
-
-            if (risNoField.classList.contains('is-valid')) {
-                // RIS number is valid and not duplicate - enable button
-                reviewBtn.disabled = false;
-                reviewBtn.title = 'Review request';
-                reviewBtn.classList.remove('disabled');
-                return;
-            }
-
-            // Default case - waiting for validation, disable button
-            reviewBtn.disabled = true;
-            reviewBtn.title = 'Validating RIS number...';
-            reviewBtn.classList.add('disabled');
-        }
-
-        // Initialize button state on page load
-        updateReviewButtonState();
-
-        // Check RIS number on input
-        risNoField.addEventListener('input', function() {
-            clearTimeout(checkTimeout);
-
-            // Limit input to 4 digits
-            if (this.value.length > 4) {
-                this.value = this.value.slice(0, 4);
-            }
-
-            const risNumber = this.value.trim();
-            if (!risNumber) {
-                this.classList.remove('is-invalid', 'is-valid');
-                removeErrorMessage();
-                updateReviewButtonState();
-                return;
-            }
-
-            // Update button state immediately
-            updateReviewButtonState();
-
-            // Debounce the duplicate check
-            checkTimeout = setTimeout(() => {
-                checkRISDuplicate(risNumber);
-            }, 500);
+            return response.json();
+        })
+        .then(data => {
+            callback(data.exists || false);
+        })
+        .catch(error => {
+            console.error('Error checking RIS number:', error);
+            callback(false); // Continue on error
         });
-
-        function removeErrorMessage() {
-            const existingError = risContainer.querySelector('.ris-error-message');
-            if (existingError) {
-                existingError.remove();
-            }
-        }
-
-        function showErrorMessage(message) {
-            removeErrorMessage();
-
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'ris-error-message invalid-feedback';
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-
-            risContainer.appendChild(errorDiv);
-        }
-
-        function showSuccessMessage(message) {
-            // Remove any existing messages
-            removeErrorMessage();
-
-            const successDiv = document.createElement('div');
-            successDiv.className = 'ris-error-message valid-feedback';
-            successDiv.textContent = message;
-            successDiv.style.display = 'block';
-            successDiv.style.color = '#28a745';
-
-            risContainer.appendChild(successDiv);
-        }
-
-        function checkRISDuplicate(risNumber) {
-            const fullRIS = risPrefix + risNumber;
-
-            fetch('check_ris_duplicate.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'ris_no=' + encodeURIComponent(fullRIS)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.exists) {
-                        risNoField.classList.add('is-invalid');
-                        risNoField.classList.remove('is-valid');
-                        showErrorMessage('RIS Number already used. Please choose a different number.');
-                    } else {
-                        risNoField.classList.add('is-valid');
-                        risNoField.classList.remove('is-invalid');
-                        removeErrorMessage();
-                        showSuccessMessage('RIS Number is available');
-                        
-                        // Auto-remove success message after 2 seconds
-                        setTimeout(() => {
-                            removeErrorMessage();
-                        }, 2000);
-                    }
-                    updateReviewButtonState();
-                })
-                .catch(error => {
-                    console.error('Error checking RIS number:', error);
-                    // On error, remove validation states
-                    risNoField.classList.remove('is-invalid', 'is-valid');
-                    removeErrorMessage();
-                    updateReviewButtonState();
-                });
-        }
-
-        function closeModalIfOpen() {
-            if (receiptModal && document.getElementById('receiptModal').classList.contains('show')) {
-                receiptModal.hide();
-            }
-        }
-
-        // Also check on form review to prevent submission of duplicate RIS
-        document.getElementById('reviewBtn').addEventListener('click', function(e) {
-            const risNumber = risNoField.value.trim();
-            if (!risNumber) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'RIS Number Required',
-                    text: 'Please enter a RIS number before reviewing.',
-                    confirmButtonColor: '#dc3545'
-                });
-                risNoField.focus();
-                e.preventDefault();
-                return;
-            }
-
-            const fullRIS = risPrefix + risNumber;
-
-            fetch('check_ris_duplicate.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'ris_no=' + encodeURIComponent(fullRIS)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.exists) {
-                        risNoField.classList.add('is-invalid');
-                        risNoField.classList.remove('is-valid');
-                        showErrorMessage('RIS Number already used. Please choose a different number.');
-
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Duplicate RIS Number',
-                            text: 'This RIS Number is already used. Please choose a different number.',
-                            confirmButtonColor: '#dc3545'
-                        });
-                        e.preventDefault();
-                        risNoField.focus();
-
-                        // Ensure modal is closed
-                        closeModalIfOpen();
-                    } else {
-                        // Show success message and proceed with review
-                        showSuccessMessage('RIS Number validated successfully!');
-                        // Continue with normal review process
-                        setTimeout(() => {
-                            proceedWithReview();
-                        }, 500);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error checking RIS number:', error);
-                    // Continue with review if check fails but show warning
-                    Swal.fire({
-                        title: 'Proceed with Review?',
-                        text: 'RIS number verification failed. Do you want to proceed anyway?',
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#28a745',
-                        cancelButtonColor: '#dc3545',
-                        confirmButtonText: 'Yes, proceed',
-                        cancelButtonText: 'Cancel'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            proceedWithReview();
-                        }
-                    });
-                });
-        });
-
-        function proceedWithReview() {
-            const rows = document.querySelectorAll('#itemsTable tbody tr');
-            let receiptHTML = '<p><strong>Requestor:</strong> ' +
-                document.getElementById('requestorSelect').selectedOptions[0].text +
-                ' (' + document.getElementById('positionField').value + ')</p>';
-
-            // Add RIS number to receipt
-            const risNumber = document.getElementById('risNoField').value.trim();
-            const fullRIS = risPrefix + risNumber;
-            receiptHTML += `<p><strong>RIS Number:</strong> ${fullRIS}</p>`;
-
-            receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Stock Status</th></tr></thead><tbody>';
-            let hasItem = false;
-
-            rows.forEach(row => {
-                const input = row.querySelector('input.qty-input');
-                const qty = parseFloat(input.value) || 0;
-                if (qty <= 0) return;
-
-                const itemId = input.dataset.itemid;
-                const itemName = row.cells[1].innerText.trim();
-                const available = row.cells[2].innerText.trim();
-                const unitSelect = row.querySelector('select[name^="unit_type"]');
-                const selectedUnit = unitSelect.selectedOptions[0].text;
-                
-                // Get stock status from the row class
-                let stockStatus = 'In Stock';
-                let statusClass = 'text-success';
-                if (row.classList.contains('table-out-of-stock')) {
-                    stockStatus = 'Out of Stock';
-                    statusClass = 'text-danger';
-                } else if (row.classList.contains('table-low-stock')) {
-                    stockStatus = 'Low Stock';
-                    statusClass = 'text-warning';
-                }
-
-                hasItem = true;
-
-                receiptHTML += `
-                <tr>
-                    <td>${itemName}</td>
-                    <td>${qty}</td>
-                    <td>${selectedUnit}</td>
-                    <td>${available}</td>
-                    <td class="${statusClass}"><strong>${stockStatus}</strong></td>
-                </tr>`;
-            });
-
-            receiptHTML += '</tbody></table>';
-
-            if (!hasItem) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'No items selected',
-                    text: 'Enter quantity greater than 0 for at least one item.'
-                });
-                return;
-            }
-
-            const remarks = document.querySelector('textarea[name="remarks"]').value.trim();
-            if (remarks) receiptHTML += `<p><strong>Remarks:</strong> ${remarks}</p>`;
-
-            document.getElementById('receiptBody').innerHTML = receiptHTML;
-
-            // Show modal
-            if (receiptModal) receiptModal.show();
-        }
-
-        // Clear form should also clear RIS validation
-        document.getElementById('clearBtn').addEventListener('click', function() {
-            risNoField.classList.remove('is-invalid', 'is-valid');
-            removeErrorMessage();
-            closeModalIfOpen();
-            updateReviewButtonState();
-        });
-
-        // Also check when modal final submit button is clicked (extra safety)
-        document.getElementById('finalSubmitBtn').addEventListener('click', function(e) {
-            const risNumber = risNoField.value.trim();
-            if (!risNumber) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'RIS Number Required',
-                    text: 'Please enter a RIS number before submitting.',
-                    confirmButtonColor: '#dc3545'
-                });
-                e.preventDefault();
-                closeModalIfOpen();
-                risNoField.focus();
-                return;
-            }
-
-            const fullRIS = risPrefix + risNumber;
-
-            fetch('check_ris_duplicate.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'ris_no=' + encodeURIComponent(fullRIS)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.exists) {
-                        risNoField.classList.add('is-invalid');
-                        risNoField.classList.remove('is-valid');
-                        showErrorMessage('RIS Number already used. Please choose a different number.');
-
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Duplicate RIS Number',
-                            text: 'This RIS Number is already used. Please choose a different number.',
-                            confirmButtonColor: '#dc3545'
-                        });
-
-                        e.preventDefault();
-                        closeModalIfOpen();
-                        risNoField.focus();
-                    } else {
-                        // Show success message before final submission
-                        showSuccessMessage('RIS Number validated! Submitting request...');
-                        
-                        // Proceed with the SweetAlert confirmation after a brief delay
-                        setTimeout(() => {
-                            Swal.fire({
-                                title: "Submit Request?",
-                                text: "Do you want to finalize and send this request?",
-                                icon: "question",
-                                showCancelButton: true,
-                                confirmButtonColor: "#28a745",
-                                cancelButtonColor: "#6c757d",
-                                confirmButtonText: "Yes, submit it",
-                                cancelButtonText: "Cancel"
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    // Show final success message before form submission
-                                    Swal.fire({
-                                        title: "Success!",
-                                        text: "Your request has been submitted successfully.",
-                                        icon: "success",
-                                        confirmButtonColor: "#28a745",
-                                        timer: 2000,
-                                        showConfirmButton: false
-                                    }).then(() => {
-                                        document.getElementById('requestForm').submit();
-                                    });
-                                }
-                            });
-                        }, 1000);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error checking RIS number:', error);
-                    // If check fails, still show confirmation but warn user
-                    Swal.fire({
-                        title: "Submit Request?",
-                        text: "Do you want to finalize and send this request? (RIS number verification failed)",
-                        icon: "warning",
-                        showCancelButton: true,
-                        confirmButtonColor: "#28a745",
-                        cancelButtonColor: "#6c757d",
-                        confirmButtonText: "Yes, submit it",
-                        cancelButtonText: "Cancel"
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            Swal.fire({
-                                title: "Success!",
-                                text: "Your request has been submitted successfully.",
-                                icon: "success",
-                                confirmButtonColor: "#28a745",
-                                timer: 2000,
-                                showConfirmButton: false
-                            }).then(() => {
-                                document.getElementById('requestForm').submit();
-                            });
-                        }
-                    });
-                });
-
-            e.preventDefault();
-        });
-    });
+    }
 </script>

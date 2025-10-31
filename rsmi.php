@@ -197,18 +197,26 @@ $serial_no_prefix = $year . '-' . $month . '-';
     gap: 10px;
     margin-top: 10px;
 }
+.card-header-custom {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    padding: 1.5rem;
+    border: none;
+}
+
+.card-header-custom h5 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.5rem;
+    text-align: center;
+}
 </style>
 
-<div class="card">
-    <div class="card shadow-sm border-0">
-        <div class="card-header" style="border-top: 5px solid #28a745; border-radius: 10px;">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                <h5 class="mb-2 mb-md-0 text-center" style="font-family: 'Times New Roman', serif;">
-                    <strong>REPORTS OF</strong>
-                </h5>
-            </div>
+     <div class="card">
+        <div class="card-header-custom">
+            <h5>REPORTS OF SUPPLIES AND MATERIALS ISSUED (RSMI)</h5>
         </div>
-    </div>
 
     <!-- Tabs Navigation -->
     <div class="tabs-container">
@@ -466,9 +474,7 @@ $serial_no_prefix = $year . '-' . $month . '-';
                 <i class="fa-solid fa-print"></i> Generate RSMI
             </button>
             
-            <button id="export-word" class="btn btn-export btn-block">
-                <i class="fa-solid fa-file-word"></i> Export to Word
-            </button>
+          
         </div>
     </div>
 </div>

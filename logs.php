@@ -6,52 +6,162 @@ page_require_level(1);
 // Fetch all approved/rejected requests
 $requests = find_all_req_logs();
 
-// Fetch and group ICS transactions by ICS number
+// Fetch and group ICS transactions by ICS number with proper status calculation
 $ics_grouped = [];
 $ics_transactions = find_all_ics_transactions();
 foreach ($ics_transactions as $ics) {
-  $ics_no = $ics['ics_no'];
-  if (!isset($ics_grouped[$ics_no])) {
-    $ics_grouped[$ics_no] = [
-      'ics_no' => $ics_no,
-      'employee_name' => $ics['employee_name'],
-      'department' => $ics['department'],
-      'image' => $ics['image'],
-      'transaction_date' => $ics['transaction_date'],
-      'items' => [],
-      'total_quantity' => 0,
-      'status' => $ics['status']
+    $ics_no = $ics['ics_no'];
+    if (!isset($ics_grouped[$ics_no])) {
+        $ics_grouped[$ics_no] = [
+            'ics_no' => $ics_no,
+            'employee_name' => $ics['employee_name'],
+            'department' => $ics['department'],
+            'image' => $ics['image'],
+            'transaction_date' => $ics['transaction_date'],
+            'items' => [],
+            'total_quantity' => 0,
+            'status' => $ics['status']
+        ];
+    }
+    $ics_grouped[$ics_no]['items'][] = [
+        'item_name' => $ics['item_name'],
+        'quantity' => $ics['quantity']
     ];
-  }
-  $ics_grouped[$ics_no]['items'][] = [
-    'item_name' => $ics['item_name'],
-    'quantity' => $ics['quantity']
-  ];
-  $ics_grouped[$ics_no]['total_quantity'] += $ics['quantity'];
+    $ics_grouped[$ics_no]['total_quantity'] += $ics['quantity'];
 }
 
-// Fetch and group PAR transactions by PAR number
+// Calculate document-level status for ICS
+foreach ($ics_grouped as &$ics_doc) {
+    $ics_doc['status'] = calculate_document_status($ics_doc['items'], $ics_doc['ics_no'], 'ics');
+}
+
+// Fetch and group PAR transactions by PAR number with proper status calculation
 $par_grouped = [];
 $par_transactions = find_all_par_transactions();
 foreach ($par_transactions as $par) {
-  $par_no = $par['par_no'];
-  if (!isset($par_grouped[$par_no])) {
-    $par_grouped[$par_no] = [
-      'par_no' => $par_no,
-      'employee_name' => $par['employee_name'],
-      'department' => $par['department'],
-      'image' => $par['image'],
-      'transaction_date' => $par['transaction_date'],
-      'items' => [],
-      'total_quantity' => 0,
-      'status' => $par['status']
+    $par_no = $par['par_no'];
+    if (!isset($par_grouped[$par_no])) {
+        $par_grouped[$par_no] = [
+            'par_no' => $par_no,
+            'employee_name' => $par['employee_name'],
+            'department' => $par['department'],
+            'image' => $par['image'],
+            'transaction_date' => $par['transaction_date'],
+            'items' => [],
+            'total_quantity' => 0,
+            'status' => $par['status']
+        ];
+    }
+    $par_grouped[$par_no]['items'][] = [
+        'item_name' => $par['item_name'],
+        'quantity' => $par['quantity']
     ];
-  }
-  $par_grouped[$par_no]['items'][] = [
-    'item_name' => $par['item_name'],
-    'quantity' => $par['quantity']
-  ];
-  $par_grouped[$par_no]['total_quantity'] += $par['quantity'];
+    $par_grouped[$par_no]['total_quantity'] += $par['quantity'];
+}
+
+// Calculate document-level status for PAR
+foreach ($par_grouped as &$par_doc) {
+    $par_doc['status'] = calculate_document_status($par_doc['items'], $par_doc['par_no'], 'par');
+}
+
+/**
+ * Calculate document status based on return status of all items
+ */
+function calculate_document_status($items, $doc_no, $doc_type) {
+    global $db;
+    
+    // Count total items and returned items
+    $total_items = count($items);
+    $returned_items = 0;
+    $partially_returned_items = 0;
+    
+    if ($doc_type === 'ics') {
+        // For ICS documents - check return_items table
+        $sql = "SELECT COUNT(DISTINCT t.item_id) as returned_count 
+                FROM return_items ri 
+                JOIN transactions t ON ri.transaction_id = t.id 
+                WHERE t.ICS_No = '{$doc_no}'";
+    } else {
+        // For PAR documents - check return_items table
+        $sql = "SELECT COUNT(DISTINCT t.properties_id) as returned_count 
+                FROM return_items ri 
+                JOIN transactions t ON ri.transaction_id = t.id 
+                WHERE t.PAR_No = '{$doc_no}'";
+    }
+    
+    $result = $db->query($sql);
+    $returned_count = 0;
+    if ($result && $db->num_rows($result) > 0) {
+        $data = $db->fetch_assoc($result);
+        $returned_count = $data['returned_count'];
+    }
+    
+    // Determine status based on returned items count
+    if ($returned_count == 0) {
+        return 'Issued';
+    } elseif ($returned_count > 0 && $returned_count < $total_items) {
+        return 'Partially Returned';
+    } else {
+        return 'Returned';
+    }
+}
+
+/**
+ * Alternative function to calculate status based on quantity returned
+ */
+function calculate_document_status_by_quantity($doc_no, $doc_type) {
+    global $db;
+    
+    if ($doc_type === 'ics') {
+        $sql = "SELECT 
+                    t.id,
+                    t.quantity as issued_qty,
+                    COALESCE(SUM(ri.qty), 0) as returned_qty
+                FROM transactions t
+                LEFT JOIN return_items ri ON t.id = ri.transaction_id
+                WHERE t.ICS_No = '{$doc_no}'
+                GROUP BY t.id";
+    } else {
+        $sql = "SELECT 
+                    t.id,
+                    t.quantity as issued_qty,
+                    COALESCE(SUM(ri.qty), 0) as returned_qty
+                FROM transactions t
+                LEFT JOIN return_items ri ON t.id = ri.transaction_id
+                WHERE t.PAR_No = '{$doc_no}'
+                GROUP BY t.id";
+    }
+    
+    $result = $db->query($sql);
+    $total_items = 0;
+    $fully_returned_items = 0;
+    $partially_returned_items = 0;
+    $not_returned_items = 0;
+    
+    if ($result && $db->num_rows($result) > 0) {
+        while ($data = $db->fetch_assoc($result)) {
+            $total_items++;
+            $issued_qty = $data['issued_qty'];
+            $returned_qty = $data['returned_qty'];
+            
+            if ($returned_qty >= $issued_qty) {
+                $fully_returned_items++;
+            } elseif ($returned_qty > 0) {
+                $partially_returned_items++;
+            } else {
+                $not_returned_items++;
+            }
+        }
+    }
+    
+    // Determine document status
+    if ($fully_returned_items == $total_items) {
+        return 'Returned';
+    } elseif ($fully_returned_items > 0 || $partially_returned_items > 0) {
+        return 'Partially Returned';
+    } else {
+        return 'Issued';
+    }
 }
 ?>
 
@@ -126,18 +236,14 @@ foreach ($par_transactions as $par) {
                   <?php endif; ?>
                 </td>
                 <td class="text-center">
-                  <a href="print_ris.php?id=<?php echo (int)$req['id']; ?>"
+                  <a href="ris_view.php?id=<?php echo (int)$req['id']; ?>"
                     class="btn btn-success btn-sm"
                     title="View Request">
                     <i class="fa fa-eye"></i>
                   </a>
-
-                  <a href="a_script.php?id=<?php echo (int)$req['id']; ?>"
-                    class="btn btn-danger btn-md archive-btn"
-                    data-id="<?php echo (int)$req['id']; ?>"
-                    data-ris="<?php echo remove_junk($req['ris_no']); ?>"
-                    title="Archive">
-                    <span><i class="fa-solid fa-file-zipper"></i></span>
+                  <a href="print_ris.php?ris_no=<?php echo (int)($req['id']); ?>"
+                    class="btn btn-primary btn-sm" title="Print RIS">
+                    <i class="fa-solid fa-print"></i> 
                   </a>
                 </td>
               </tr>
@@ -163,7 +269,7 @@ foreach ($par_transactions as $par) {
             <th>Profile</th>
             <th>Employee</th>
             <th>Office</th>
-            <th>Items</th>
+            <th>Item/s</th>
             <th>Total Qty</th>
             <th>Date Issued</th>
             <th>Status</th>
@@ -198,24 +304,26 @@ foreach ($par_transactions as $par) {
               </td>
               <td><?php echo date('M d, Y', strtotime($ics['transaction_date'])); ?></td>
               <td>
-                <?php if ($ics['status'] == 'Returned'): ?>
-                  <span class="badge bg-warning">Returned</span>
-                <?php elseif ($ics['status'] == 'Issued'): ?>
+                <?php 
+                $status = $ics['status'];
+                if ($status == 'Returned'): ?>
+                  <span class="badge bg-success">Returned</span>
+                <?php elseif ($status == 'Partially Returned'): ?>
+                  <span class="badge bg-warning">Partially Returned</span>
+                <?php elseif ($status == 'Issued'): ?>
                   <span class="badge bg-info">Issued</span>
-                <?php elseif ($ics['status'] == 'Re-issued'): ?>
+                <?php elseif ($status == 'Re-issued'): ?>
                   <span class="badge bg-primary">Re-issued</span>
                 <?php else: ?>
-                  <span class="badge bg-secondary"><?php echo ucfirst($ics['status']); ?></span>
+                  <span class="badge bg-secondary"><?php echo ucfirst($status); ?></span>
                 <?php endif; ?>
               </td>
               <td class="text-center">
-
-                <a href="view_logs.php?ics_no=<?php echo urlencode($ics_no); ?>" class="btn btn-success btn-sm" title="View">
+                <a href="view_logs.php?ics_no=<?php echo urlencode($ics['ics_no']); ?>" class="btn btn-success btn-sm" title="View">
                   <i class="fa fa-eye"></i>
-
                 </a>
                 <a href="ics_view.php?ics_no=<?php echo urlencode($ics['ics_no']); ?>"
-                  class="btn btn-primary btn-sm" title="View ICS">
+                  class="btn btn-primary btn-sm" title="Print ICS">
                   <i class="fa-solid fa-print"></i>
                 </a>
               </td>
@@ -241,7 +349,7 @@ foreach ($par_transactions as $par) {
             <th>Profile</th>
             <th>Employee</th>
             <th>Office</th>
-            <th>Items</th>
+            <th>Item/s</th>
             <th>Total Qty</th>
             <th>Date Issued</th>
             <th>Status</th>
@@ -264,8 +372,8 @@ foreach ($par_transactions as $par) {
                 <div class="items-list">
                   <?php
                   $items_display = [];
-                  foreach ($par['items'] as $item) {
-                    $items_display[] = $item['item_name'] . ' (' . $item['quantity'] . ')';
+                  foreach ($par['items'] as $par_item) {
+                    $items_display[] = $par_item['item_name'] . ' (' . $par_item['quantity'] . ')';
                   }
                   echo remove_junk(implode('<br>', $items_display));
                   ?>
@@ -276,19 +384,26 @@ foreach ($par_transactions as $par) {
               </td>
               <td><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></td>
               <td>
-                <?php if ($par['status'] == 'Returned'): ?>
-                  <span class="badge bg-warning">Returned</span>
-                <?php elseif ($par['status'] == 'Issued'): ?>
+                <?php 
+                $status = $par['status'];
+                if ($status == 'Returned'): ?>
+                  <span class="badge bg-success">Returned</span>
+                <?php elseif ($status == 'Partially Returned'): ?>
+                  <span class="badge bg-warning">Partially Returned</span>
+                <?php elseif ($status == 'Issued'): ?>
                   <span class="badge bg-info">Issued</span>
-                <?php elseif ($par['status'] == 'Re-issued'): ?>
+                <?php elseif ($status == 'Re-issued'): ?>
                   <span class="badge bg-primary">Re-issued</span>
                 <?php else: ?>
-                  <span class="badge bg-secondary"><?php echo ucfirst($par['status']); ?></span>
+                  <span class="badge bg-secondary"><?php echo ucfirst($status); ?></span>
                 <?php endif; ?>
               </td>
               <td class="text-center">
-                <a href="par_view.php?par_no=<?php echo urlencode($par['par_no']); ?>" class="btn btn-success btn-word btn-sm" title="Export using Template">                  <i class="fa fa-eye"></i>
-</a>
+                <a href="view_logs.php?par_no=<?php echo urlencode($par['par_no']); ?>" class="btn btn-success btn-word btn-sm" title="View PAR"> <i class="fa fa-eye"></i></a>
+                <a href="par_view.php?par_no=<?php echo urlencode($par['par_no']); ?>"
+                  class="btn btn-primary btn-sm" title=" Print PAR">
+                  <i class="fa-solid fa-print"></i>
+                </a>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -380,6 +495,26 @@ foreach ($par_transactions as $par) {
     max-height: 100px;
     overflow-y: auto;
     font-size: 0.9rem;
+  }
+  
+  .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+  }
+  
+  .badge.bg-success {
+    background-color: #28a745 !important;
+    color: white !important;
+  }
+  
+  .badge.bg-info {
+    background-color: #17a2b8 !important;
+    color: white !important;
+  }
+  
+  .badge.bg-primary {
+    background-color: #007bff !important;
+    color: white !important;
   }
 </style>
 

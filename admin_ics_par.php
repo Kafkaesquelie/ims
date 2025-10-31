@@ -49,7 +49,7 @@ $issued_items = find_by_sql("
            END as item_type
     FROM transactions t
     LEFT JOIN employees e ON t.employee_id = e.id
-    LEFT JOIN properties p ON t.item_id = p.id AND t.PAR_No != ''
+    LEFT JOIN properties p ON t.properties_id = p.id AND t.PAR_No != ''
     LEFT JOIN semi_exp_prop s ON t.item_id = s.id AND t.ICS_No != ''
     WHERE t.transaction_type = 'issue' AND t.status = 'completed'
     ORDER BY t.transaction_date DESC

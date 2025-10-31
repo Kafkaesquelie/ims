@@ -40,6 +40,7 @@ $semi_expendable_items = find_by_sql("
         p.unit,
         p.unit_cost,
         p.fund_cluster,
+        t.ICS_No,
         t.quantity as qty_issued,
         (t.quantity * p.unit_cost) AS amount,
         t.transaction_date,
@@ -53,6 +54,22 @@ $semi_expendable_items = find_by_sql("
 
 $display_date = $report_date ? date("F d, Y", strtotime($report_date)) : date("F d, Y");
 $rspi_serial_prefix = date("Y-m-");
+
+// Prepare data for Excel export
+$excel_data = [];
+if (!empty($semi_expendable_items)) {
+    foreach ($semi_expendable_items as $item) {
+        $excel_data[] = [
+            'ics_no' => $item['ICS_No'],
+            'inv_item_no' => $item['inv_item_no'],
+            'item_description' => $item['item'] . ' - ' . $item['item_description'],
+            'unit' => $item['unit'],
+            'qty_issued' => $item['qty_issued'],
+            'unit_cost' => $item['unit_cost'],
+            'amount' => $item['amount']
+        ];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -139,7 +156,7 @@ $rspi_serial_prefix = date("Y-m-");
             text-align: center;
         }
         
-        /* Print Controls Styling */
+        /* Print Controls Styling - VERTICAL LAYOUT */
         .print-controls {
             position: fixed;
             top: 20px;
@@ -150,14 +167,17 @@ $rspi_serial_prefix = date("Y-m-");
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             z-index: 1000;
             border: 2px solid #28a745;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 140px;
         }
         
         .print-controls .btn {
-            display: inline-flex;
+            display: flex;
             align-items: center;
             justify-content: center;
-            padding: 10px 15px;
-            margin: 0 5px;
+            padding: 12px 15px;
             border: none;
             border-radius: 5px;
             font-weight: 600;
@@ -165,7 +185,7 @@ $rspi_serial_prefix = date("Y-m-");
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: none;
-            min-width: 120px;
+            width: 100%;
         }
         
         .print-controls .btn-success {
@@ -177,6 +197,17 @@ $rspi_serial_prefix = date("Y-m-");
             background: linear-gradient(135deg, #1e7e34, #155724);
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        }
+        
+        .print-controls .btn-primary {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+        }
+        
+        .print-controls .btn-primary:hover {
+            background: linear-gradient(135deg, #0056b3, #004085);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
         }
         
         .print-controls .btn-secondary {
@@ -271,9 +302,10 @@ $rspi_serial_prefix = date("Y-m-");
 <body>
     <!-- Print Controls (visible only on screen) -->
     <div class="print-controls no-print">
-        <button onclick="handlePrint()" class="btn btn-success">
-            <i class="fas fa-print"></i> Print Now
+        <button onclick="exportToExcel()" class="btn btn-success">
+            <i class="fas fa-file-excel"></i> Export to Excel
         </button>
+      
         <button onclick="handleClose()" class="btn btn-secondary">
             <i class="fas fa-times"></i> Close
         </button>
@@ -327,6 +359,8 @@ $rspi_serial_prefix = date("Y-m-");
             <table class="rspi-property-table">
                 <thead>
                     <tr>
+                        <th>ICS No.</th>
+                        <th>Responsibility Center Code</th>
                         <th>Semi-expendable Property No.</th>
                         <th>Item Description</th>
                         <th>Unit</th>
@@ -343,6 +377,8 @@ $rspi_serial_prefix = date("Y-m-");
                             $total_amount += $item['amount'];
                         ?>
                             <tr>
+                                <td><?= $item['ICS_No']; ?></td>
+                                <td></td>
                                 <td><?= $item['inv_item_no']; ?></td>
                                 <td class="text-left"><?= $item['item'] . ' - ' . $item['item_description']; ?></td>
                                 <td><?= $item['unit']; ?></td>
@@ -351,15 +387,10 @@ $rspi_serial_prefix = date("Y-m-");
                                 <td class="text-right">₱<?= number_format($item['amount'], 2); ?></td>
                             </tr>
                         <?php endforeach; ?>
-                        
-                        <!-- Total Row -->
-                        <tr>
-                            <td colspan="5" class="text-right"><strong>Total Amount:</strong></td>
-                            <td class="text-right"><strong>₱<?= number_format($total_amount, 2); ?></strong></td>
-                        </tr>
+       
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="text-center">No semi-expendable properties issued found with the selected filters.</td>
+                            <td colspan="8" class="text-center">No semi-expendable properties issued found with the selected filters.</td>
                         </tr>
                     <?php endif; ?>
 
@@ -375,12 +406,14 @@ $rspi_serial_prefix = date("Y-m-");
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
                         </tr>
                     <?php endfor; ?>
 
                     <!-- Signatories Row -->
                     <tr>
-                        <td colspan="3" style="padding-top: 20px; vertical-align: top;">
+                        <td colspan="5" style="padding-top: 20px; vertical-align: top;">
                             <div style="margin-bottom: 8px; font-size: 11px; text-align: left;">
                                 I hereby certify to the correctness of the above information.
                             </div>
@@ -431,6 +464,64 @@ $rspi_serial_prefix = date("Y-m-");
                     window.close();
                 }
             }
+        }
+        
+        // Export to Excel function
+        function exportToExcel() {
+            // Create a form to submit the data
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'export_rspi.php';
+            
+            // Add the data as hidden fields
+            const data = <?= json_encode($excel_data) ?>;
+            const dataInput = document.createElement('input');
+            dataInput.type = 'hidden';
+            dataInput.name = 'excel_data';
+            dataInput.value = JSON.stringify(data);
+            form.appendChild(dataInput);
+            
+            // Add metadata
+            const entityInput = document.createElement('input');
+            entityInput.type = 'hidden';
+            entityInput.name = 'entity_name';
+            entityInput.value = 'Benguet State University - BOKOD CAMPUS';
+            form.appendChild(entityInput);
+            
+            const serialInput = document.createElement('input');
+            serialInput.type = 'hidden';
+            serialInput.name = 'serial_no';
+            serialInput.value = '<?= $rspi_serial_prefix ?>0000';
+            form.appendChild(serialInput);
+            
+            const fundInput = document.createElement('input');
+            fundInput.type = 'hidden';
+            fundInput.name = 'fund_cluster';
+            fundInput.value = '<?= $selected_cluster ?: 'GAA' ?>';
+            form.appendChild(fundInput);
+            
+            const dateInput = document.createElement('input');
+            dateInput.type = 'hidden';
+            dateInput.name = 'report_date';
+            dateInput.value = '<?= $display_date ?>';
+            form.appendChild(dateInput);
+            
+            const custodianInput = document.createElement('input');
+            custodianInput.type = 'hidden';
+            custodianInput.name = 'property_custodian';
+            custodianInput.value = '<?= htmlspecialchars($property_custodian) ?>';
+            form.appendChild(custodianInput);
+            
+            const accountingInput = document.createElement('input');
+            accountingInput.type = 'hidden';
+            accountingInput.name = 'accounting_staff';
+            accountingInput.value = '<?= htmlspecialchars($accounting_staff) ?>';
+            form.appendChild(accountingInput);
+            
+            // Submit the form
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
         
         // Auto-print when page loads

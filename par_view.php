@@ -13,7 +13,7 @@ if (!$par_no) {
     redirect('logs.php');
 }
 
-// 🟩 Fetch transaction details using PAR number
+// 🟩 Fetch ALL transaction details using PAR number (REMOVED LIMIT 1)
 $sql = "
     SELECT 
         t.id,
@@ -35,19 +35,20 @@ $sql = "
         e.office,
         e.image
     FROM transactions t
-    LEFT JOIN properties p ON t.item_id = p.id
+    LEFT JOIN properties p ON t.properties_id = p.id
     LEFT JOIN employees e ON t.employee_id = e.id
     WHERE t.par_no = '{$par_no}'
-    LIMIT 1
 ";
 
-$par = find_by_sql($sql);
-$par = !empty($par) ? $par[0] : null;
+$par_items = find_by_sql($sql);
 
-if (!$par) {
+if (!$par_items) {
     $session->msg("d", "PAR record not found for PAR No: {$par_no}");
     redirect('logs.php');
 }
+
+// Get first item for header info
+$first_item = $par_items[0];
 ?>
 
 <!DOCTYPE html>
@@ -55,7 +56,7 @@ if (!$par) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Property Acknowledgment Receipt - <?php echo $par['par_no']; ?></title>
+<title>Property Acknowledgment Receipt - <?php echo $first_item['par_no']; ?></title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <style>
@@ -184,6 +185,7 @@ th:nth-child(6), td:nth-child(6) { width: 20%; } /* Amount */
 
 .btn-print { background-color: #007bff; }
 .btn-word  { background-color: #28a745; }
+.btn-excel { background-color: #217346; }
 .btn-back  { background-color: #6c757d; }
 
 .btn-circle:hover { transform: scale(1.1); }
@@ -268,8 +270,12 @@ th:nth-child(6), td:nth-child(6) { width: 20%; } /* Amount */
         <i class="fa-solid fa-print"></i>
     </button>
 
-    <a href="export_par.php?par_no=<?php echo urlencode($par['par_no']); ?>" class="btn-circle btn-word" title="Export using Template">
+    <a href="export_par.php?par_no=<?php echo urlencode($first_item['par_no']); ?>" class="btn-circle btn-word" title="Export using Template">
         <i class="fa-solid fa-file-word"></i>
+    </a>
+
+    <a href="export_par_excel.php?par_no=<?php echo urlencode($first_item['par_no']); ?>" class="btn-circle btn-excel" title="Export to Excel">
+        <i class="fa-solid fa-file-excel"></i>
     </a>
 
     <a href="logs.php" class="btn-circle btn-back" title="Back">
@@ -290,8 +296,8 @@ th:nth-child(6), td:nth-child(6) { width: 20%; } /* Amount */
     <div class="receipt-title">Property Acknowledgment Receipt</div>
 
     <div class="doc-info">
-        <strong>Fund Cluster:</strong> <?php echo $par['fund_cluster']; ?>
-        <span style="float:right;"><strong>PAR No.:</strong> <?php echo $par['par_no']; ?></span>
+        <strong>Fund Cluster:</strong> <?php echo $first_item['fund_cluster']; ?>
+        <span style="float:right;"><strong>PAR No.:</strong> <?php echo $first_item['par_no']; ?></span>
     </div>
 
     <table>
@@ -306,19 +312,21 @@ th:nth-child(6), td:nth-child(6) { width: 20%; } /* Amount */
             </tr>
         </thead>
         <tbody>
+            <?php foreach ($par_items as $item): ?>
             <tr>
-                <td align="center"><?php echo $par['quantity']; ?></td>
-                <td align="center"><?php echo $par['unit']; ?></td>
+                <td align="center"><?php echo $item['quantity']; ?></td>
+                <td align="center"><?php echo $item['unit']; ?></td>
                 <td>
-                    <strong><?php echo $par['item_name']; ?></strong>
-                    <?php if (!empty($par['description'])): ?>
-                        <br><small><?php echo $par['description']; ?></small>
+                    <strong><?php echo $item['item_name']; ?></strong>
+                    <?php if (!empty($item['description'])): ?>
+                        <br><small><?php echo $item['description']; ?></small>
                     <?php endif; ?>
                 </td>
-                <td align="center"><?php echo $par['property_no']; ?></td>
-                <td align="center"><?php echo !empty($par['date_acquired']) ? date('M d, Y', strtotime($par['date_acquired'])) : 'N/A'; ?></td>
-                <td align="right">₱<?php echo number_format($par['unit_cost'] * $par['quantity'], 2); ?></td>
+                <td align="center"><?php echo $item['property_no']; ?></td>
+                <td align="center"><?php echo !empty($item['date_acquired']) ? date('M d, Y', strtotime($item['date_acquired'])) : 'N/A'; ?></td>
+                <td align="right">₱<?php echo number_format($item['unit_cost'] * $item['quantity'], 2); ?></td>
             </tr>
+            <?php endforeach; ?>
             <?php for ($i=0; $i<12; $i++): ?>
                 <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
             <?php endfor; ?>
@@ -327,11 +335,11 @@ th:nth-child(6), td:nth-child(6) { width: 20%; } /* Amount */
         <tr>
             <td colspan="3" class="signature-section">
                 <strong>Received by:</strong><br><br>
-                <div class="signature-line"><?php echo strtoupper($par['employee_name']); ?></div>
+                <div class="signature-line"><?php echo strtoupper($first_item['employee_name']); ?></div>
                 <div class="signature-label">Signature over Printed Name</div>
-                <div class="signature-line"><?php echo $par['position']; ?></div>
+                <div class="signature-line"><?php echo $first_item['position']; ?></div>
                 <div class="signature-label">Position/Office</div>
-                <div class="signature-line"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div class="signature-line"><?php echo date('M d, Y', strtotime($first_item['transaction_date'])); ?></div>
                 <div class="signature-label">Date</div>
             </td>
             <td colspan="3" class="signature-section">
@@ -340,7 +348,7 @@ th:nth-child(6), td:nth-child(6) { width: 20%; } /* Amount */
                 <div class="signature-label">Signature over Printed Name</div>
                 <div class="signature-line"><?php echo $current_user['position'] ?? 'Position'; ?></div>
                 <div class="signature-label">Position/Office</div>
-                <div class="signature-line"><?php echo date('M d, Y', strtotime($par['transaction_date'])); ?></div>
+                <div class="signature-line"><?php echo date('M d, Y', strtotime($first_item['transaction_date'])); ?></div>
                 <div class="signature-label">Date</div>
             </td>
         </tr>

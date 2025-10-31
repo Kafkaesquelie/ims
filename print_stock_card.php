@@ -4,60 +4,215 @@ require_once('includes/load.php');
 page_require_level(1);
 
 $stock_card_input = $_GET['stock_card'] ?? null;
+$category = $_GET['category'] ?? '';
+$item = $_GET['item'] ?? '';
 $stock = null;
+$stock_transactions = [];
 
-// Fetch stock info
-if ($stock_card_input) {
-    // Try by ID first
-    $stock = find_by_id('items', $stock_card_input);
+// If item filter is selected, use it for search
+$search_input = $item ?: $stock_card_input;
 
-    if (!$stock) {
-        $stock_result = find_by_sql("
-            SELECT * FROM items 
-            WHERE stock_card = '{$db->escape($stock_card_input)}' 
-               OR name LIKE '%{$db->escape($stock_card_input)}%' 
-            LIMIT 1
-        ");
-        $stock = $stock_result[0] ?? null;
+if (!empty($search_input)) {
+    // Fetch item details first with unit from units table
+    $item_sql = "
+        SELECT 
+            i.id,
+            i.name AS item_name,
+            i.stock_card AS stock_number,
+            i.unit_cost,
+            i.fund_cluster,
+            ui.name AS unit_name,
+            i.description,
+            i.quantity AS current_balance
+        FROM items i
+        LEFT JOIN units ui ON i.unit_id = ui.id
+        WHERE i.stock_card LIKE '%{$db->escape($search_input)}%' 
+           OR i.name LIKE '%{$db->escape($search_input)}%'
+        LIMIT 1
+    ";
+    
+    $items = find_by_sql($item_sql);
+    $stock = !empty($items) ? $items[0] : null;
+    
+    if ($stock) {
+        $item_id = $stock['id'];
+        $item_unit_cost = $stock['unit_cost'];
+        
+        // Fetch ONLY stock_in transactions from stock history
+        $stock_history_sql = "
+            SELECT 
+                sh.id,
+                sh.date_changed AS date,
+                '' AS reference,
+                sh.new_qty AS quantity,
+                sh.previous_qty AS prev_quantity,
+                i.unit_cost,
+                (sh.new_qty * i.unit_cost) AS total_cost,
+                sh.change_type,
+                sh.remarks,
+                'stock_history' AS source,
+                '' AS office_name
+            FROM stock_history sh
+            JOIN items i ON sh.item_id = i.id
+            WHERE sh.item_id = '{$db->escape($item_id)}'
+            AND sh.change_type = 'stock_in'
+            ORDER BY sh.date_changed ASC
+        ";
+        $stock_history = find_by_sql($stock_history_sql);
+        
+        // Fetch requests (issuances) - FIXED QUERY to include completed and issued statuses with both dates
+        $issuances_sql = "
+            SELECT 
+                r.id,
+                -- Use date_completed if available, otherwise use date_issued
+                CASE 
+                    WHEN r.date_completed IS NOT NULL AND r.date_completed != '0000-00-00' THEN r.date_completed
+                    ELSE r.date_issued 
+                END AS date,
+                CONCAT('RIS-', r.ris_no) AS reference,
+                ri.qty AS quantity,
+                0 AS prev_quantity,
+                i.unit_cost,
+                (ri.qty * i.unit_cost) AS total_cost,
+                'issuance' AS change_type,
+                CONCAT('Issued - ', r.status) AS remarks,
+                'request' AS source,
+                o.office_name,
+                r.date_issued,
+                r.date_completed
+            FROM requests r
+            INNER JOIN request_items ri ON r.id = ri.req_id
+            INNER JOIN items i ON ri.item_id = i.id
+            LEFT JOIN users u ON r.requested_by = u.id
+            LEFT JOIN offices o ON u.office = o.id
+            WHERE ri.item_id = '{$db->escape($item_id)}'
+            AND (r.status = 'approved' OR r.status = 'completed' OR r.status = 'issued')
+            ORDER BY date ASC
+        ";
+        $issuances = find_by_sql($issuances_sql);
+        
+        // Fetch carry forward transactions (if they exist as separate records)
+        $carry_forward_sql = "
+            SELECT 
+                sh.id,
+                sh.date_changed AS date,
+                CONCAT('CF-', YEAR(sh.date_changed)) AS reference,
+                sh.new_qty AS quantity,
+                sh.previous_qty AS prev_quantity,
+                i.unit_cost,
+                (sh.new_qty * i.unit_cost) AS total_cost,
+                'carry_forward' AS change_type,
+                'Carried Forward' AS remarks,
+                'stock_history' AS source,
+                '' AS office_name
+            FROM stock_history sh
+            JOIN items i ON sh.item_id = i.id
+            WHERE sh.item_id = '{$db->escape($item_id)}'
+            AND sh.change_type = 'carry_forward'
+            ORDER BY sh.date_changed ASC
+        ";
+        $carry_forwards = find_by_sql($carry_forward_sql);
+        
+        // If no carry_forward records, check for year-end adjustments
+        if (empty($carry_forwards)) {
+            $year_end_sql = "
+                SELECT 
+                    sh.id,
+                    sh.date_changed AS date,
+                    CONCAT('YE-', YEAR(sh.date_changed)) AS reference,
+                    sh.new_qty AS quantity,
+                    sh.previous_qty AS prev_quantity,
+                    i.unit_cost,
+                    (sh.new_qty * i.unit_cost) AS total_cost,
+                    'carry_forward' AS change_type,
+                    'Year End Balance' AS remarks,
+                    'stock_history' AS source,
+                    '' AS office_name
+                FROM stock_history sh
+                JOIN items i ON sh.item_id = i.id
+                WHERE sh.item_id = '{$db->escape($item_id)}'
+                AND (sh.remarks LIKE '%carry%' OR sh.remarks LIKE '%year%')
+                ORDER BY sh.date_changed ASC
+            ";
+            $carry_forwards = find_by_sql($year_end_sql);
+        }
+        
+        // Combine all transactions
+        $all_transactions = array_merge($stock_history, $issuances, $carry_forwards);
+        
+        // Sort by date and time - more precise sorting
+        usort($all_transactions, function($a, $b) {
+            $dateA = isset($a['date']) ? strtotime($a['date']) : 0;
+            $dateB = isset($b['date']) ? strtotime($b['date']) : 0;
+            
+            // If dates are equal, sort by transaction type to maintain logical order
+            if ($dateA === $dateB) {
+                $orderA = getTransactionOrder($a['change_type'] ?? '');
+                $orderB = getTransactionOrder($b['change_type'] ?? '');
+                return $orderA - $orderB;
+            }
+            
+            return $dateA - $dateB;
+        });
+        
+        // Calculate running balance - START FROM CURRENT BALANCE AND WORK BACKWARDS
+        // First, get the current balance from items table
+        $current_balance = $stock['current_balance'];
+        
+        // Reverse the transactions to calculate historical balances
+        $reversed_transactions = array_reverse($all_transactions);
+        $running_balance = $current_balance;
+        $running_total_cost = $current_balance * $item_unit_cost;
+        
+        foreach ($reversed_transactions as &$transaction) {
+            // Ensure all required fields are set
+            $transaction['date'] = $transaction['date'] ?? '';
+            $transaction['reference'] = $transaction['reference'] ?? '';
+            $transaction['quantity'] = $transaction['quantity'] ?? 0;
+            $transaction['unit_cost'] = $transaction['unit_cost'] ?? $item_unit_cost;
+            $transaction['total_cost'] = $transaction['total_cost'] ?? 0;
+            $transaction['change_type'] = $transaction['change_type'] ?? '';
+            $transaction['remarks'] = $transaction['remarks'] ?? '';
+            $transaction['office_name'] = $transaction['office_name'] ?? '';
+            
+            // Store the running balance for this transaction
+            $transaction['running_balance'] = $running_balance;
+            $transaction['running_total_cost'] = $running_balance * $transaction['unit_cost'];
+            
+            // Adjust running balance based on transaction type
+            if ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') {
+                // For stock_in, subtract the quantity to get previous balance
+                $running_balance -= $transaction['quantity'];
+            } elseif ($transaction['change_type'] === 'issuance') {
+                // For issuance, add the quantity to get previous balance
+                $running_balance += $transaction['quantity'];
+            }
+        }
+        
+        // Reverse back to chronological order
+        $stock_transactions = array_reverse($reversed_transactions);
     }
 }
 
-$transactions = [];
-if ($stock) {
-    $stock_id = $stock['id'];
-    $sql = "
-        SELECT 
-            r.id AS req_id,
-            r.date AS request_date,
-            u.name AS requested_by,
-            d.dpt AS department,
-            ri.qty AS issue_qty,
-            i.unit_cost,
-            (ri.qty * i.unit_cost) AS issue_total_cost,
-            i.name,
-            i.description,
-            i.UOM,
-            i.stock_card
-        FROM request_items ri
-        JOIN requests r ON ri.req_id = r.id
-        JOIN items i ON ri.item_id = i.id
-        JOIN users u ON r.requested_by = u.id
-        JOIN departments d ON u.department = d.id
-        WHERE r.status = 'Approved' AND i.id = '{$db->escape($stock_id)}'
-        ORDER BY r.date ASC
-    ";
-    $transactions = find_by_sql($sql);
+// Helper function to define transaction order for same-date sorting
+function getTransactionOrder($type) {
+    switch($type) {
+        case 'carry_forward': return 1;
+        case 'stock_in': return 2;
+        case 'issuance': return 3;
+        default: return 4;
+    }
 }
 
 // Prepare data for Word export
 $word_data = [
-    'stock_number' => $stock['stock_card'] ?? 'N/A',
-    'item_name' => strtoupper($stock['name'] ?? 'N/A'),
+    'stock_number' => $stock['stock_number'] ?? 'N/A',
+    'item_name' => strtoupper($stock['item_name'] ?? 'N/A'),
     'description' => $stock['description'] ?? 'N/A',
-    'unit_of_measurement' => $stock['UOM'] ?? 'N/A',
+    'unit_of_measurement' => $stock['unit_name'] ?? 'N/A',
     'fund_cluster' => $stock['fund_cluster'] ?? 'N/A',
-    'reorder_point' => $stock['reorder_point'] ?? '',
-    'transactions' => $transactions
+    'reorder_point' => '',
+    'transactions' => $stock_transactions
 ];
 ?>
 
@@ -84,12 +239,18 @@ $word_data = [
     top: 20px;
     right: 20px;
     display: flex;
+    flex-direction: column;
     gap: 10px;
     z-index: 1000;
+    background: #f8fff9;
+    border: 3px solid #28a745;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .action-btn {
-    padding: 10px 20px;
+    padding: 12px 20px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -99,6 +260,8 @@ $word_data = [
     align-items: center;
     gap: 8px;
     font-family: 'Times New Roman', serif;
+    min-width: 180px;
+    justify-content: center;
 }
 
 .print-btn {
@@ -118,6 +281,16 @@ $word_data = [
 
 .word-btn:hover {
     background: #155c33;
+    transform: translateY(-2px);
+}
+
+.excel-btn {
+    background: #217346;
+    color: white;
+}
+
+.excel-btn:hover {
+    background: #1a5c38;
     transform: translateY(-2px);
 }
 
@@ -182,6 +355,9 @@ table.table-bordered thead th {
     <button class="action-btn word-btn" onclick="exportToWord()">
         <i class="fa-solid fa-file-word"></i> Export to Word
     </button>
+    <button class="action-btn excel-btn" onclick="exportToExcel()">
+        <i class="fa-solid fa-file-excel"></i> Export to Excel
+    </button>
     <button class="action-btn close-btn" onclick="closeWindow()">
         <i class="fa-solid fa-times"></i> Close
     </button>
@@ -208,8 +384,8 @@ table.table-bordered thead th {
 
     <!-- Right Logos in a Row -->
     <div style="flex:0 0 auto; display:flex; gap:10px;">
-      <img src="uploads/other/bsulogo.png" alt="Logo Right 1" style="max-width:80px; height:auto;">
-      <img src="uploads/other/bsulogo.png" alt="Logo Right 2" style="max-width:80px; height:auto;">
+      <img src="uploads/other/SPMO.png" alt="Logo Right 1" style="max-width:80px; height:auto;">
+      <img src="uploads/other/BP.PNg" alt="Logo Right 2" style="max-width:100px; height:auto;">
     </div>
 
   </div>
@@ -226,13 +402,13 @@ table.table-bordered thead th {
       <td>
         <strong style="font-size:10px;" >STOCK NUMBER:</strong> 
        <strong><span style="margin-left:60px;font-size:12px; display:inline-block; border-bottom:1px solid #000; min-width:200px;text-align:center;">
-          <?= $stock['stock_card'] ?? 'N/A'; ?>
+          <?= $stock['stock_number'] ?? 'N/A'; ?>
         </span></strong> 
       </td>
        <td class="text-end">
         <strong style="font-size:10px;">Re-order Point:</strong> 
         <input type="text" name="reorder_point" 
-               value="<?= $stock['reorder_point'] ?? '' ?>" 
+               value="" 
                style="margin-left:15px; border:none; border-bottom:1px solid #000; outline:none; min-width:150px; text-align:center;">
       </td>
     </tr>
@@ -240,7 +416,7 @@ table.table-bordered thead th {
       <td colspan="2">
         <strong style="font-size:10px;">ITEM:</strong> 
        <strong><span style="margin-left:120px;font-size:12px; display:inline-block; border-bottom:1px solid #000; min-width:200px;text-align:center;">
-             <?= strtoupper($stock['name'] ?? 'N/A'); ?>
+             <?= strtoupper($stock['item_name'] ?? 'N/A'); ?>
         </span></strong> 
       </td>
     </tr>
@@ -258,7 +434,7 @@ table.table-bordered thead th {
       <td>
         <strong style="font-size:10px;margin:0">UNIT OF MEASUREMENT:</strong> 
         <span style="margin-left:15px;font-size:12px; display:inline-block; border-bottom:1px solid #000; min-width:200px;text-align:center;">
-          <?= $stock['UOM'] ?? 'N/A'; ?>
+          <?= $stock['unit_name'] ?? 'N/A'; ?>
         </span>
       </td>
     </tr>
@@ -289,42 +465,59 @@ table.table-bordered thead th {
       </tr>
     </thead>
     <tbody style="font-size:10px">
-      <?php if(!empty($transactions)): ?>
-        <?php 
-          $balance_qty = 0;
-          $balance_total = 0;
-          foreach($transactions as $trx): 
-              $receipt_qty = $trx['issue_qty'];
-              $unit_cost = $trx['unit_cost'];
-              $issue_total = $trx['issue_total_cost'];
-              $balance_qty += $trx['issue_qty'];
-              $balance_total += $trx['issue_total_cost'];
-        ?>
+      <?php if(!empty($stock_transactions)): ?>
+        <?php foreach($stock_transactions as $transaction): ?>
         <tr>
-          <td><?= date("m/d/Y", strtotime($trx['request_date'])) ?></td>
-          <td><?= "REQ-" . $trx['req_id'] ?></td>
-          <!-- Receipt -->
-          <td><?= $receipt_qty ?></td>
-          <td><?= number_format($unit_cost, 2) ?></td>
-          <!-- Issuance -->
-          <td><?= $trx['issue_qty'] ?></td>
-          <td><?= number_format($unit_cost, 2) ?></td>
-          <td><?= number_format($issue_total, 2) ?></td>
-          <td><?= $trx['department'] ?></td>
-          <!-- Balance -->
-          <td><?= $balance_qty ?></td>
-          <td><?= number_format($balance_total, 2) ?></td>
-          <td></td>
-          <td></td>
+          <td>
+            <?php if (!empty($transaction['date'])): ?>
+              <?= date("m/d/Y", strtotime($transaction['date'])) ?>
+            <?php else: ?>
+              <?= 'N/A' ?>
+            <?php endif; ?>
+          </td>
+          <td><?= $transaction['reference'] ?? '' ?></td>
+          
+          <!-- Receipt Columns -->
+          <td>
+            <?= ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') ? $transaction['quantity'] : '' ?>
+          </td>
+          <td>
+            <?= ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') ? number_format($transaction['unit_cost'], 2) : '' ?>
+          </td>
+          
+          <!-- Issuance Columns -->
+          <td>
+            <?= $transaction['change_type'] === 'issuance' ? $transaction['quantity'] : '' ?>
+          </td>
+          <td>
+            <?= $transaction['change_type'] === 'issuance' ? number_format($transaction['unit_cost'], 2) : '' ?>
+          </td>
+          <td>
+            <?= $transaction['change_type'] === 'issuance' ? number_format($transaction['total_cost'], 2) : '' ?>
+          </td>
+          <td>
+            <?= $transaction['office_name'] ?? '' ?>
+          </td>
+          
+          <!-- Balance Columns -->
+          <td><?= $transaction['running_balance'] ?? 0 ?></td>
+          <td><?= number_format($transaction['running_total_cost'] ?? 0, 2) ?></td>
+          <td></td> <!-- No. of Days to Consume -->
+          <td>
+            <?= $transaction['change_type'] === 'carry_forward' ? 'Carried Forward' : ($transaction['remarks'] ?? '') ?>
+          </td>
         </tr>
         <?php endforeach; ?>
       <?php else: ?>
-        <tr><td colspan="12" class="text-muted" style="font-size:35px; padding:5px"> <i class="fa-solid fa-chalkboard-user"></i> No transactions found.</td></tr>
+        <tr><td colspan="12" class="text-muted" style="font-size:35px; padding:5px"> 
+          <i class="fa-solid fa-chalkboard-user"></i> 
+          <?= $search_input ? 'No stock transactions found for this search.' : 'Enter a stock number to search.' ?>
+        </td></tr>
       <?php endif; ?>
     </tbody>
      <tbody>
   <?php 
-    $count = !empty($transactions) ? count($transactions) : 0;
+    $count = !empty($stock_transactions) ? count($stock_transactions) : 0;
   $empty_rows = 9 - $count;
   if ($empty_rows > 0):
     for ($i=0; $i<$empty_rows; $i++): ?>
@@ -414,6 +607,50 @@ function exportToWord() {
         day: 'numeric' 
     });
     form.appendChild(generationDateInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+}
+
+function exportToExcel() {
+    // Create a temporary form to submit data to Excel export
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'export_stock_card_excel.php';
+    form.target = '_blank';
+    
+    // Add data as hidden inputs
+    const data = <?= json_encode($word_data); ?>;
+    
+    // Add all data fields
+    for (const key in data) {
+        if (key === 'transactions') {
+            // Handle transactions array
+            data[key].forEach((transaction, index) => {
+                for (const field in transaction) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = `transactions[${index}][${field}]`;
+                    input.value = transaction[field];
+                    form.appendChild(input);
+                }
+            });
+        } else {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = data[key];
+            form.appendChild(input);
+        }
+    }
+    
+    // Add current date
+    const currentDateInput = document.createElement('input');
+    currentDateInput.type = 'hidden';
+    currentDateInput.name = 'export_date';
+    currentDateInput.value = new Date().toISOString().split('T')[0];
+    form.appendChild(currentDateInput);
     
     document.body.appendChild(form);
     form.submit();

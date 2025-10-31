@@ -216,7 +216,7 @@ $fund_cluster_display = !empty($first_transaction['fund_cluster']) ? $first_tran
     height: fit-content;
 }
 
-.btn-print, .btn-back, .btn-word {
+.btn-print, .btn-back, .btn-word, .btn-excel {
     width: 50px;
     height: 50px;
     border-radius: 50%;
@@ -228,15 +228,17 @@ $fund_cluster_display = !empty($first_transaction['fund_cluster']) ? $first_tran
     cursor: pointer;
     font-size: 18px;
     transition: transform 0.2s, background-color 0.2s;
+    text-decoration: none;
 }
 
 /* Colors */
 .btn-print { background-color: #007bff; }
 .btn-word  { background-color: #28a745; }
+.btn-excel { background-color: #217346; }
 .btn-back  { background-color: #6c757d; }
 
 /* Hover effect */
-.btn-print:hover, .btn-word:hover, .btn-back:hover {
+.btn-print:hover, .btn-word:hover, .btn-excel:hover, .btn-back:hover {
     transform: scale(1.1);
 }
 
@@ -258,6 +260,10 @@ $fund_cluster_display = !empty($first_transaction['fund_cluster']) ? $first_tran
 
     <a href="export_ics.php?ics_no=<?php echo urlencode($ics_no); ?>" class="btn-circle btn-word" title="Export using Template">
         <i class="fa-solid fa-file-word"></i>
+    </a>
+
+    <a href="export_ics_excel.php?ics_no=<?php echo urlencode($ics_no); ?>" class="btn-circle btn-excel" title="Export to Excel">
+        <i class="fa-solid fa-file-excel"></i>
     </a>
 
     <a href="logs.php" class="btn-circle btn-back d-flex align-items-center justify-content-center" title="Back">

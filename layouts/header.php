@@ -369,12 +369,12 @@ $user = current_user();
                                 <p>RSMI / RSPI</p>
                             </a>
                         </li>
-                        <li class="nav-item">
+                        <!-- <li class="nav-item">
                             <a href="rpc.php" class="nav-link">
                                 <i class="nav-icon fas fa-file-invoice"></i>
                                 <p>RRC-INV-SP-PPE</p>
                             </a>
-                        </li>
+                        </li> -->
                        
 
                         <li class="nav-header">INVENTORY MANAGEMENT</li>

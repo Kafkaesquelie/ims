@@ -226,7 +226,7 @@ $total_employees = count($employees_summary);
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                                <div class="card-footer text-center bg-light">
+                                <div class="card-footer text-center bg-light " >
                                     <a href="user_emp_records.php?id=<?php echo (int)$employee['id']; ?>&type=employee" 
                                        class="btn btn-success btn-sm btn-block">
                                         <i class="fas fa-eye mr-1"></i> View Full Profile & Records
@@ -275,6 +275,15 @@ $total_employees = count($employees_summary);
 .btn-success {
     background: linear-gradient(135deg, #28a745, #1e7e34);
     border-color: #28a745;
+    color: white !important;
+}
+
+.card-footer .btn-success {
+    color: white !important;
+}
+
+.employee-card .btn-success {
+    color: white !important;
 }
 .badge.bg-success {
     background: linear-gradient(135deg, #28a745, #1e7e34) !important;

@@ -42,7 +42,7 @@ $issued_items = find_by_sql("
   .header,
   .meta {
     font-family: 'Times New Roman', serif;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .controls {
@@ -133,10 +133,19 @@ $issued_items = find_by_sql("
     font-size: 12px;
   }
 
+  /* FIXED TABLE STYLES - MUCH WIDER COLUMNS */
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 13px;
+    table-layout: fixed;
+    word-wrap: break-word;
   }
 
   table,
@@ -147,7 +156,76 @@ $issued_items = find_by_sql("
 
   th,
   td {
-    padding: 4px;
+    padding: 6px 8px;
+    text-align: center;
+    vertical-align: top;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* MUCH WIDER COLUMN WIDTHS - FULLY UTILIZE SPACE */
+  .date-col { width: 8% !important; min-width: 100px; }
+  .ref-col { width: 15% !important; min-width: 100px; }
+  .prop-col { width: 15% !important; min-width: 10px; }
+  .desc-col { width: 10% !important; min-width: 100px; }
+  .life-col { width: 6% !important; min-width: 100px; }
+  .issue-col { width: 12% !important; min-width: 60px; }
+  .ret-col { width: 12% !important; min-width: 60px; }
+  .rei-col { width: 12% !important; min-width: 60px; }
+  .qty-col { width: 6% !important; min-width: 60px; }
+  .amount-col { width: 7% !important; min-width: 100px; }
+  .remarks-col { width: 12% !important; min-width: 100px; }
+
+  /* SPECIFIC COLUMN STYLING */
+  .remarks-col {
+    max-width: 300px;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .desc-col {
+    max-width: 300px;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .officer-col {
+    max-width: 200px;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .ref-col {
+    max-width: 180px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .prop-col {
+    max-width: 180px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  /* Ensure table fits within viewport */
+  #reportTable {
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Better padding for readability */
+  th, td {
+    padding: 8px 6px;
+  }
+
+  /* Center align numeric columns */
+  .qty-col, .amount-col, .date-col, .life-col {
     text-align: center;
   }
 
@@ -170,6 +248,7 @@ $issued_items = find_by_sql("
 
     @page {
       size: landscape;
+      margin: 0.5cm;
     }
 
     .editable {
@@ -179,6 +258,15 @@ $issued_items = find_by_sql("
 
     .controls {
       display: none;
+    }
+
+    /* Ensure print layout is clean */
+    table {
+      font-size: 11px;
+    }
+
+    th, td {
+      padding: 6px 4px;
     }
   }
 
@@ -205,6 +293,23 @@ $issued_items = find_by_sql("
       justify-content: center;
       margin: 0 auto;
     }
+
+    /* Adjust table for mobile */
+    .table-container {
+      font-size: 11px;
+    }
+  }
+
+  /* Additional overflow protection */
+  .content-wrapper {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Better text handling */
+  .text-content {
+    line-height: 1.4;
+    padding: 3px;
   }
 </style>
 
@@ -240,7 +345,6 @@ $issued_items = find_by_sql("
         <button id="printPreviewBtn">
           <i class="fa-solid fa-print"></i>
         </button>
-
       </div>
     </div>
   </div>
@@ -253,88 +357,107 @@ $issued_items = find_by_sql("
   <input type="hidden" name="tableData" id="formTableData">
 </form>
 
-
 <!-- 🔽 PRINT AREA -->
-<div id="print-area">
-  <div class="meta">
-    <div>
-      <strong>Entity Name:</strong>
-      <span>Benguet State University - Bokod Campus</span><br>
-      <strong>Semi-expandable Property:</strong>
+  <div id="print-area">
+    <div class="meta">
+      <div>
+        <strong>Entity Name:</strong>
+        <span>Benguet State University - Bokod Campus</span><br>
+        <strong>Semi-expandable Property:</strong>
+      </div>
+      <div>
+        <strong>Fund Cluster:</strong>
+        <span id="fundClusterField">__________</span><br>
+        <strong>Sheet No.:</strong>
+        <input type="text" class="editable" placeholder="______________">
+      </div>
     </div>
-    <div>
-      <strong>Fund Cluster:</strong>
-      <span id="fundClusterField">__________</span><br>
-      <strong>Sheet No.:</strong>
-      <input type="text" class="editable" placeholder="______________">
+
+    <div class="table-container">
+      <table id="reportTable">
+        <thead>
+          <tr>
+            <th class="date-col" rowspan="2">DATE</th>
+            <th class="ref-col" colspan="2">REFERENCE</th>
+            <th class="desc-col" rowspan="2">ITEM DESCRIPTION</th>
+            <th class="life-col" rowspan="2">Estimated Useful Life</th>
+            <th class="issue-col" colspan="2">ISSUED</th>
+            <th class="ret-col" colspan="2">RETURNED</th>
+            <th class="rei-col" colspan="2">RE-ISSUED</th>
+            <th class="qty-col" colspan="1">Disposed</th>
+            <th class="qty-col" colspan="1">Balance</th>
+            <th class="amount-col" rowspan="2">Amount</th>
+            <th class="remarks-col" rowspan="2">Remarks</th>
+          </tr>
+          <tr>
+            <th class="ref-col">ICS/RRSP No.</th>
+            <th class="prop-col">Semi-expandable Property No.</th>
+            <th class="qty1-col">QTY</th>
+            <th class="officer1-col">Officer</th>
+            <th class="qty2-col">QTY</th>
+            <th class="officer2-col">Officer</th>
+            <th class="qty3-col">QTY</th>
+            <th class="officer3-col">Officer</th>
+            <th class="qty-col">QTY</th>
+            <th class="qty-col">QTY</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+          $count = 0;
+          if (!empty($issued_items)):
+            foreach ($issued_items as $item):
+              $count++;
+              // Much higher character limits for better readability
+              $item_description = htmlspecialchars($item['item_description']);
+              if (strlen($item_description) > 120) {
+                $item_description = substr($item_description, 0, 117) . '...';
+              }
+
+              $officer = htmlspecialchars($item['officer']);
+              if (strlen($officer) > 50) {
+                $officer = substr($officer, 0, 47) . '...';
+              }
+
+              $remarks = htmlspecialchars($item['remarks']);
+              if (strlen($remarks) > 80) {
+                $remarks = substr($remarks, 0, 77) . '...';
+              }
+          ?>
+              <tr data-fund-cluster="<?= htmlspecialchars($item['fund_cluster']); ?>" data-unit-cost="<?= $item['unit_cost']; ?>">
+                <td class="date-col text-content"><?= date('Y-m-d', strtotime($item['date'])); ?></td>
+                <td class="ref-col text-content"><?= htmlspecialchars($item['ics_no']); ?></td>
+                <td class="prop-col text-content"><?= htmlspecialchars($item['sep_inv_item_no']); ?></td>
+                <td class="desc-col text-content" title="<?= htmlspecialchars($item['item_description']); ?>"><?= $item_description; ?></td>
+                <td class="life-col text-content"><?= htmlspecialchars($item['estimated_use']); ?></td>
+                <td class="qty-col text-content"><?= (int)$item['qty_issued']; ?></td>
+                <td class="officer-col text-content" title="<?= htmlspecialchars($item['officer']); ?>"><?= $officer; ?></td>
+                <td class="qty-col text-content"><?= (int)$item['qty_returned']; ?></td>
+                <td class="officer-col text-content"><?= $item['qty_returned'] > 0 ? $officer : ''; ?></td>
+                <td class="qty-col text-content"><?= (int)$item['qty_re_issued']; ?></td>
+                <td class="officer-col text-content"><?= $item['qty_re_issued'] > 0 ? $officer : ''; ?></td>
+                <td class="qty-col text-content"></td>
+                <td class="qty-col text-content"><?= max(0, (int)$item['qty_issued'] - (int)$item['qty_returned']); ?></td>
+                <td class="amount-col text-content"><?= number_format($item['unit_cost'], 2); ?></td>
+                <td class="remarks-col text-content" title="<?= htmlspecialchars($item['remarks']); ?>"><?= $remarks; ?></td>
+              </tr>
+          <?php endforeach;
+          endif; ?>
+
+          <?php
+          $total_rows = 20;
+          $empty_rows = max(0, $total_rows - $count);
+          for ($i = 0; $i < $empty_rows; $i++): ?>
+            <tr>
+              <?php for ($j = 0; $j < 15; $j++): ?>
+                <td class="text-content">&nbsp;</td>
+              <?php endfor; ?>
+            </tr>
+          <?php endfor; ?>
+        </tbody>
+      </table>
     </div>
   </div>
-
-
-  <table id="reportTable">
-    <thead>
-      <tr>
-        <th rowspan="2">DATE</th>
-        <th colspan="2">REFERENCE</th>
-        <th rowspan="2">ITEM DESCRIPTION</th>
-        <th rowspan="2">Estimated Useful Life</th>
-        <th colspan="2">ISSUED</th>
-        <th colspan="2">RETURNED</th>
-        <th colspan="2">RE-ISSUED</th>
-        <th colspan="1">Disposed</th>
-        <th colspan="1">Balance</th>
-        <th rowspan="2">Amount</th>
-        <th rowspan="2">Remarks</th>
-      </tr>
-      <tr>
-        <th>ICS/RRSP No.</th>
-        <th>Semi-expandable Property No.</th>
-        <th>QTY</th>
-        <th>Officer</th>
-        <th>QTY</th>
-        <th>Officer</th>
-        <th>QTY</th>
-        <th>Officer</th>
-        <th>QTY</th>
-        <th>QTY</th>
-      </tr>
-    </thead>
-    <tbody>
-      <?php
-      $count = 0;
-      if (!empty($issued_items)):
-        foreach ($issued_items as $item):
-          $count++;
-      ?>
-          <tr data-fund-cluster="<?= htmlspecialchars($item['fund_cluster']); ?>" data-unit-cost="<?= $item['unit_cost']; ?>">
-            <td><?= date('Y-m-d', strtotime($item['date'])); ?></td>
-            <td><?= htmlspecialchars($item['ics_no']); ?></td>
-            <td><?= htmlspecialchars($item['sep_inv_item_no']); ?></td>
-            <td><?= htmlspecialchars($item['item_description']); ?></td>
-            <td><?= htmlspecialchars($item['estimated_use']); ?></td>
-            <td><?= (int)$item['qty_issued']; ?></td>
-            <td><?= htmlspecialchars($item['officer']); ?></td>
-            <td><?= (int)$item['qty_returned']; ?></td>
-            <td><?= $item['qty_returned'] > 0 ? htmlspecialchars($item['officer']) : ''; ?></td>
-            <td><?= (int)$item['qty_re_issued']; ?></td>
-            <td><?= $item['qty_re_issued'] > 0 ? htmlspecialchars($item['officer']) : ''; ?></td>
-            <td></td>
-            <td><?= max(0, (int)$item['qty_issued'] - (int)$item['qty_returned']); ?></td>
-            <td><?= number_format($item['unit_cost'], 2); ?></td>
-            <td><?= nl2br(htmlspecialchars($item['remarks'])); ?></td>
-          </tr>
-      <?php endforeach;
-      endif; ?>
-
-      <?php
-      $total_rows = 20;
-      $empty_rows = max(0, $total_rows - $count);
-      for ($i = 0; $i < $empty_rows; $i++): ?>
-        <tr><?php for ($j = 0; $j < 15; $j++): ?><td>&nbsp;</td><?php endfor; ?></tr>
-      <?php endfor; ?>
-    </tbody>
-  </table>
-</div>
 
 <!-- 🔽 SCRIPT -->
 <script>

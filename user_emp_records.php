@@ -206,7 +206,7 @@ $activity_dates = find_by_sql("
                     <div class="mt-2">
                         <span class="badge bg-success">Employee</span>
                         <?php if ($has_user_account): ?>
-                            <span class="badge bg-info">Has User Account</span>
+                            <span class="badge bg-warning">Has User Account</span>
                         <?php endif; ?>
                         <?php if ($emp_summary['total_par'] > 0 || $emp_summary['total_ics'] > 0): ?>
                             <span class="badge bg-warning">Has Property Records</span>
@@ -306,8 +306,8 @@ $activity_dates = find_by_sql("
                 <h3 class="card-title mb-0"><i class="fas fa-history"></i> Request History</h3>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                <div class="table-responsive" >
+                    <table class="table table-striped table-hover" id="detailTable">
                         <thead>
                             <tr>
                                 <th>RIS No</th>
@@ -357,7 +357,7 @@ $activity_dates = find_by_sql("
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table class="table table-striped table-hover" id="reqTable">
                         <thead>
                             <tr>
                                 <th>RIS No</th>
@@ -408,7 +408,7 @@ $activity_dates = find_by_sql("
                 <div class="card-body">
                     <?php if (count($par_transactions) > 0): ?>
                         <div class="table-responsive">
-                            <table class="table table-striped table-hover">
+                            <table class="table table-striped table-hover" id="parTable">
                                 <thead>
                                     <tr>
                                         <th>PAR No</th>
@@ -457,7 +457,7 @@ $activity_dates = find_by_sql("
                 <div class="card-body">
                     <?php if (count($ics_transactions) > 0): ?>
                         <div class="table-responsive">
-                            <table class="table table-striped table-hover">
+                            <table class="table table-striped table-hover" id="icsTable">
                                 <thead>
                                     <tr>
                                         <th>ICS No</th>
@@ -514,3 +514,71 @@ $activity_dates = find_by_sql("
 </style>
 
 <?php include_once('layouts/footer.php'); ?>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+
+<script>
+    $(document).ready(function () {
+    var table = $('#icsTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: false,
+        autoWidth: false,
+        fixedColumns: true
+    });
+    $('#searchInput').on('keyup', function() {
+      table.search(this.value).draw();
+    }); 
+    }); 
+
+</script>
+<script>
+    $(document).ready(function () {
+    var table = $('#parTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: false,
+        autoWidth: false,
+        fixedColumns: true
+    });
+    $('#searchInput').on('keyup', function() {
+      table.search(this.value).draw();
+    }); 
+    }); 
+
+</script>
+
+<script>
+    $(document).ready(function () {
+    var table = $('#reqTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: false,
+        autoWidth: false,
+        fixedColumns: true
+    });
+    $('#searchInput').on('keyup', function() {
+      table.search(this.value).draw();
+    }); 
+    }); 
+
+</script>
+<script>
+    $(document).ready(function () {
+    var table = $('#detailTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: false,
+        autoWidth: false,
+        fixedColumns: true
+    });
+    $('#searchInput').on('keyup', function() {
+      table.search(this.value).draw();
+    }); 
+    }); 
+
+</script>

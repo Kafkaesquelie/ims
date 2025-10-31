@@ -141,7 +141,7 @@ th {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-width: 180px;
+    min-width: 200px;
 }
 
 .print-controls .btn {
@@ -168,6 +168,17 @@ th {
     background: linear-gradient(135deg, #1e7e34, #155724);
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+}
+
+.print-controls .btn-info {
+    background: linear-gradient(135deg, var(--info), #138496);
+    color: white;
+}
+
+.print-controls .btn-info:hover {
+    background: linear-gradient(135deg, #138496, #0f6674);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(23, 162, 184, 0.4);
 }
 
 .print-controls .btn-secondary {
@@ -299,6 +310,22 @@ td:empty {
     <button onclick="handlePrint()" class="btn btn-success">
         <i class="fas fa-print"></i> Print Report
     </button>
+    <!-- <button onclick="exportToExcel()" class="btn btn-info">
+        <i class="fas fa-file-excel"></i> Export to Excel
+    </button> -->
+    <a href="export_rsmi.php?<?php 
+    $params = [
+        'report_date' => $report_date,
+        'fund_cluster' => $selected_cluster,
+        'signatory_name' => $signatory_name,
+        'signatory_position' => $signatory_position,
+        'signatory_agency' => $signatory_agency,
+        'serial_number' => $serial_number
+    ];
+    echo http_build_query(array_filter($params));
+?>" class="btn btn-info">
+    <i class="fas fa-file-excel"></i> Export to Excel
+</a>
     <button onclick="handleClose()" class="btn btn-secondary">
         <i class="fas fa-times"></i> Close Window
     </button>
@@ -542,6 +569,26 @@ td:empty {
 function handlePrint() {
     // Show print dialog
     window.print();
+}
+
+// Export to Excel function
+function exportToExcel() {
+    // Get the current URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Add export parameter
+    urlParams.set('export', 'excel');
+    
+    // Create export URL
+    const exportUrl = window.location.pathname + '?' + urlParams.toString();
+    
+    // Create and trigger download
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.download = 'RSMI_Report_' + new Date().toISOString().split('T')[0] + '.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // Enhanced close function

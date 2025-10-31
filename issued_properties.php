@@ -498,8 +498,8 @@ foreach ($ics_items as $item) {
                             <th>Issued To</th>
                             <th>Items</th>
                             <th class="text-center">Total Qty Issued</th>
-                            <th class="text-center">Total Qty Returned</th>
-                            <th class="text-center">Total Qty Re-Issued</th>
+                            <th class="text-center">Returned</th>
+                            <th class="text-center">Re-Issued</th>
                             <th class="text-center">Status</th>
                             <th class="text-center">Issue Date</th>
                             <th class="text-center">Actions</th>

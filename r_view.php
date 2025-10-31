@@ -702,7 +702,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
                     </div>
 
                     <!-- Items Table -->
-                    <!-- Items Table -->
 <div class="table-responsive">
     <table class="items-table">
         <thead>
@@ -826,40 +825,195 @@ document.addEventListener('DOMContentLoaded', function() {
     const risStatus = document.getElementById('risStatus');
     const approveBtn = document.getElementById('approveBtn');
     let originalRisValue = risInput.value;
+    let editableInput = null;
+    let fixedDisplay = null;
 
-    // RIS number editing
+    // RIS number formatting functions
+    function formatRISNumber(year, middle, sequence) {
+        return `${year}-${middle}-${sequence}`;
+    }
+
+    function parseRISNumber(risValue) {
+        if (!risValue) {
+            const currentYear = new Date().getFullYear().toString();
+            return { year: currentYear, middle: '0000', sequence: '0001' };
+        }
+        
+        const parts = risValue.split('-');
+        if (parts.length === 3) {
+            return {
+                year: parts[0] || '2024',
+                middle: parts[1] || '0000',
+                sequence: parts[2] || '0001'
+            };
+        }
+        return { year: '2024', middle: '0000', sequence: '0001' };
+    }
+
+    function validateMiddleDigits(middle) {
+        return /^\d{4}$/.test(middle);
+    }
+
+    // Initialize RIS number if empty
+    if (!originalRisValue) {
+        const parts = parseRISNumber('');
+        originalRisValue = formatRISNumber(parts.year, parts.middle, parts.sequence);
+        risInput.value = originalRisValue;
+    }
+
+    // RIS number editing - create editable middle part only
     risEditBtn.addEventListener('click', function() {
-        risInput.classList.remove('readonly');
-        risInput.classList.add('editable');
-        risInput.readOnly = false;
-        risInput.focus();
+        const parts = parseRISNumber(risInput.value);
+        
+        // Hide the original input
+        risInput.style.display = 'none';
+        
+        // Create display for fixed parts with editable middle
+        fixedDisplay = document.createElement('div');
+        fixedDisplay.className = 'ris-fixed-display';
+        fixedDisplay.style.display = 'flex';
+        fixedDisplay.style.alignItems = 'center';
+        fixedDisplay.style.gap = '5px';
+        fixedDisplay.style.marginBottom = '10px';
+        fixedDisplay.style.flexWrap = 'wrap';
+        
+        // First part (fixed)
+        const yearSpan = document.createElement('span');
+        yearSpan.className = 'ris-fixed-part';
+        yearSpan.textContent = parts.year + '-';
+        yearSpan.style.fontWeight = 'bold';
+        yearSpan.style.color = 'white';
+        yearSpan.style.fontSize = '1.1rem';
+        
+        // Middle part (editable)
+        editableInput = document.createElement('input');
+        editableInput.type = 'text';
+        editableInput.value = parts.middle;
+        editableInput.className = 'ris-input editable-middle';
+        editableInput.style.width = '80px';
+        editableInput.style.textAlign = 'center';
+        editableInput.style.fontSize = '1.1rem';
+        editableInput.style.fontWeight = 'bold';
+        editableInput.maxLength = 4;
+        editableInput.pattern = '[0-9]{4}';
+        editableInput.title = 'Enter 4 digits for the middle part';
+        
+        // Last part (fixed)
+        const sequenceSpan = document.createElement('span');
+        sequenceSpan.className = 'ris-fixed-part';
+        sequenceSpan.textContent = '-' + parts.sequence;
+        sequenceSpan.style.fontWeight = 'bold';
+        sequenceSpan.style.color = 'white';
+        sequenceSpan.style.fontSize = '1.1rem';
+        
+        fixedDisplay.appendChild(yearSpan);
+        fixedDisplay.appendChild(editableInput);
+        fixedDisplay.appendChild(sequenceSpan);
+        
+        risInput.parentNode.insertBefore(fixedDisplay, risInput);
+        
+        // Focus and select the editable part
+        editableInput.focus();
+        editableInput.select();
+        
         risActions.style.display = 'flex';
         risEditBtn.style.display = 'none';
+
+        // Handle input validation for middle digits
+        editableInput.addEventListener('input', function(e) {
+            // Allow only digits
+            this.value = this.value.replace(/[^0-9]/g, '');
+            
+            // Limit to 4 digits
+            if (this.value.length > 4) {
+                this.value = this.value.slice(0, 4);
+            }
+        });
+
+        // Handle Enter key to save
+        editableInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                saveRISChanges();
+            } else if (e.key === 'Escape') {
+                cancelRISEdit();
+            }
+        });
     });
 
-    risCancelBtn.addEventListener('click', function() {
-        risInput.value = originalRisValue;
-        risInput.classList.remove('editable');
-        risInput.classList.add('readonly');
-        risInput.readOnly = true;
+    // Save RIS changes
+    function saveRISChanges() {
+        if (!editableInput) return;
+        
+        const middleValue = editableInput.value;
+        
+        if (!validateMiddleDigits(middleValue)) {
+            showAlert('Invalid Input', 'Middle part must be exactly 4 digits.', 'error');
+            editableInput.focus();
+            editableInput.select();
+            return;
+        }
+
+        // Get the fixed parts
+        const parts = parseRISNumber(risInput.value);
+        
+        // Reconstruct full RIS number
+        const newRIS = formatRISNumber(parts.year, middleValue, parts.sequence);
+        risInput.value = newRIS;
+        
+        // Submit the form
+        risForm.submit();
+    }
+
+    // Cancel RIS edit
+    function cancelRISEdit() {
+        // Restore original state
+        risInput.style.display = 'inline-block';
+        if (fixedDisplay) {
+            fixedDisplay.remove();
+            fixedDisplay = null;
+        }
+        editableInput = null;
         risActions.style.display = 'none';
         risEditBtn.style.display = 'block';
         updateRISStatus(originalRisValue);
+    }
+
+    // Handle save button click
+    risForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        saveRISChanges();
     });
 
-    // Real-time RIS validation
+    // Handle cancel button click
+    risCancelBtn.addEventListener('click', function() {
+        cancelRISEdit();
+    });
+
+    // Real-time RIS validation for display
     risInput.addEventListener('input', function() {
         updateRISStatus(this.value);
     });
 
-    // Form submission with validation
+    // Form submission with validation (for direct form submission)
     risForm.addEventListener('submit', function(e) {
-        e.preventDefault();
+        // This prevents the default form submission when using the editable input
+        if (editableInput) {
+            e.preventDefault();
+            return;
+        }
         
         const risValue = risInput.value.trim();
         
         if (!risValue) {
             showAlert('Error', 'RIS Number cannot be empty.', 'error');
+            e.preventDefault();
+            return;
+        }
+
+        const parts = parseRISNumber(risValue);
+        if (!validateMiddleDigits(parts.middle)) {
+            showAlert('Invalid Format', 'Middle part must be exactly 4 digits.', 'error');
+            e.preventDefault();
             return;
         }
 
@@ -867,11 +1021,9 @@ document.addEventListener('DOMContentLoaded', function() {
         checkRISDuplicate(risValue).then(isDuplicate => {
             if (isDuplicate && risValue !== originalRisValue) {
                 showAlert('Duplicate RIS', 'This RIS Number is already used by another request. Please use a different number.', 'error');
+                e.preventDefault();
                 return;
             }
-
-            // Submit the form
-            risForm.submit();
         });
     });
 
@@ -923,8 +1075,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const parts = parseRISNumber(risValue);
+        if (!validateMiddleDigits(parts.middle)) {
+            risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-times-circle"></i> Middle part must be 4 digits</span>';
+            updateApproveButton(false);
+            return;
+        }
+
         checkRISDuplicate(risValue).then(isDuplicate => {
-            // Don't show duplicate if it's the current request's own RIS number
             if (isDuplicate && risValue !== originalRisValue) {
                 risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>';
                 updateApproveButton(false);

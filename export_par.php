@@ -9,7 +9,7 @@ if (ob_get_level()) {
 }
 
 try {
-    require 'vendor/autoload.php';  // Ensure PhpWord is loaded
+    require 'vendor/autoload.php';
 } catch (Exception $e) {
     die("Error loading PhpWord: " . $e->getMessage());
 }
@@ -23,7 +23,7 @@ if (!$par_no) {
     die("Invalid PAR number.");
 }
 
-// Fetch transaction details for the PAR number
+// 🟩 FIXED: Use the CORRECT SQL query with proper table joins
 $sql = "
     SELECT 
         t.id,
@@ -41,11 +41,11 @@ $sql = "
         t.status,
         t.remarks,
         CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
-        e.position AS employee_position,
-        e.office AS employee_office,
+        e.position,
+        e.office,
         e.image
     FROM transactions t
-    LEFT JOIN properties p ON t.item_id = p.id
+    LEFT JOIN properties p ON t.properties_id = p.id  -- 🟩 FIXED: Changed from item_id to properties_id
     LEFT JOIN employees e ON t.employee_id = e.id
     WHERE t.par_no = '{$par_no}'
     ORDER BY p.article ASC
@@ -71,14 +71,14 @@ try {
     // Load the template file
     $template = new TemplateProcessor($templatePath);
 
-    // Set the general PAR info (PAR No and Fund Cluster)
+    // Set the general PAR info
     $template->setValue('par_no', $par_no);
     $template->setValue('fund_cluster', !empty($first_transaction['fund_cluster']) ? $first_transaction['fund_cluster'] : 'General Fund');
     
-    // Set Receiver (Employee) Info
+    // 🟩 FIXED: Set Receiver (Employee) Info with proper field names
     $template->setValue('employee_name', strtoupper($first_transaction['employee_name'] ?? ''));
-    $template->setValue('employee_position', $first_transaction['employee_position'] ?? '');
-    $template->setValue('employee_office', $first_transaction['employee_office'] ?? '');
+    $template->setValue('employee_position', $first_transaction['position'] ?? ''); // 🟩 FIXED: Changed from employee_position to position
+    $template->setValue('employee_office', $first_transaction['office'] ?? ''); // 🟩 FIXED: Changed from employee_office to office
     
     // Clone rows for each item in the transaction
     $template->cloneRow('item_name', count($transactions));
@@ -97,7 +97,7 @@ try {
         $template->setValue("date_acquired#".($index+1), !empty($transaction['date_acquired']) ? date('M d, Y', strtotime($transaction['date_acquired'])) : 'N/A');
     }
 
-    // Set Issuer Information
+    // 🟩 FIXED: Set Issuer Information with proper position
     $template->setValue('issuer_name', strtoupper($current_user['name'] ?? 'Supply Officer'));
     $template->setValue('issuer_position', $current_user['position'] ?? 'Supply and Property Officer');
     $template->setValue('date_issued', date('F d, Y', strtotime($first_transaction['transaction_date'] ?? 'now')));
@@ -141,3 +141,4 @@ try {
     }
     die("Error generating document: " . $e->getMessage());
 }
+?>

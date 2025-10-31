@@ -16,7 +16,6 @@ $current_user = current_user();
 $report_date = $_GET['report_date'] ?? null;
 $selected_cluster = $_GET['fund_cluster'] ?? null;
 $value_type = $_GET['value_type'] ?? null;
-$serial_suffix = $_GET['serial_suffix'] ?? '0000';
 
 // Fetch semi-expendable items that were issued
 $semi_expendable_items = find_by_sql("
@@ -38,8 +37,8 @@ $semi_expendable_items = find_by_sql("
     LEFT JOIN semicategories sc ON p.semicategory_id = sc.id
     LEFT JOIN employees e ON t.employee_id = e.id
     WHERE 
-        t.transaction_type = 'issued'
-        AND t.status = 'approved'
+        t.transaction_type = 'issue'
+        AND t.status = 'Issued'
         " . ($report_date ? " AND DATE(t.transaction_date) = '" . $db->escape($report_date) . "'" : "") . "
         " . ($selected_cluster && $selected_cluster !== 'all' ? " AND p.fund_cluster = '" . $db->escape($selected_cluster) . "'" : "") . "
         " . ($value_type === 'low' ? " AND p.unit_cost < 5000" : "") . "
@@ -49,7 +48,6 @@ $semi_expendable_items = find_by_sql("
 
 $display_date = $report_date ? date("F d, Y", strtotime($report_date)) : date("F d, Y");
 $rspi_serial_prefix = date("Y-m-");
-$serial_number = $rspi_serial_prefix . $serial_suffix;
 ?>
 
 <?php include_once('layouts/header.php'); ?>
@@ -555,18 +553,7 @@ select.form-control option {
                     </select>
                 </div>
             </div>
-            <div class="filter-row">
-                <div class="filter-group">
-                    <label for="serial_suffix"><i class="fas fa-hashtag me-1"></i>Serial Number</label>
-                    <div class="serial-container">
-                        <span class="serial-prefix"><?= $rspi_serial_prefix ?></span>
-                        <input type="text" name="serial_suffix" id="serial_suffix" 
-                               class="serial-suffix" value="<?= htmlspecialchars($serial_suffix) ?>"
-                               placeholder="0000" maxlength="4" pattern="[0-9]{4}" title="Enter 4 digits">
-                    </div>
-                    <small class="form-text text-muted">Format: YYYY-MM-<strong>XXXX</strong> (Only last 4 digits are editable)</small>
-                </div>
-            </div>
+            
             <div class="d-flex gap-2 flex-wrap">
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-filter me-1"></i> Apply Filters
@@ -586,18 +573,17 @@ select.form-control option {
                 <span class="badge badge-primary me-2">Date: <?= $display_date ?></span>
                 <span class="badge badge-primary me-2">Fund Cluster: <?= $selected_cluster ? $selected_cluster : 'All' ?></span>
                 <span class="badge badge-primary me-2">Value: <?= $value_type ? ucfirst($value_type) : 'All' ?></span>
-                <span class="badge badge-primary">Serial No: <?= $serial_number ?></span>
             </p>
         </div>
 
         <?php if (!empty($semi_expendable_items)): ?>
-            <div class="table-responsive">
-                <table class="table table-hover">
+            <div class="table-responsive p-3">
+                <table class="table table-hover" id="rspiTable">
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Property No</th>
-                            <th>Article</th>
+                            <th>Inventory Item No</th>
+                            <th>Item</th>
                             <th>Description</th>
                             <th>Unit</th>
                             <th>Issued Qty</th>
@@ -700,52 +686,62 @@ $(document).ready(function(){
     });
 
     // Print RSPI
-    $('#printRspi').on('click', function(){
-        const reportDate = $('#report_date').val();
-        const fundCluster = $('#fund_cluster').val();
-        const valueType = $('#value_type').val();
-        const propertyCustodian = $('#property_custodian').val();
-        const accountingStaff = $('#accounting_staff').val();
-        const serialSuffix = $('#serial_suffix').val();
+    // Print RSPI - FIXED VERSION
+$('#printRspi').on('click', function(){
+    const reportDate = $('#report_date').val();
+    const fundCluster = $('#fund_cluster').val();
+    const valueType = $('#value_type').val();
+    const propertyCustodian = $('#property_custodian').val();
+    const accountingStaff = $('#accounting_staff').val();
 
-        // 🚫 Prevent printing if no date is selected
-        if (!reportDate) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Missing Report Date',
-                text: 'Please select a report date before generating the RSPI report.',
-                confirmButtonColor: '#28a745',
-                confirmButtonText: 'OK'
-            });
-            return;
-        }
+    // 🚫 Prevent printing if no date is selected
+    if (!reportDate) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Missing Report Date',
+            text: 'Please select a report date before generating the RSPI report.',
+            confirmButtonColor: '#28a745',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
 
-        // 🚫 Prevent printing if serial suffix is empty or invalid
-        if (!serialSuffix.trim() || !/^\d{4}$/.test(serialSuffix)) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Invalid Serial Number',
-                text: 'Please enter a valid 4-digit serial number suffix.',
-                confirmButtonColor: '#28a745',
-                confirmButtonText: 'OK'
-            });
-            return;
-        }
+    // 🚫 Prevent printing if signatories are not selected
+    if (!propertyCustodian) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Missing Property Custodian',
+            text: 'Please select a Property Custodian before generating the RSPI report.',
+            confirmButtonColor: '#28a745',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
 
-        let printUrl = 'print_rspi.php?';
-        
-        if (reportDate) printUrl += 'report_date=' + reportDate + '&';
-        if (fundCluster && fundCluster !== 'all') printUrl += 'fund_cluster=' + fundCluster + '&';
-        if (valueType) printUrl += 'value_type=' + valueType + '&';
-        if (propertyCustodian) printUrl += 'property_custodian=' + encodeURIComponent(propertyCustodian) + '&';
-        if (accountingStaff) printUrl += 'accounting_staff=' + encodeURIComponent(accountingStaff) + '&';
-        if (serialSuffix) printUrl += 'serial_suffix=' + encodeURIComponent(serialSuffix);
+    if (!accountingStaff) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Missing Accounting Staff',
+            text: 'Please select an Accounting Staff before generating the RSPI report.',
+            confirmButtonColor: '#28a745',
+            confirmButtonText: 'OK'
+        });
+        return;
+    }
 
-        // Remove trailing & or ? if no parameters
-        printUrl = printUrl.replace(/[&?]$/, '');
+    let printUrl = 'print_rspi.php?';
+    
+    if (reportDate) printUrl += 'report_date=' + reportDate + '&';
+    if (fundCluster && fundCluster !== 'all') printUrl += 'fund_cluster=' + fundCluster + '&';
+    if (valueType) printUrl += 'value_type=' + valueType + '&';
+    if (propertyCustodian) printUrl += 'property_custodian=' + encodeURIComponent(propertyCustodian) + '&';
+    if (accountingStaff) printUrl += 'accounting_staff=' + encodeURIComponent(accountingStaff);
 
-        window.open(printUrl, '_blank');
-    });
+    // Remove trailing & if exists
+    printUrl = printUrl.replace(/[&]$/, '');
+
+    window.open(printUrl, '_blank');
+});
 
     // Restrict serial suffix input to numbers only
     $('#serial_suffix').on('input', function() {
@@ -758,4 +754,19 @@ $(document).ready(function(){
     // Add animation to cards on load
     $('.card').addClass('fade-in');
 });
+</script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+  <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+<script>
+     $(document).ready(function() {
+      var table = $('#rspiTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: false,
+        autoWidth: false,
+        fixedColumns: true
+      });
+      }); 
+
 </script>
