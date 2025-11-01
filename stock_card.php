@@ -13,6 +13,28 @@ function getTransactionOrder($type) {
     }
 }
 
+// Helper function to convert quantity to base unit
+function convertToBaseUnit($quantity, $unit_id, $db) {
+    if (!$unit_id) return $quantity;
+    
+    $unit = find_by_id('units', $unit_id);
+    if ($unit && isset($unit['conversion_factor']) && $unit['conversion_factor'] > 0) {
+        return $quantity * $unit['conversion_factor'];
+    }
+    return $quantity;
+}
+
+// Helper function to convert from base unit to display unit
+function convertFromBaseUnit($quantity, $unit_id, $db) {
+    if (!$unit_id) return $quantity;
+    
+    $unit = find_by_id('units', $unit_id);
+    if ($unit && isset($unit['conversion_factor']) && $unit['conversion_factor'] > 0) {
+        return $quantity / $unit['conversion_factor'];
+    }
+    return $quantity;
+}
+
 // =====================
 // Get filter parameters
 // =====================
@@ -67,7 +89,7 @@ $categories = find_by_sql("
 $items_list = [];
 if (!empty($category_filter)) {
     $items_list = find_by_sql("
-        SELECT i.id, i.name, i.stock_card
+        SELECT i.id, i.name, i.stock_card, i.unit_id
         FROM items i
         WHERE i.categorie_id = '{$db->escape($category_filter)}'
         ORDER BY i.name
@@ -79,6 +101,7 @@ if (!empty($category_filter)) {
 // =====================
 $stock_transactions = [];
 $stock_item = null;
+$item_unit_id = null;
 
 // If item filter is selected, use it for search
 $search_input = $item_filter ?: $stock_card_input;
@@ -93,6 +116,7 @@ if (!empty($search_input)) {
             i.unit_cost,
             i.fund_cluster,
             ui.name AS unit_name,
+            ui.id AS unit_id,
             i.description,
             i.quantity AS current_balance
         FROM items i
@@ -107,6 +131,7 @@ if (!empty($search_input)) {
     
     if ($stock_item) {
         $item_id = $stock_item['id'];
+        $item_unit_id = $stock_item['unit_id'];
         $item_unit_cost = $stock_item['unit_cost'];
         
         // Fetch ONLY stock_in transactions from stock history
@@ -122,7 +147,8 @@ if (!empty($search_input)) {
                 sh.change_type,
                 sh.remarks,
                 'stock_history' AS source,
-                '' AS office_name
+                '' AS office_name,
+                i.unit_id
             FROM stock_history sh
             JOIN items i ON sh.item_id = i.id
             WHERE sh.item_id = '{$db->escape($item_id)}'
@@ -150,7 +176,8 @@ if (!empty($search_input)) {
                 'request' AS source,
                 o.office_name,
                 r.date_issued,
-                r.date_completed
+                r.date_completed,
+                i.unit_id
             FROM requests r
             INNER JOIN request_items ri ON r.id = ri.req_id
             INNER JOIN items i ON ri.item_id = i.id
@@ -161,14 +188,6 @@ if (!empty($search_input)) {
             ORDER BY date ASC
         ";
         $issuances = find_by_sql($issuances_sql);
-        
-        // Debug: Check if issuances are being fetched
-        error_log("Issuances found: " . count($issuances));
-        if (!empty($issuances)) {
-            error_log("First issuance - Date issued: " . ($issuances[0]['date_issued'] ?? 'No date issued') . 
-                     ", Date completed: " . ($issuances[0]['date_completed'] ?? 'No date completed') . 
-                     ", Final date: " . ($issuances[0]['date'] ?? 'No final date'));
-        }
         
         // Fetch carry forward transactions (if they exist as separate records)
         $carry_forward_sql = "
@@ -185,7 +204,8 @@ if (!empty($search_input)) {
                 'stock_history' AS source,
                 '' AS office_name,
                 NULL AS date_issued,
-                NULL AS date_completed
+                NULL AS date_completed,
+                i.unit_id
             FROM stock_history sh
             JOIN items i ON sh.item_id = i.id
             WHERE sh.item_id = '{$db->escape($item_id)}'
@@ -210,7 +230,8 @@ if (!empty($search_input)) {
                     'stock_history' AS source,
                     '' AS office_name,
                     NULL AS date_issued,
-                    NULL AS date_completed
+                    NULL AS date_completed,
+                    i.unit_id
                 FROM stock_history sh
                 JOIN items i ON sh.item_id = i.id
                 WHERE sh.item_id = '{$db->escape($item_id)}'
@@ -229,12 +250,6 @@ if (!empty($search_input)) {
         // Combine all transactions
         $all_transactions = array_merge($stock_history, $issuances, $carry_forwards);
         
-        // Debug: Check combined transactions
-        error_log("Total transactions: " . count($all_transactions));
-        error_log("Stock history (stock_in only): " . count($stock_history));
-        error_log("Issuances: " . count($issuances));
-        error_log("Carry forwards: " . count($carry_forwards));
-        
         // Sort by date and time - more precise sorting
         usort($all_transactions, function($a, $b) {
             $dateA = isset($a['date']) ? strtotime($a['date']) : 0;
@@ -251,13 +266,13 @@ if (!empty($search_input)) {
         });
         
         // Calculate running balance - START FROM CURRENT BALANCE AND WORK BACKWARDS
-        // First, get the current balance from items table
-        $current_balance = $stock_item['current_balance'];
+        // First, get the current balance from items table and convert to base unit
+        $current_balance_base = convertToBaseUnit($stock_item['current_balance'], $item_unit_id, $db);
         
         // Reverse the transactions to calculate historical balances
         $reversed_transactions = array_reverse($all_transactions);
-        $running_balance = $current_balance;
-        $running_total_cost = $current_balance * $item_unit_cost;
+        $running_balance_base = $current_balance_base;
+        $running_total_cost = $current_balance_base * $item_unit_cost;
         
         foreach ($reversed_transactions as &$transaction) {
             // Ensure all required fields are set
@@ -272,30 +287,40 @@ if (!empty($search_input)) {
             $transaction['date_issued'] = $transaction['date_issued'] ?? null;
             $transaction['date_completed'] = $transaction['date_completed'] ?? null;
             
-            // Store the running balance for this transaction
-            $transaction['running_balance'] = $running_balance;
-            $transaction['running_total_cost'] = $running_balance * $transaction['unit_cost'];
+            // Convert transaction quantity to base unit for calculation
+            $tx_quantity_base = convertToBaseUnit($transaction['quantity'], $transaction['unit_id'] ?? $item_unit_id, $db);
             
-            // Adjust running balance based on transaction type
+            // Convert running balance back to display unit for storage
+            $transaction['running_balance'] = convertFromBaseUnit($running_balance_base, $item_unit_id, $db);
+            $transaction['running_total_cost'] = $running_balance_base * $transaction['unit_cost'];
+            
+            // Adjust running balance based on transaction type (in base units)
             if ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') {
                 // For stock_in, subtract the quantity to get previous balance
-                $running_balance -= $transaction['quantity'];
+                $running_balance_base -= $tx_quantity_base;
             } elseif ($transaction['change_type'] === 'issuance') {
                 // For issuance, add the quantity to get previous balance
-                $running_balance += $transaction['quantity'];
+                $running_balance_base += $tx_quantity_base;
             }
             
-            // Debug individual transaction
-            error_log("Transaction: " . $transaction['change_type'] . 
-                     " - Date: " . $transaction['date'] . 
-                     " - Date Issued: " . ($transaction['date_issued'] ?? 'N/A') .
-                     " - Date Completed: " . ($transaction['date_completed'] ?? 'N/A') .
-                     " - Qty: " . $transaction['quantity'] . 
-                     " - Balance: " . $transaction['running_balance']);
+            // Ensure running balance doesn't go negative
+            if ($running_balance_base < 0) {
+                $running_balance_base = 0;
+            }
         }
         
         // Reverse back to chronological order
         $stock_transactions = array_reverse($reversed_transactions);
+        
+        // Final conversion of all quantities to display units
+        foreach ($stock_transactions as &$transaction) {
+            $transaction['quantity'] = convertFromBaseUnit($transaction['quantity'], $transaction['unit_id'] ?? $item_unit_id, $db);
+            $transaction['running_balance'] = convertFromBaseUnit($transaction['running_balance'], $item_unit_id, $db);
+            
+            // Round to whole numbers for display
+            $transaction['quantity'] = round($transaction['quantity']);
+            $transaction['running_balance'] = round($transaction['running_balance']);
+        }
     }
 }
 
@@ -746,7 +771,7 @@ if (!empty($smpi_items)) {
                 
                 <!-- Receipt Columns -->
                 <td>
-                  <?= ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') ? $transaction['quantity'] : '' ?>
+                  <?= ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') ? round($transaction['quantity']) : '' ?>
                 </td>
                 <td>
                   <?= ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') ? number_format($transaction['unit_cost'], 2) : '' ?>
@@ -754,7 +779,7 @@ if (!empty($smpi_items)) {
                 
                 <!-- Issuance Columns -->
                 <td>
-                  <?= $transaction['change_type'] === 'issuance' ? $transaction['quantity'] : '' ?>
+                  <?= $transaction['change_type'] === 'issuance' ? round($transaction['quantity']) : '' ?>
                 </td>
                 <td>
                   <?= $transaction['change_type'] === 'issuance' ? number_format($transaction['unit_cost'], 2) : '' ?>
@@ -767,7 +792,7 @@ if (!empty($smpi_items)) {
                 </td>
                 
                 <!-- Balance Columns -->
-                <td><?= $transaction['running_balance'] ?? 0 ?></td>
+                <td><?= round($transaction['running_balance'] ?? 0) ?></td>
                 <td><?= number_format($transaction['running_total_cost'] ?? 0, 2) ?></td>
                 <td></td> <!-- No. of Days to Consume -->
                 <td>
