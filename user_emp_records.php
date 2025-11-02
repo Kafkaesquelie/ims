@@ -539,7 +539,7 @@ $activity_dates = find_by_sql("
         pageLength: 5,
         lengthMenu: [5, 10, 25, 50],
         ordering: true,
-        searching: false,
+        searching: true,
         autoWidth: false,
         fixedColumns: true
     });
@@ -556,7 +556,7 @@ $activity_dates = find_by_sql("
         pageLength: 5,
         lengthMenu: [5, 10, 25, 50],
         ordering: true,
-        searching: false,
+        searching: true,
         autoWidth: false,
         fixedColumns: true
     });
@@ -572,7 +572,7 @@ $activity_dates = find_by_sql("
         pageLength: 5,
         lengthMenu: [5, 10, 25, 50],
         ordering: true,
-        searching: false,
+        searching: true,
         autoWidth: false,
         fixedColumns: true
     });

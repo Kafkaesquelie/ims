@@ -1075,34 +1075,34 @@ if (!empty($msg) && is_array($msg)):
                 <td class="text-center">
                   <strong class="text-success">₱<?= number_format($item['unit_cost'] ?? 0, 2); ?></strong>
                 </td>
-     <td class="text-center">
-  <div class="d-flex flex-column align-items-center">
-    <span class="badge badge-custom <?= $lowStock ? 'badge-warning' : 'badge-primary'; ?> p-2" style="font-size:14px">
-      <?php if ($has_conversion): ?>
-        <!-- For items with conversion, use the conversion unit data -->
-        <?php if ($main_quantity > 0 && $base_quantity > 0): ?>
-          <strong><?= intval($main_quantity); ?></strong> <?= $item['main_unit']; ?>
-          |
-          <strong><?= intval($base_quantity); ?></strong> <?= $item['base_unit']; ?>
-        <?php elseif ($main_quantity > 0): ?>
-          <strong><?= intval($main_quantity); ?></strong> <?= $item['main_unit']; ?>
-        <?php else: ?>
-          <strong><?= intval($base_quantity); ?></strong> <?= $item['base_unit']; ?>
-        <?php endif; ?>
-      <?php else: ?>
-        <!-- For items without conversion, use the main unit name -->
-        <strong><?= number_format($item_quantity); ?></strong> <?= $item['unit_name']; ?>
-      <?php endif; ?>
-    </span>
-    
-    <!-- Show conversion info when applicable -->
-    <?php if ($has_conversion): ?>
-      <small class="text-muted quantity-breakdown mt-1">
-        1 <?= $item['main_unit']; ?> = <?= $conversion_rate; ?> <?= $item['base_unit']; ?>
-      </small>
-    <?php endif; ?>
-  </div>
-</td>
+                <td class="text-center">
+                  <div class="d-flex flex-column align-items-center">
+                    <span class="badge badge-custom <?= $lowStock ? 'badge-warning' : 'badge-primary'; ?> p-2" style="font-size:14px">
+                      <?php if ($has_conversion): ?>
+                        <!-- For items with conversion, use the conversion unit data -->
+                        <?php if ($main_quantity > 0 && $base_quantity > 0): ?>
+                          <strong><?= intval($main_quantity); ?></strong> <?= $item['main_unit']; ?>
+                          |
+                          <strong><?= intval($base_quantity); ?></strong> <?= $item['base_unit']; ?>
+                        <?php elseif ($main_quantity > 0): ?>
+                          <strong><?= intval($main_quantity); ?></strong> <?= $item['main_unit']; ?>
+                        <?php else: ?>
+                          <strong><?= intval($base_quantity); ?></strong> <?= $item['base_unit']; ?>
+                        <?php endif; ?>
+                      <?php else: ?>
+                        <!-- For items without conversion, use the main unit name -->
+                        <strong><?= number_format($item_quantity); ?></strong> <?= $item['unit_name']; ?>
+                      <?php endif; ?>
+                    </span>
+
+                    <!-- Show conversion info when applicable -->
+                    <?php if ($has_conversion): ?>
+                      <small class="text-muted quantity-breakdown mt-1">
+                        1 <?= $item['main_unit']; ?> = <?= $conversion_rate; ?> <?= $item['base_unit']; ?>
+                      </small>
+                    <?php endif; ?>
+                  </div>
+                </td>
                 <td class="text-center">
                   <div class="btn-group btn-group-custom">
                     <a href="edit_item.php?id=<?= (int)$item['id']; ?>" class="btn btn-warning-custom" title="Edit">
@@ -1132,239 +1132,240 @@ if (!empty($msg) && is_array($msg)):
       </div>
     <?php endif; ?>
   </div>
+</div>
 
-  <?php include_once('layouts/footer.php'); ?>
+<?php include_once('layouts/footer.php'); ?>
 
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
-  <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
-  <script>
-    $(document).ready(function() {
-      var table = $('#itemsTable').DataTable({
-        pageLength: 5,
-        lengthMenu: [5, 10, 25, 50],
-        ordering: true,
-        searching: false,
-        autoWidth: false,
-        fixedColumns: true
-      });
-      $('#searchInput').on('keyup', function() {
-        table.search(this.value).draw();
-      }); // 🔍 Custom search box function
+<script>
+  $(document).ready(function() {
+    var table = $('#itemsTable').DataTable({
+      pageLength: 5,
+      lengthMenu: [5, 10, 25, 50],
+      ordering: true,
+      searching: false,
+      autoWidth: false,
+      fixedColumns: true
+    });
+    $('#searchInput').on('keyup', function() {
+      table.search(this.value).draw();
+    }); // 🔍 Custom search box function
 
 
-      // Show add item form
-      function showAddForm() {
-        $('#addItemForm').fadeIn(300).addClass('fade-in');
-        $('#itemsTableSection').hide();
-        $('html, body').animate({
-          scrollTop: $('#addItemForm').offset().top - 20
-        }, 300);
+    // Show add item form
+    function showAddForm() {
+      $('#addItemForm').fadeIn(300).addClass('fade-in');
+      $('#itemsTableSection').hide();
+      $('html, body').animate({
+        scrollTop: $('#addItemForm').offset().top - 20
+      }, 300);
+    }
+
+    // Hide add item form
+    function hideAddForm() {
+      $('#addItemForm').fadeOut(300);
+      $('#itemsTableSection').fadeIn(300);
+      $('html, body').animate({
+        scrollTop: $('#itemsTableSection').offset().top - 20
+      }, 300);
+    }
+
+    // Event listeners for showing form
+    $('#showAddFormBtn, #showAddFormEmptyBtn').on('click', showAddForm);
+
+    // Event listeners for hiding form
+    $('#cancelAddBtn, #cancelFormBtn').on('click', hideAddForm);
+
+    // Form validation
+    (function() {
+      'use strict';
+      window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+          form.addEventListener('submit', function(event) {
+            if (form.checkValidity() === false) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+          }, false);
+        });
+      }, false);
+    })();
+
+    // Bulk selection functionality
+    function updateBulkActions() {
+      const selectedCount = $('.item-checkbox:checked').length;
+      const bulkActions = $('#bulkActions');
+      const selectedCountElement = $('#selectedCount');
+
+      selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
+
+      if (selectedCount > 0) {
+        bulkActions.addClass('show');
+      } else {
+        bulkActions.removeClass('show');
+      }
+    }
+
+    // Select All functionality
+    $('#selectAll').on('change', function() {
+      const checked = $(this).is(':checked');
+      table.rows().nodes().to$().find('.item-checkbox').prop('checked', checked);
+      updateBulkActions();
+    });
+
+    // Individual checkbox change
+    $('#itemsTable tbody').on('change', '.item-checkbox', updateBulkActions);
+
+    // Clear selection
+    $('#clearSelection').on('click', function() {
+      table.rows().nodes().to$().find('.item-checkbox').prop('checked', false);
+      $('#selectAll').prop('checked', false);
+      updateBulkActions();
+    });
+
+    // Bulk Edit
+    $('#bulkEdit').on('click', function() {
+      const ids = table.$('.item-checkbox:checked').map(function() {
+        return $(this).data('id');
+      }).get();
+
+      if (ids.length > 0) {
+        window.location.href = "bulk_edit_items.php?ids=" + ids.join(',');
+      } else {
+        Swal.fire('No items selected', 'Please select items to edit.', 'info');
+      }
+    });
+
+    // Bulk Archive
+    $('#bulkArchive').on('click', function() {
+      const ids = table.$('.item-checkbox:checked').map(function() {
+        return $(this).data('id');
+      }).get();
+
+      if (ids.length === 0) {
+        Swal.fire('No items selected', 'Please select items to archive.', 'info');
+        return;
       }
 
-      // Hide add item form
-      function hideAddForm() {
-        $('#addItemForm').fadeOut(300);
-        $('#itemsTableSection').fadeIn(300);
-        $('html, body').animate({
-          scrollTop: $('#itemsTableSection').offset().top - 20
-        }, 300);
-      }
-
-      // Event listeners for showing form
-      $('#showAddFormBtn, #showAddFormEmptyBtn').on('click', showAddForm);
-
-      // Event listeners for hiding form
-      $('#cancelAddBtn, #cancelFormBtn').on('click', hideAddForm);
-
-      // Form validation
-      (function() {
-        'use strict';
-        window.addEventListener('load', function() {
-          var forms = document.getElementsByClassName('needs-validation');
-          var validation = Array.prototype.filter.call(forms, function(form) {
-            form.addEventListener('submit', function(event) {
-              if (form.checkValidity() === false) {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-              form.classList.add('was-validated');
-            }, false);
+      Swal.fire({
+        title: 'Archive Items?',
+        text: `You are about to archive ${ids.length} item(s). This action can be undone later.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, archive them!',
+        cancelButtonText: 'Cancel'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          const form = $('<form method="POST" action="items.php"></form>');
+          ids.forEach(id => {
+            form.append(`<input type="hidden" name="bulk_archive_ids[]" value="${id}">`);
           });
-        }, false);
-      })();
-
-      // Bulk selection functionality
-      function updateBulkActions() {
-        const selectedCount = $('.item-checkbox:checked').length;
-        const bulkActions = $('#bulkActions');
-        const selectedCountElement = $('#selectedCount');
-
-        selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
-
-        if (selectedCount > 0) {
-          bulkActions.addClass('show');
-        } else {
-          bulkActions.removeClass('show');
-        }
-      }
-
-      // Select All functionality
-      $('#selectAll').on('change', function() {
-        const checked = $(this).is(':checked');
-        table.rows().nodes().to$().find('.item-checkbox').prop('checked', checked);
-        updateBulkActions();
-      });
-
-      // Individual checkbox change
-      $('#itemsTable tbody').on('change', '.item-checkbox', updateBulkActions);
-
-      // Clear selection
-      $('#clearSelection').on('click', function() {
-        table.rows().nodes().to$().find('.item-checkbox').prop('checked', false);
-        $('#selectAll').prop('checked', false);
-        updateBulkActions();
-      });
-
-      // Bulk Edit
-      $('#bulkEdit').on('click', function() {
-        const ids = table.$('.item-checkbox:checked').map(function() {
-          return $(this).data('id');
-        }).get();
-
-        if (ids.length > 0) {
-          window.location.href = "bulk_edit_items.php?ids=" + ids.join(',');
-        } else {
-          Swal.fire('No items selected', 'Please select items to edit.', 'info');
+          $('body').append(form);
+          form.submit();
         }
       });
+    });
 
-      // Bulk Archive
-      $('#bulkArchive').on('click', function() {
-        const ids = table.$('.item-checkbox:checked').map(function() {
-          return $(this).data('id');
-        }).get();
-
-        if (ids.length === 0) {
-          Swal.fire('No items selected', 'Please select items to archive.', 'info');
-          return;
-        }
+    // Individual archive confirmation
+    document.querySelectorAll('.archive-btn').forEach(function(button) {
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        const url = this.getAttribute('href');
+        const id = this.getAttribute('data-id');
 
         Swal.fire({
-          title: 'Archive Items?',
-          text: `You are about to archive ${ids.length} item(s). This action can be undone later.`,
+          title: 'Archive Item?',
+          text: "This item will be moved to archives. You can restore it later if needed.",
           icon: 'warning',
           showCancelButton: true,
           confirmButtonColor: '#d33',
           cancelButtonColor: '#6c757d',
-          confirmButtonText: 'Yes, archive them!',
+          confirmButtonText: 'Yes, archive it!',
           cancelButtonText: 'Cancel'
         }).then((result) => {
           if (result.isConfirmed) {
-            const form = $('<form method="POST" action="items.php"></form>');
-            ids.forEach(id => {
-              form.append(`<input type="hidden" name="bulk_archive_ids[]" value="${id}">`);
-            });
-            $('body').append(form);
-            form.submit();
-          }
-        });
-      });
-
-      // Individual archive confirmation
-      document.querySelectorAll('.archive-btn').forEach(function(button) {
-        button.addEventListener('click', function(e) {
-          e.preventDefault();
-          const url = this.getAttribute('href');
-          const id = this.getAttribute('data-id');
-
-          Swal.fire({
-            title: 'Archive Item?',
-            text: "This item will be moved to archives. You can restore it later if needed.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, archive it!',
-            cancelButtonText: 'Cancel'
-          }).then((result) => {
-            if (result.isConfirmed) {
-              window.location.href = url;
-            }
-          });
-        });
-      });
-
-      // Add row hover effects
-      const tableRows = document.querySelectorAll('#itemsTable tbody tr');
-      tableRows.forEach(row => {
-        row.addEventListener('click', function(e) {
-          if (!e.target.closest('.btn-group-custom') && !e.target.closest('.item-checkbox')) {
-            const checkbox = this.querySelector('.item-checkbox');
-            if (checkbox) {
-              checkbox.checked = !checkbox.checked;
-              updateBulkActions();
-            }
+            window.location.href = url;
           }
         });
       });
     });
 
-    document.addEventListener("DOMContentLoaded", () => {
-      const searchInput = document.getElementById("searchInput");
-      const table = document.getElementById("itemsTable");
-      const rows = table.getElementsByTagName("tr");
-
-      searchInput.addEventListener("keyup", function() {
-        const filter = this.value.toLowerCase();
-
-        // Loop through table rows (skip header)
-        for (let i = 1; i < rows.length; i++) {
-          const cells = rows[i].getElementsByTagName("td");
-          let match = false;
-
-          // Check every cell for a match
-          for (let j = 0; j < cells.length; j++) {
-            const cellText = cells[j].textContent || cells[j].innerText;
-            if (cellText.toLowerCase().indexOf(filter) > -1) {
-              match = true;
-              break;
-            }
+    // Add row hover effects
+    const tableRows = document.querySelectorAll('#itemsTable tbody tr');
+    tableRows.forEach(row => {
+      row.addEventListener('click', function(e) {
+        if (!e.target.closest('.btn-group-custom') && !e.target.closest('.item-checkbox')) {
+          const checkbox = this.querySelector('.item-checkbox');
+          if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            updateBulkActions();
           }
-
-          // Show or hide the row based on match
-          rows[i].style.display = match ? "" : "none";
         }
       });
     });
-  </script>
+  });
 
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const baseUnit = document.getElementById('base_unit_id');
-      const convRate = document.getElementById('conversion_rate');
-      const unitSelect = document.getElementById('unit_id');
+  document.addEventListener("DOMContentLoaded", () => {
+    const searchInput = document.getElementById("searchInput");
+    const table = document.getElementById("itemsTable");
+    const rows = table.getElementsByTagName("tr");
 
-      function toggleConversionRate() {
-        const baseUnitName = baseUnit.options[baseUnit.selectedIndex].text;
-        const baseUnitValue = baseUnit.value;
-        const unitValue = unitSelect.value;
+    searchInput.addEventListener("keyup", function() {
+      const filter = this.value.toLowerCase();
 
-        // Disable conversion rate if:
-        // 1. Base unit is "Not Applicable" OR
-        // 2. Base unit is same as regular unit
-        if (baseUnitName === 'Not Applicable' || baseUnitValue === unitValue) {
-          convRate.value = '';
-          convRate.disabled = true;
-          convRate.placeholder = 'Not needed';
-        } else {
-          convRate.disabled = false;
-          convRate.placeholder = 'e.g., 10 (if 1 box = 10 pieces)';
+      // Loop through table rows (skip header)
+      for (let i = 1; i < rows.length; i++) {
+        const cells = rows[i].getElementsByTagName("td");
+        let match = false;
+
+        // Check every cell for a match
+        for (let j = 0; j < cells.length; j++) {
+          const cellText = cells[j].textContent || cells[j].innerText;
+          if (cellText.toLowerCase().indexOf(filter) > -1) {
+            match = true;
+            break;
+          }
         }
+
+        // Show or hide the row based on match
+        rows[i].style.display = match ? "" : "none";
       }
-
-      baseUnit.addEventListener('change', toggleConversionRate);
-      unitSelect.addEventListener('change', toggleConversionRate);
-      toggleConversionRate(); // run on load
     });
-  </script>
+  });
+</script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const baseUnit = document.getElementById('base_unit_id');
+    const convRate = document.getElementById('conversion_rate');
+    const unitSelect = document.getElementById('unit_id');
+
+    function toggleConversionRate() {
+      const baseUnitName = baseUnit.options[baseUnit.selectedIndex].text;
+      const baseUnitValue = baseUnit.value;
+      const unitValue = unitSelect.value;
+
+      // Disable conversion rate if:
+      // 1. Base unit is "Not Applicable" OR
+      // 2. Base unit is same as regular unit
+      if (baseUnitName === 'Not Applicable' || baseUnitValue === unitValue) {
+        convRate.value = '';
+        convRate.disabled = true;
+        convRate.placeholder = 'Not needed';
+      } else {
+        convRate.disabled = false;
+        convRate.placeholder = 'e.g., 10 (if 1 box = 10 pieces)';
+      }
+    }
+
+    baseUnit.addEventListener('change', toggleConversionRate);
+    unitSelect.addEventListener('change', toggleConversionRate);
+    toggleConversionRate(); // run on load
+  });
+</script>

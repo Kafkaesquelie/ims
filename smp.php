@@ -635,7 +635,7 @@ if (!empty($msg) && is_array($msg)):
         <div class="form-row-custom">
            <div class="form-group-custom">
             <label class="form-label">Item</label>
-            <input type="text" class="form-control" name="item_description" placeholder="Item Description" required>
+            <input type="text" class="form-control" name="item" placeholder="Item Name" required>
           </div>
           <div class="form-group-custom">
             <label class="form-label">Item Description</label>
@@ -665,7 +665,7 @@ if (!empty($msg) && is_array($msg)):
           </div>
           <div class="form-group-custom d-flex align-items-end">
             <button type="submit" class="btn btn-primary-custom w-100">
-              <i class="fas fa-check me-2"></i> Save Property
+              <i class="fas fa-check me-2"></i> Save Semi-Expendable Property
             </button>
           </div>
         </div>

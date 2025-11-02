@@ -31,14 +31,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_equipment'])) {
 
     if ($db->query($query)) {
       $session->msg("s", "Equipment added successfully.");
-      redirect('equipment.php', false);
+      redirect('ppe.php', false);
     } else {
       $session->msg("d", "Sorry, failed to add equipment.");
-      redirect('equipment.php', false);
+      redirect('ppe.php', false);
     }
   } else {
     $session->msg("d", $errors);
-    redirect('equipment.php', false);
+    redirect('ppe.php', false);
   }
 }
 

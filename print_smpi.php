@@ -562,10 +562,10 @@ if (isset($_POST['export_excel']) && $item) {
             </form>
         <?php endif; ?>
         
-        <button onclick="window.print()" class="action-btn print-btn">
+        <!-- <button onclick="window.print()" class="action-btn print-btn">
             <i class="fas fa-print btn-icon"></i>
             Print
-        </button>
+        </button> -->
         
         <button onclick="window.close()" class="action-btn close-btn">
             <i class="fas fa-times btn-icon"></i>

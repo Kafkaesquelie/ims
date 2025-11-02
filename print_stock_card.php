@@ -421,7 +421,7 @@ table.table-bordered thead th {
     <!-- Right Logos in a Row -->
     <div style="flex:0 0 auto; display:flex; gap:10px;">
       <img src="uploads/other/SPMO.png" alt="Logo Right 1" style="max-width:80px; height:auto;">
-      <img src="uploads/other/BP.PNg" alt="Logo Right 2" style="max-width:100px; height:auto;">
+      <img src="uploads/other/BP.png" alt="Logo Right 2" style="max-width:100px; height:auto;">
     </div>
 
   </div>

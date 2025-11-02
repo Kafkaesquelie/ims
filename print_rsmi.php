@@ -307,9 +307,9 @@ td:empty {
 
 <!-- Print Controls -->
 <div class="print-controls no-print">
-    <button onclick="handlePrint()" class="btn btn-success">
+    <!-- <button onclick="handlePrint()" class="btn btn-success">
         <i class="fas fa-print"></i> Print Report
-    </button>
+    </button> -->
     <!-- <button onclick="exportToExcel()" class="btn btn-info">
         <i class="fas fa-file-excel"></i> Export to Excel
     </button> -->
@@ -323,7 +323,7 @@ td:empty {
         'serial_number' => $serial_number
     ];
     echo http_build_query(array_filter($params));
-?>" class="btn btn-info">
+?>" class="btn btn-success">
     <i class="fas fa-file-excel"></i> Export to Excel
 </a>
     <button onclick="handleClose()" class="btn btn-secondary">

@@ -398,7 +398,7 @@ $all_subcategories = find_all('subcategories');
 
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
-                                <label class="form-label-custom">Subcategory</label>
+                                <label class="form-label-custom">Fund Cluster</label><br>
                                 <select class="form-select-custom" id="fund_cluster" name="fund_cluster" required>
                                     <option value="">Select Fund Cluster</option>
                                     <?php foreach ($fund_clusters as $cluster): ?>
@@ -500,7 +500,7 @@ $all_subcategories = find_all('subcategories');
 
                         <!-- Value Calculation -->
                         <div class="value-calculation">
-                            <div class="row text-center">
+                            <div class="row text-center"> 
                                 <div class="col-md-4">
                                     <small class="text-muted d-block">Unit Cost</small>
                                     <div class="cost-display">₱<?php echo number_format($property['unit_cost'], 2); ?></div>
