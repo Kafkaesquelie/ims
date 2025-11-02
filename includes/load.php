@@ -2,7 +2,7 @@
 <?php
 
 // Prevent accidental output before session starts
-ob_start();
+// ob_start();
 // Enable error reporting (development/debug mode only)
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -34,6 +34,6 @@ require_once(LIB_PATH_INC . 'database.php');
 require_once(LIB_PATH_INC . 'sql.php');
 
 // Clean accidental output to prevent header issues
-ob_end_clean();
+// ob_end_clean();
 
 ?>
