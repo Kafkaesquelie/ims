@@ -1,10 +1,11 @@
 <?php
-$page_title = 'Admin Home Page';
 require_once('includes/load.php');
 if (!$session->isUserLoggedIn()) {
   header("Location: admin.php");
   exit();
 }
+$page_title = 'Admin Home Page';
+
 
 // Checkin What level user has permission to view this page
 page_require_level(1);
