@@ -70,14 +70,14 @@ function get_inventory_breakdown() {
     }
     
     // Semi-expendable properties value
-    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop WHERE archived = 0";
+    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop ";
     $semi_result = $db->query($semi_sql);
     if ($semi_result && $semi_row = $semi_result->fetch_assoc()) {
         $breakdown['semi_expendable'] = $semi_row['total_value'] ?? 0;
     }
     
     // Properties value
-    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties WHERE archived = 0";
+    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties";
     $prop_result = $db->query($prop_sql);
     if ($prop_result && $prop_row = $prop_result->fetch_assoc()) {
         $breakdown['properties'] = $prop_row['total_value'] ?? 0;
