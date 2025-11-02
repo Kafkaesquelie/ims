@@ -557,9 +557,6 @@ $total_properties = $equipment_count;
   <div class="add-equipment-form" id="addEquipmentForm">
     <div class="add-form-header">
       <h5><i class="fas fa-plus-circle me-2"></i> Add New Equipment</h5>
-      <button type="button" id="cancelAddBtn" class="btn btn-light btn-sm">
-        <i class="fas fa-times me-1"></i> Cancel
-      </button>
     </div>
 
     <form method="post" action="equipment.php" class="needs-validation" novalidate>
@@ -699,7 +696,7 @@ $total_properties = $equipment_count;
       </div>
 
       <div class="form-section">
-        <div class="d-flex justify-content-between">
+        <div class="d-flex w-100">
           <button type="button" id="cancelFormBtn" class="btn btn-secondary">
             <i class="fas fa-times me-1"></i> Cancel
           </button>

@@ -416,6 +416,58 @@ if (!empty($msg) && is_array($msg)):
   margin-top: 0.25rem;
 }
 
+/* IMPROVED FORM BUTTONS - WIDER AND CENTERED */
+.form-buttons-container {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 2rem;
+  width: 100%;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e9ecef;
+}
+
+.form-btn {
+  min-width: 180px;
+  padding: 0.85rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.form-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.btn-cancel {
+  background: #6c757d;
+  color: white;
+  border: none;
+}
+
+.btn-cancel:hover {
+  background: #5a6268;
+  color: white;
+}
+
+.btn-save {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+  border: none;
+}
+
+.btn-save:hover {
+  background: linear-gradient(135deg, var(--primary-dark), #155724);
+  color: white;
+}
+
 @media (max-width: 768px) {
   .card-header-custom {
     padding: 1rem;
@@ -443,6 +495,17 @@ if (!empty($msg) && is_array($msg)):
   .bulk-actions-container {
     flex-direction: column;
     text-align: center;
+  }
+
+  /* Responsive form buttons */
+  .form-buttons-container {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .form-btn {
+    min-width: 100%;
+    width: 100%;
   }
 }
 
@@ -530,21 +593,7 @@ if (!empty($msg) && is_array($msg)):
     </div>
   </div>
 
-  <!-- Bulk Actions Container -->
-  <div class="bulk-actions-container" id="bulkActions">
-    <div class="bulk-selection-count" id="selectedCount">0 items selected</div>
-    <div class="d-flex gap-2">
-      <button id="bulkEdit" class="btn btn-warning-custom ml-3" title="Edit Selected">
-        <i class="fas fa-edit me-1"></i> Edit
-      </button>
-      <button id="bulkArchive" class="btn btn-danger-custom ml-3" title="Archive Selected">
-                                 <i class="fa-solid fa-file-zipper"></i>  Archive
-      </button>
-      <button id="clearSelection" class="btn btn-secondary ml-3" title="Clear Selection">
-        <i class="fas fa-times me-1"></i> Clear
-      </button>
-    </div>
-  </div>
+ 
 
   <!-- Statistics Cards -->
   <div class="stats-grid">
@@ -583,13 +632,26 @@ if (!empty($msg) && is_array($msg)):
     </div>
   </div>
 
+   <!-- Bulk Actions Container -->
+  <div class="bulk-actions-container" id="bulkActions">
+    <div class="bulk-selection-count" id="selectedCount">0 items selected</div>
+    <div class="d-flex gap-2">
+      <button id="bulkEdit" class="btn btn-warning-custom ml-3" title="Edit Selected">
+        <i class="fas fa-edit me-1"></i> Edit
+      </button>
+      <button id="bulkArchive" class="btn btn-danger-custom ml-3" title="Archive Selected">
+                                 <i class="fa-solid fa-file-zipper"></i>  Archive
+      </button>
+      <button id="clearSelection" class="btn btn-secondary ml-3" title="Clear Selection">
+        <i class="fas fa-times me-1"></i> Clear
+      </button>
+    </div>
+  </div>
   <!-- Add Item Form (Hidden by Default) -->
   <div class="add-form-container" id="addItemCard" style="display: none;">
         <div class="add-form-header d-flex justify-content-between align-items-center mb-4 p-3 bg-primary bg-opacity-10 rounded">
       <h5 class="mb-0 text-light"><i class="fas fa-plus-circle me-2"></i>Add New Semi-Expendable Property</h5>
-      <button type="button" id="cancelAddBtn" class="btn btn-secondary btn-sm">
-           <i class="fa-solid fa-circle-xmark"></i> Cancel
-      </button>
+    
     </div>
     <div class="add-form-body">
       <form method="POST" action="">
@@ -663,11 +725,16 @@ if (!empty($msg) && is_array($msg)):
             <label class="form-label">Estimated Use</label>
             <input type="text" class="form-control" name="estimated_use" placeholder="Estimated Use">
           </div>
-          <div class="form-group-custom d-flex align-items-end">
-            <button type="submit" class="btn btn-primary-custom w-100">
-              <i class="fas fa-check me-2"></i> Save Semi-Expendable Property
-            </button>
-          </div>
+        </div>
+
+        <!-- IMPROVED BUTTONS SECTION - WIDER AND CENTERED ON NEW ROW -->
+        <div class="form-buttons-container">
+          <button type="button" id="cancelAddBtn" class="btn btn-cancel form-btn">
+            <i class="fas fa-times me-2"></i> Close
+          </button>
+          <button type="submit" class="btn btn-save form-btn">
+            <i class="fas fa-save me-2"></i> Save Property
+          </button>
         </div>
       </form>
     </div>
