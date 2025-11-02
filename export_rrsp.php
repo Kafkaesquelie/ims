@@ -10,6 +10,9 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 ini_set('memory_limit', '512M');
 ini_set('max_execution_time', 300);
 
+// Start output buffering at the very beginning
+ob_start();
+
 // Get the transaction_id or ICS number from the query
 $transaction_id = isset($_GET['transaction_id']) ? (int)$_GET['transaction_id'] : null;
 $ics_no = isset($_GET['ics_no']) ? trim($db->escape($_GET['ics_no'])) : null;
@@ -42,6 +45,10 @@ if ($transaction_id) {
     $return_items = find_by_sql($sql);
     
     if (!$return_items) {
+        // Clean buffer before redirect
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
         $session->msg("d", "No return record found for transaction ID: {$transaction_id}");
         redirect('logs.php');
     }
@@ -75,11 +82,19 @@ if ($transaction_id) {
     $return_items = find_by_sql($sql);
     
     if (!$return_items) {
+        // Clean buffer before redirect
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
         $session->msg("d", "No returned items found for ICS: {$ics_no}");
         redirect('logs.php');
     }
     $rrsp_number = date('Y-m') . '-' . sprintf('%04d', rand(1000, 9999));
 } else {
+    // Clean buffer before redirect
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     $session->msg("d", "No transaction or ICS number provided.");
     redirect('logs.php');
 }
@@ -133,7 +148,7 @@ try {
         $row++;
     }
 
-    // === FIXED: Better signatory handling ===
+    // === FIXED: Better signatory handling with null checks ===
     
     // Check if template already has signatory placeholders
     $currentB39 = $sheet->getCell('B39')->getCalculatedValue();
@@ -141,8 +156,8 @@ try {
     $currentB41 = $sheet->getCell('B41')->getCalculatedValue();
     $currentE41 = $sheet->getCell('E41')->getCalculatedValue();
     
-    // Fill signatories - preserve any existing labels
-    if (empty(trim($currentB39)) || strpos($currentB39, '[END_USER]') !== false) {
+    // Fill signatories - preserve any existing labels with null-safe checks
+    if (empty($currentB39) || (is_string($currentB39) && strpos($currentB39, '[END_USER]') !== false)) {
         // If B39 is empty or has placeholder, set employee name
         $sheet->setCellValue('B39', $return_items[0]['employee_name']);
     } else {
@@ -150,7 +165,7 @@ try {
         $sheet->setCellValue('B39', $currentB39 . "\n" . $return_items[0]['employee_name']);
     }
     
-    if (empty(trim($currentE39)) || strpos($currentE39, '[HEAD]') !== false) {
+    if (empty($currentE39) || (is_string($currentE39) && strpos($currentE39, '[HEAD]') !== false)) {
         // If E39 is empty or has placeholder, set current user name
         $sheet->setCellValue('E39', $current_user['name']);
     } else {
@@ -158,10 +173,10 @@ try {
         $sheet->setCellValue('E39', $currentE39 . "\n" . $current_user['name']);
     }
 
-    // === ADD CURRENT DATE TO B41 AND E41 ===
+    // === ADD CURRENT DATE TO B41 AND E41 with null-safe checks ===
     
     // Fill date in B41 - preserve any existing labels
-    if (empty(trim($currentB41)) || strpos($currentB41, '[DATE]') !== false) {
+    if (empty($currentB41) || (is_string($currentB41) && strpos($currentB41, '[DATE]') !== false)) {
         // If B41 is empty or has placeholder, set current date
         $sheet->setCellValue('B41', $current_date);
     } else {
@@ -170,12 +185,17 @@ try {
     }
     
     // Fill date in E41 - preserve any existing labels
-    if (empty(trim($currentE41)) || strpos($currentE41, '[DATE]') !== false) {
+    if (empty($currentE41) || (is_string($currentE41) && strpos($currentE41, '[DATE]') !== false)) {
         // If E41 is empty or has placeholder, set current date
         $sheet->setCellValue('E41', $current_date);
     } else {
         // If E41 has content, append current date
         $sheet->setCellValue('E41', $currentE41 . "\n" . $current_date);
+    }
+
+    // Clear output buffer completely before headers
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
 
     // Set appropriate headers
@@ -184,11 +204,6 @@ try {
     header('Cache-Control: max-age=0');
     header('Pragma: no-cache');
     header('Expires: 0');
-
-    // Clear any previous output
-    if (ob_get_level()) {
-        ob_end_clean();
-    }
 
     // Save to output
     $writer = new Xlsx($spreadsheet);
@@ -199,6 +214,11 @@ try {
     // Log the error
     error_log("Excel Export Error: " . $e->getMessage());
     
+    // Clear output buffer completely
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
     // Fallback to creating a new spreadsheet from scratch
     try {
         $spreadsheet = new Spreadsheet();
@@ -207,8 +227,8 @@ try {
         // Set basic headers WITH LABELS
         $sheet->setCellValue('A1', 'RECEIPT OF RETURNED SEMI-EXPENDABLE PROPERTY (RRSP)');
         $sheet->setCellValue('A2', 'Entity Name: BENGUET STATE UNIVERSITY - BOKOD CAMPUS');
-        $sheet->setCellValue('E6', 'RRSP No: ' . $rrsp_number); // WITH LABEL
-        $sheet->setCellValue('E5', 'Date: ' . $current_date);   // WITH LABEL
+        $sheet->setCellValue('E5', 'RRSP No: ' . $rrsp_number); // WITH LABEL
+        $sheet->setCellValue('E6', 'Date: ' . $current_date);   // WITH LABEL
         
         // Set table headers
         $sheet->setCellValue('A8', 'ITEM DESCRIPTION');
@@ -255,10 +275,6 @@ try {
         header('Pragma: no-cache');
         header('Expires: 0');
         
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
-        
         $writer = new Xlsx($spreadsheet);
         $writer->save('php://output');
         exit();
@@ -269,10 +285,6 @@ try {
         header('Content-Disposition: attachment; filename="RRSP_' . $rrsp_number . '.csv"');
         header('Pragma: no-cache');
         header('Expires: 0');
-        
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
         
         $output = fopen('php://output', 'w');
         fputcsv($output, ['RRSP Number', 'Date', 'Item Description', 'Quantity', 'ICS Number', 'End User', 'Conditions', 'Received By', 'End User Date', 'Head Date']);

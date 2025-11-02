@@ -50,8 +50,8 @@ function exportToExcel($tableData, $fundCluster, $searchTerm) {
         $writer = new Xlsx($spreadsheet);
         $fileName = "SMPI_Card_" . date('YmdHis') . ".xlsx";
 
-        // Clear any previous output
-        while (ob_get_level()) {
+        // Clear all output buffers
+        while (ob_get_level() > 0) {
             ob_end_clean();
         }
 
@@ -68,7 +68,7 @@ function exportToExcel($tableData, $fundCluster, $searchTerm) {
         
     } catch (Exception $e) {
         // Clean any output buffers
-        while (ob_get_level()) {
+        while (ob_get_level() > 0) {
             ob_end_clean();
         }
         
@@ -81,10 +81,7 @@ function exportToExcel($tableData, $fundCluster, $searchTerm) {
 
 // Trigger the export
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_excel'])) {
-    // Clean output buffer before processing
-    if (ob_get_length()) {
-        ob_clean();
-    }
+    // Don't call ob_clean() here - let the function handle buffer cleaning
     
     // Validate and sanitize input
     $tableData = isset($_POST['tableData']) ? json_decode($_POST['tableData'], true) : [];
@@ -94,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_excel'])) {
     // Validate table data
     if (empty($tableData) || !is_array($tableData)) {
         // Clean output buffer
-        while (ob_get_level()) {
+        while (ob_get_level() > 0) {
             ob_end_clean();
         }
         
@@ -106,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_excel'])) {
     exportToExcel($tableData, $fundCluster, $searchTerm);
 } else {
     // Clean output buffer
-    while (ob_get_level()) {
+    while (ob_get_level() > 0) {
         ob_end_clean();
     }
     
@@ -116,6 +113,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_excel'])) {
     exit();
 }
 
-// End output buffering
-ob_end_flush();
 ?>

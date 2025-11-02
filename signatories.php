@@ -393,9 +393,10 @@ include_once('layouts/header.php');?>
                         data-target="#editSignatoryModal<?= $sig['id']; ?>">
                   <i class="fas fa-edit"></i> Edit
                 </button>
-                <button class="btn btn-delete" 
-                        onclick="confirmDelete(<?= $sig['id']; ?>, '<?= remove_junk($sig['name']); ?>')">
-                <i class="fas fa-trash"></i> Archive
+                <button class="btn btn-delete archive-btn" 
+                        data-id="<?= $sig['id']; ?>"
+                        data-name="<?= htmlspecialchars(remove_junk($sig['name'])); ?>">
+                  <i class="fas fa-archive"></i> Archive
                 </button>
               </div>
             </div>
@@ -492,22 +493,77 @@ include_once('layouts/header.php');?>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-function confirmDelete(id, name) {
-  if (confirm(`Are you sure you want to archive "${name}"?`)) {
-    window.location.href = `a_script.php?id=${id}`;
-  }
-}
-
-
-// Animation for cards
+// SweetAlert for archive confirmation
 document.addEventListener('DOMContentLoaded', function() {
+  // Archive button functionality
+  document.querySelectorAll('.archive-btn').forEach(function(button) {
+    button.addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      const id = this.getAttribute('data-id');
+      const name = this.getAttribute('data-name');
+      
+      Swal.fire({
+        title: 'Archive Signatory?',
+        html: `You are about to archive <strong>"${name}"</strong>.<br>This action can be undone later if needed.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, archive it!',
+        cancelButtonText: 'Cancel',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+          return new Promise((resolve) => {
+            // Simulate API call or redirect
+            setTimeout(() => {
+              window.location.href = `a_script.php?id=${id}`;
+              resolve();
+            }, 1000);
+          });
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+      }).then((result) => {
+        if (result.isConfirmed) {
+          Swal.fire({
+            title: 'Archived!',
+            text: 'The signatory has been archived.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false
+          });
+        }
+      });
+    });
+  });
+
+  // Animation for cards
   const cards = document.querySelectorAll('.signatory-card');
   cards.forEach((card, index) => {
     card.style.animationDelay = `${index * 0.1}s`;
     card.classList.add('animate__animated', 'animate__fadeInUp');
   });
 });
+
+// Alternative simpler archive function (if you prefer)
+function confirmDelete(id, name) {
+  Swal.fire({
+    title: 'Archive Signatory?',
+    html: `Are you sure you want to archive <strong>"${name}"</strong>?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Yes, archive!',
+    cancelButtonText: 'Cancel'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      window.location.href = `a_script.php?id=${id}`;
+    }
+  });
+}
 </script>
 
 <?php include_once('layouts/footer.php'); ?>

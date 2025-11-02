@@ -376,6 +376,58 @@ $total_properties = $equipment_count;
     border-bottom: 2px solid var(--primary-light);
   }
 
+  /* IMPROVED FORM BUTTONS - WIDER AND CENTERED */
+  .form-buttons-container {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 2rem;
+    width: 100%;
+    padding-top: 1.5rem;
+    border-top: 2px solid #e9ecef;
+  }
+
+  .form-btn {
+    min-width: 180px;
+    padding: 0.85rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .form-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .btn-cancel {
+    background: #6c757d;
+    color: white;
+    border: none;
+  }
+
+  .btn-cancel:hover {
+    background: #5a6268;
+    color: white;
+  }
+
+  .btn-save {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+  }
+
+  .btn-save:hover {
+    background: linear-gradient(135deg, var(--primary-dark), #155724);
+    color: white;
+  }
+
   /* Table Container - No scrollbar */
   .table-container {
     width: 100%;
@@ -411,6 +463,24 @@ $total_properties = $equipment_count;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
+  /* Form improvements */
+  .form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+  }
+
+  .form-label {
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-hint {
+    font-size: 0.8rem;
+    color: var(--secondary);
+    margin-top: 0.25rem;
+  }
+
   /* Responsive Design */
   @media (max-width: 768px) {
     .stats-grid {
@@ -429,6 +499,21 @@ $total_properties = $equipment_count;
     /* On mobile, allow horizontal scroll for table */
     .table-container {
       overflow-x: auto;
+    }
+
+    /* Responsive form buttons */
+    .form-buttons-container {
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .form-btn {
+      min-width: 100%;
+      width: 100%;
+    }
+
+    .form-section {
+      padding: 1rem;
     }
   }
 </style>
@@ -695,13 +780,14 @@ $total_properties = $equipment_count;
         </div>
       </div>
 
+      <!-- IMPROVED BUTTONS SECTION - WIDER AND CENTERED -->
       <div class="form-section">
-        <div class="d-flex w-100">
-          <button type="button" id="cancelFormBtn" class="btn btn-secondary">
-            <i class="fas fa-times me-1"></i> Cancel
+        <div class="form-buttons-container">
+          <button type="button" id="cancelFormBtn" class="btn btn-cancel form-btn">
+            <i class="fas fa-times me-2"></i> Close
           </button>
-          <button type="submit" name="add_equipment" class="btn btn-success">
-            <i class="fas fa-save me-1"></i> Save Equipment
+          <button type="submit" name="add_equipment" class="btn btn-save form-btn">
+            <i class="fas fa-save me-2"></i> Save Equipment
           </button>
         </div>
       </div>
@@ -757,7 +843,7 @@ $total_properties = $equipment_count;
     });
 
     // Hide add form
-    $('#cancelAddBtn, #cancelFormBtn').on('click', function() {
+    $('#cancelFormBtn').on('click', function() {
       $('#addEquipmentForm').slideUp(300);
       $('#equipmentTableSection').slideDown(300); // Show table section
     });

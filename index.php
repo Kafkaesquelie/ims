@@ -501,7 +501,7 @@
       <!-- Logo on the left -->
       <a class="navbar-brand" href="#home">
         <img src="uploads/other/imslogo.png" alt="BSU Logo" height="40" class="me-2">
-        <span>MUSH</span>
+        <span>PRIMES</span>
       </a>
 
       <!-- Toggler for mobile -->
