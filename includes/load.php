@@ -3,6 +3,9 @@
 
 // Prevent accidental output before session starts
 ob_start();
+// Enable error reporting (development/debug mode only)
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
 // -----------------------------------------------------------------------
 // DEFINE SEPARATOR ALIASES
