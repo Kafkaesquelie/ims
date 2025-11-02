@@ -1,5 +1,4 @@
 <?php
-session_start();
 require_once('includes/load.php'); // include your class
 
 $auth = new Session(); 

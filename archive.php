@@ -13,7 +13,7 @@ $user_group = $user['user_level'] ?? 1;
 
 // 🔹 Filter archives based on user group rules
 if ($user_group == 1) {
-  // Group 1 → hide users & employees
+  // Group 1 → hide users & employees 
   $archives = array_filter($archives, function ($a) {
     return !in_array($a['classification'], ['users', 'employees']);
   });

@@ -395,7 +395,7 @@ include_once('layouts/header.php');?>
                 </button>
                 <button class="btn btn-delete" 
                         onclick="confirmDelete(<?= $sig['id']; ?>, '<?= remove_junk($sig['name']); ?>')">
-                <i class="fas fa-trash"></i> Delete
+                <i class="fas fa-trash"></i> Archive
                 </button>
               </div>
             </div>
