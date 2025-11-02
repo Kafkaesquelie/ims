@@ -848,9 +848,6 @@ if (!empty($msg) && is_array($msg)):
   <div class="add-item-form" id="addItemForm">
     <div class="add-form-header">
       <h5><i class="fas fa-plus-circle me-2"></i>Add New Inventory Item</h5>
-      <button type="button" id="cancelAddBtn" class="btn btn-light btn-sm">
-        <i class="fas fa-times me-1"></i> Cancel
-      </button>
     </div>
 
     <form method="POST" action="items.php" enctype="multipart/form-data" class="needs-validation" novalidate>
@@ -967,7 +964,7 @@ if (!empty($msg) && is_array($msg)):
       </div>
 
       <div class="form-section">
-        <div class="d-flex justify-content-between">
+        <div class="d-flex justify-content-between w-100">
           <button type="button" id="cancelFormBtn" class="btn btn-secondary">
             <i class="fas fa-times me-1"></i> Cancel
           </button>

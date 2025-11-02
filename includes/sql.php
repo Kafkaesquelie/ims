@@ -51,47 +51,35 @@ function delete_by_id($table,$id)
    }
 }
 // *********************************
-
 function archive($table, $id, $classification) {
     global $db;
 
-    // Ensure session is started
-    if(session_status() === PHP_SESSION_NONE) session_start();
+    // Get logged-in user ID safely
+    $user_id = isset($_SESSION['id']) ? (int)$_SESSION['id'] : 0;
 
-    // Default values if no session
-    $user_id = 0;
-    $user_role = 'Unknown';
-
-    // Get logged-in user info from session
-    if(isset($_SESSION['user_id']) && $_SESSION['user_id'] > 0) {
-        $user_id = (int)$_SESSION['user_id'];
-    }
-
-    // Fetch record to archive
+    // Fetch original record
     $sql = "SELECT * FROM {$table} WHERE id = '{$id}' LIMIT 1";
     $result = $db->query($sql);
 
     if ($db->num_rows($result) > 0) {
         $record = $db->fetch_assoc($result);
 
-        // Store archived_by as JSON
-        $archived_by = json_encode([ 
-            'user_id' => $user_id,
-            
-        ]);
+        // JSON encode record properly for storage
+        $json_data = $db->escape(json_encode($record, JSON_UNESCAPED_UNICODE));
 
-        // Insert into archive
-        $archive_sql = "INSERT INTO archive (record_id, data, classification, archived_at, archived_by) 
-                        VALUES (
-                            '{$record['id']}',
-                            '" . $db->escape(json_encode($record)) . "',
-                            '{$classification}',
-                            NOW(),
-                            '" . $db->escape($archived_by) . "'
-                        )";
+        // Insert into archive table (archived_by is integer ✅)
+        $archive_sql = "
+            INSERT INTO archive (record_id, data, classification, archived_at, archived_by)
+            VALUES (
+                '{$record['id']}',
+                '{$json_data}',
+                '{$classification}',
+                NOW(),
+                {$user_id}
+            )";
 
         if ($db->query($archive_sql)) {
-            // Delete original record
+            // ✅ Delete original after archive success
             $delete_sql = "DELETE FROM {$table} WHERE id = '{$id}' LIMIT 1";
             return $db->query($delete_sql);
         }
@@ -99,6 +87,7 @@ function archive($table, $id, $classification) {
 
     return false;
 }
+
 
 
 function archive_request($id) {
