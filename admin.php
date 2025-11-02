@@ -35,14 +35,14 @@ function calculate_total_inventory_value() {
     }
     
     // Calculate value from semi_exp_prop table
-    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop WHERE archived = 0";
+    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop" ;
     $semi_result = $db->query($semi_sql);
     if ($semi_result && $semi_row = $semi_result->fetch_assoc()) {
         $total_value += $semi_row['total_value'] ?? 0;
     }
     
     // Calculate value from properties table
-    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties WHERE archived = 0";
+    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties" ;
     $prop_result = $db->query($prop_sql);
     if ($prop_result && $prop_row = $prop_result->fetch_assoc()) {
         $total_value += $prop_row['total_value'] ?? 0;
