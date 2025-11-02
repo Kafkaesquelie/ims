@@ -1,4 +1,3 @@
-
 <?php
 // Prevent accidental output before session starts
 // ob_start();
