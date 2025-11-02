@@ -414,7 +414,7 @@ $user = current_user();
                          <li class="nav-item">
                             <a href="users_employees.php" class="nav-link">
                                 <i class="nav-icon fas fa-chart-line"></i>
-                                <p>Audit Trail/Records(Tentative)</p>
+                                <p>Employee Record</p>
                             </a>
                         </li>
                         <li class="nav-item">

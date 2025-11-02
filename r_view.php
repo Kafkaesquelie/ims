@@ -297,18 +297,27 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     font-size: 0.8rem;
     font-weight: 600;
     width: 100%;
+    padding: 0.5rem;
+    border-radius: 4px;
+    text-align: center;
 }
 
 .ris-valid {
     color: var(--primary-green);
+    background: rgba(40, 167, 69, 0.1);
+    border: 1px solid var(--border-color);
 }
 
 .ris-invalid {
     color: #dc3545;
+    background: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.2);
 }
 
 .ris-warning {
     color: #ffc107;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.2);
 }
 
 .fund-cluster-display {
@@ -319,6 +328,44 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     font-weight: 600;
     display: inline-block;
     box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+/* RIS Input Group - New container for better organization */
+.ris-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.ris-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Editable middle input styling */
+.ris-input.editable-middle {
+    background: white;
+    color: var(--dark-green);
+    border: 2px solid var(--accent-green);
+    min-width: 80px;
+    text-align: center;
+}
+
+.ris-fixed-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.ris-fixed-part {
+    font-weight: bold;
+    color: white;
+    font-size: 1.1rem;
 }
 
 /* Table Styling */
@@ -590,7 +637,7 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
         font-size: 1.4rem;
     }
     
-    .ris-input-container {
+    .ris-input-row {
         flex-direction: column;
         align-items: flex-start;
     }
@@ -664,102 +711,105 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
                         </div>
                         <div class="info-item">
                             <span class="info-label">RIS Number</span>
-                            <div class="ris-input-container">
-                                <form id="risForm" method="post" style="display: contents;">
-                                    <input type="hidden" name="update_ris" value="1">
-                                    <input type="text" 
-                                           name="ris_no" 
-                                           value="<?= htmlspecialchars($current_ris_no) ?>" 
-                                           class="ris-input readonly" 
-                                           id="risInput"
-                                           readonly
-                                           maxlength="20"
-                                           pattern="[A-Za-z0-9\-]+"
-                                           title="RIS Number format: YYYY-MM-XXXX">
-                                    <button type="button" class="ris-edit-btn" id="risEditBtn">
-                                        <i class="fas fa-edit"></i> Edit
+                            <div class="ris-input-group">
+                                <div class="ris-input-row">
+                                    <form id="risForm" method="post" style="display: contents;">
+                                        <input type="hidden" name="update_ris" value="1">
+                                        <input type="text" 
+                                               name="ris_no" 
+                                               value="<?= htmlspecialchars($current_ris_no) ?>" 
+                                               class="ris-input readonly" 
+                                               id="risInput"
+                                               readonly
+                                               maxlength="20"
+                                               pattern="[A-Za-z0-9\-]+"
+                                               title="RIS Number format: YYYY-MM-XXXX">
+                                        <button type="button" class="ris-edit-btn" id="risEditBtn">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                    </form>
+                                </div>
+                                <div class="ris-actions" id="risActions" style="display: none;">
+                                    <button type="submit" form="risForm" class="ris-save-btn">
+                                        <i class="fas fa-check"></i> Save
                                     </button>
-                                </form>
-                            </div>
-                            <div class="ris-actions" id="risActions" style="display: none;">
-                                <button type="submit" form="risForm" class="ris-save-btn">
-                                    <i class="fas fa-check"></i> Save
-                                </button>
-                                <button type="button" class="ris-cancel-btn" id="risCancelBtn">
-                                    <i class="fas fa-times"></i> Cancel
-                                </button>
-                            </div>
-                            <div class="ris-status" id="risStatus">
-                                <?php if ($is_ris_missing): ?>
-                                    <span class="ris-invalid"><i class="fas fa-exclamation-triangle"></i> RIS Number required</span>
-                                <?php elseif ($is_ris_duplicate): ?>
-                                    <span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>
-                                <?php else: ?>
-                                    <span class="ris-valid"><i class="fas fa-check-circle"></i> Valid RIS Number</span>
-                                <?php endif; ?>
+                                    <button type="button" class="ris-cancel-btn" id="risCancelBtn">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                </div>
+                                <!-- RIS Status Display - Now positioned directly under the input field -->
+                                <div class="ris-status" id="risStatus">
+                                    <?php if ($is_ris_missing): ?>
+                                        <span class="ris-invalid"><i class="fas fa-exclamation-triangle"></i> RIS Number required</span>
+                                    <?php elseif ($is_ris_duplicate): ?>
+                                        <span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>
+                                    <?php else: ?>
+                                        <span class="ris-valid"><i class="fas fa-check-circle"></i> Valid RIS Number</span>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Items Table -->
-<div class="table-responsive">
-    <table class="items-table">
-        <thead>
-            <tr>
-                <th>Stock No.</th>
-                <th>Unit</th>
-                <th>Item Description</th>
-                <th>Quantity</th>
-                <th colspan="2">Stock Available</th>
-                <th>Issue Quantity</th>
-                <th>Remarks</th>
-            </tr>
-            <tr>
-                <th></th>
-                <th></th>
-                <th></th>
-                <th></th>
-                <th>Yes</th>
-                <th>No</th>
-                <th></th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($items as $item): ?>
-                <tr>
-                    <td><strong>0<?= (int)$item['stock_card'] ?></strong></td>
-                    <td><?= remove_junk($item['unit']) ?></td>
-                    <td><?= remove_junk($item['item_name']) ?></td>
-                    <td><strong><?= (float)$item['qty'] ?></strong></td>
-                    <td>
-                        <!-- ✅ ALWAYS SHOW YES - Users can't request if no stock -->
-                        <span class="stock-check stock-yes">✔</span>
-                    </td>
-                    <td>
-                        <!-- ❌ NEVER SHOW NO - Empty column -->
-                    </td>
-                    <td><strong><?= (float)$item['qty'] ?></strong></td>
-                    <td><small><?= remove_junk($item['remarks']) ?: '-' ?></small></td>
-                </tr>
-            <?php endforeach; ?>
-            
-            <!-- Empty rows for additional items -->
-            <?php for ($i = 0; $i < 3; $i++): ?>
-            <tr>
-                <td>&nbsp;</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-            </tr>
-            <?php endfor; ?>
-        </tbody>
-    </table>
-</div>
+                    <div class="table-responsive">
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th>Stock No.</th>
+                                    <th>Unit</th>
+                                    <th>Item Description</th>
+                                    <th>Quantity</th>
+                                    <th colspan="2">Stock Available</th>
+                                    <th>Issue Quantity</th>
+                                    <th>Remarks</th>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th>Yes</th>
+                                    <th>No</th>
+                                    <th></th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($items as $item): ?>
+                                    <tr>
+                                        <td><strong>0<?= (int)$item['stock_card'] ?></strong></td>
+                                        <td><?= remove_junk($item['unit']) ?></td>
+                                        <td><?= remove_junk($item['item_name']) ?></td>
+                                        <td><strong><?= (float)$item['qty'] ?></strong></td>
+                                        <td>
+                                            <!-- ✅ ALWAYS SHOW YES - Users can't request if no stock -->
+                                            <span class="stock-check stock-yes">✔</span>
+                                        </td>
+                                        <td>
+                                            <!-- ❌ NEVER SHOW NO - Empty column -->
+                                        </td>
+                                        <td><strong><?= (float)$item['qty'] ?></strong></td>
+                                        <td><small><?= remove_junk($item['remarks']) ?: '-' ?></small></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                
+                                <!-- Empty rows for additional items -->
+                                <?php for ($i = 0; $i < 3; $i++): ?>
+                                <tr>
+                                    <td>&nbsp;</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                                <?php endfor; ?>
+                            </tbody>
+                        </table>
+                    </div>
 
                     <!-- Signatures Section -->
                     <div class="signatures-grid">

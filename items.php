@@ -630,6 +630,50 @@ if (!empty($msg) && is_array($msg)):
     border-bottom: 2px solid var(--primary-light);
   }
 
+  /* Form Button Styles - IMPROVED */
+  .form-buttons-container {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .form-btn {
+    min-width: 160px;
+    padding: 0.75rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+  }
+
+  .form-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .btn-cancel {
+    background: #6c757d;
+    color: white;
+    border: none;
+  }
+
+  .btn-cancel:hover {
+    background: #5a6268;
+    color: white;
+  }
+
+  .btn-save {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+  }
+
+  .btn-save:hover {
+    background: linear-gradient(135deg, var(--primary-dark), #155724);
+    color: white;
+  }
+
   /* Checkbox styling */
   .item-checkbox,
   #selectAll {
@@ -726,8 +770,6 @@ if (!empty($msg) && is_array($msg)):
       max-width: 100%;
     }
 
-
-
     .table-responsive {
       border-radius: var(--border-radius);
       box-shadow: var(--shadow);
@@ -746,6 +788,16 @@ if (!empty($msg) && is_array($msg)):
       flex-direction: column;
       gap: 1rem;
       text-align: center;
+    }
+
+    .form-buttons-container {
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .form-btn {
+      min-width: 100%;
+      width: 100%;
     }
   }
 
@@ -963,13 +1015,14 @@ if (!empty($msg) && is_array($msg)):
         </div>
       </div>
 
-      <div class="form-section">
-        <div class="d-flex justify-content-between w-100">
-          <button type="button" id="cancelFormBtn" class="btn btn-secondary">
-            <i class="fas fa-times me-1"></i> Cancel
+      <!-- IMPROVED BUTTONS SECTION - Wider and Centered -->
+      <div class="form-section">       
+        <div class="form-buttons-container">
+          <button type="button" id="cancelFormBtn" class="btn btn-cancel form-btn">
+            <i class="fas fa-times me-2"></i> Cancel
           </button>
-          <button type="submit" name="add_item" class="btn btn-success">
-            <i class="fas fa-save me-1"></i> Save Item
+          <button type="submit" name="add_item" class="btn btn-save form-btn">
+            <i class="fas fa-save me-2"></i> Save Item
           </button>
         </div>
       </div>
