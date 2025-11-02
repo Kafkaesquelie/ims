@@ -12,8 +12,10 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-// Clear any previous output
-ob_clean();
+// Start output buffering at the very beginning
+if (ob_get_level() === 0) {
+    ob_start();
+}
 
 try {
     // Get the posted data
@@ -312,7 +314,7 @@ try {
     $filename = "Stock_Card_" . ($stock_number ?: 'Unknown') . "_" . date('Y-m-d') . ".xlsx";
     
     // Clean output buffer and set headers
-    while (ob_get_level()) {
+    while (ob_get_level() > 0) {
         ob_end_clean();
     }
     
@@ -333,7 +335,7 @@ try {
     
 } catch (Exception $e) {
     // Clean any output
-    while (ob_get_level()) {
+    while (ob_get_level() > 0) {
         ob_end_clean();
     }
     

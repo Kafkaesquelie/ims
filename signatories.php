@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $agency   = remove_junk($db->escape($_POST['agency']));
 
     $query = "UPDATE signatories 
-              SET name='{$name}', position='{$position}', agency='{$agency}',  
+              SET name='{$name}', position='{$position}', agency='{$agency}'
               WHERE id={$id}";
     if ($db->query($query)) {
         $session->msg("s","Signatory updated successfully.");
@@ -494,10 +494,11 @@ include_once('layouts/header.php');?>
 
 <script>
 function confirmDelete(id, name) {
-  if(confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
-    window.location.href = `delete_signatory.php?id=${id}`;
+  if (confirm(`Are you sure you want to archive "${name}"?`)) {
+    window.location.href = `a_script.php?id=${id}`;
   }
 }
+
 
 // Animation for cards
 document.addEventListener('DOMContentLoaded', function() {

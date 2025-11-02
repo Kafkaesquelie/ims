@@ -80,6 +80,10 @@ switch ($referer) {
             exit;
         }
         break;
+    case 'signatories.php':
+        $table = 'signatories';
+        $classification = 'signatories';
+        break;
 
     default:
         $session->msg("d", "Unknown archive source.");
