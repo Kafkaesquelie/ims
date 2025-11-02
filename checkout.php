@@ -751,7 +751,6 @@ foreach ($all_items as &$item) {
                                 <tr class="<?= $row_class ?>">
                                     <td>
                                         <?= htmlspecialchars($it['stock_card']); ?>
-                                        <?= $it['stock_badge'] ?>
                                     </td>
                                     <td>
                                         <strong><?= htmlspecialchars($it['name']); ?></strong>

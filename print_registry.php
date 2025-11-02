@@ -255,18 +255,39 @@ function exportToWord() {
 }
 
 function handleClose() {
-    // Check if this is a popup window or main window
-    if (window.opener && !window.opener.closed) {
-        // This is a popup window - close it
-        window.close();
-    } else {
-        // This might be a main window - go back or show message
-        if (history.length > 1) {
+    // Try multiple methods to close the window
+    try {
+        // Method 1: Check if this is a popup window
+        if (window.opener && !window.opener.closed) {
+            window.close();
+            return;
+        }
+        
+        // Method 2: For modern browsers - close current window/tab
+        if (window.history.length > 1) {
+            // Try to go back first
             history.back();
+            // Fallback: close after a delay if still on page
+            setTimeout(() => {
+                if (!document.hidden) {
+                    window.close();
+                }
+            }, 1000);
         } else {
-            // If no history, just close the window/tab
+            // Method 3: Direct close attempt
             window.close();
         }
+        
+        // Method 4: If still not closed after 2 seconds, show message
+        setTimeout(() => {
+            if (!document.hidden) {
+                alert('Please close this window manually using Ctrl+W or the browser close button.');
+            }
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Error closing window:', error);
+        alert('Please close this window manually.');
     }
 }
 
@@ -288,16 +309,15 @@ document.addEventListener('keydown', function(e) {
 <body>
 
 <!-- VERTICAL BUTTON CONTAINER -->
+<!-- In your print-btn-container, update the form: -->
 <div class="print-btn-container">
-    <!-- <button class="print-btn" onclick="window.print()">
-        <i class="fas fa-print"></i> Print Report
-    </button> -->
-    
-    <form method="POST" style="width: 100%; margin: 0;">
-        <input type="hidden" name="export_excel" value="1">
-        <input type="hidden" name="fund_cluster" value="<?= htmlspecialchars($fund_cluster) ?>">
-        <input type="hidden" name="search" value="<?= htmlspecialchars($searchTerm ?? '') ?>">
-        <input type="hidden" name="tableData" value='<?= json_encode($tableData) ?>'>
+    <form method="POST" action="export_registry_excel.php" target="_blank" style="width: 100%; margin: 0;">
+        <input type="hidden" name="export_data" value='<?= json_encode([
+            'fund_cluster' => $fund_cluster,
+            'search' => $search ?? '',
+            'tableData' => $tableData,
+            'export_type' => 'excel'
+        ]) ?>'>
         <button type="submit" class="word-btn">
             <i class="fas fa-file-excel"></i> Export to Excel
         </button>

@@ -489,7 +489,7 @@ $total_items_count = $c_item['total'];
                 </div>
             </div>
 
-            <div class="card-body p-0">
+            <div class="card-body p-2">
                 <div class="table-responsive">
                     <?php if ($total_items_count == 0): ?>
                         <div class="text-center p-5">
@@ -504,7 +504,7 @@ $total_items_count = $c_item['total'];
                             <p class="text-muted">No products are below minimum stock levels.</p>
                         </div>
                     <?php else: ?>
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0 " id="lowStockTable">
                             <thead>
                                 <tr>
                                     <th>Stock No.</th>
@@ -623,3 +623,21 @@ $total_items_count = $c_item['total'];
 </div>
 
 <?php include_once('layouts/footer.php'); ?>
+
+
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+  <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+
+  <script>
+    $(document).ready(function() {
+      var table = $('#lowStockTable').DataTable({
+        pageLength: 5,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: false,
+        autoWidth: false,
+        fixedColumns: true
+      });
+ 
+      }); 
+</script>

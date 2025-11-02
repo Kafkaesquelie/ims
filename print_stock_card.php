@@ -3,6 +3,26 @@ $page_title = 'Printable Stock Card';
 require_once('includes/load.php');
 page_require_level(1);
 
+// Helper function to convert quantity to whole number based on unit
+function convertToWholeNumber($quantity, $unit_name) {
+    if (!is_numeric($quantity)) {
+        return $quantity;
+    }
+    
+    // Round to whole number for most units
+    $rounded = round($quantity);
+    
+    // For specific units that should be whole numbers
+    $whole_number_units = ['pcs', 'piece', 'pieces', 'unit', 'units', 'box', 'boxes', 'bottle', 'bottles', 'pack', 'packs'];
+    
+    $unit_lower = strtolower($unit_name);
+    if (in_array($unit_lower, $whole_number_units)) {
+        return (int)$rounded;
+    }
+    
+    return $rounded;
+}
+
 $stock_card_input = $_GET['stock_card'] ?? null;
 $category = $_GET['category'] ?? '';
 $item = $_GET['item'] ?? '';
@@ -37,6 +57,7 @@ if (!empty($search_input)) {
     if ($stock) {
         $item_id = $stock['id'];
         $item_unit_cost = $stock['unit_cost'];
+        $item_unit_name = $stock['unit_name'] ?? '';
         
         // Fetch ONLY stock_in transactions from stock history
         $stock_history_sql = "
@@ -156,8 +177,8 @@ if (!empty($search_input)) {
         });
         
         // Calculate running balance - START FROM CURRENT BALANCE AND WORK BACKWARDS
-        // First, get the current balance from items table
-        $current_balance = $stock['current_balance'];
+        // First, get the current balance from items table and convert to whole number
+        $current_balance = convertToWholeNumber($stock['current_balance'], $item_unit_name);
         
         // Reverse the transactions to calculate historical balances
         $reversed_transactions = array_reverse($all_transactions);
@@ -168,25 +189,33 @@ if (!empty($search_input)) {
             // Ensure all required fields are set
             $transaction['date'] = $transaction['date'] ?? '';
             $transaction['reference'] = $transaction['reference'] ?? '';
-            $transaction['quantity'] = $transaction['quantity'] ?? 0;
+            
+            // Convert quantity to whole number for calculation
+            $transaction_quantity = convertToWholeNumber($transaction['quantity'] ?? 0, $item_unit_name);
+            $transaction['quantity'] = $transaction_quantity;
+            
             $transaction['unit_cost'] = $transaction['unit_cost'] ?? $item_unit_cost;
             $transaction['total_cost'] = $transaction['total_cost'] ?? 0;
             $transaction['change_type'] = $transaction['change_type'] ?? '';
             $transaction['remarks'] = $transaction['remarks'] ?? '';
             $transaction['office_name'] = $transaction['office_name'] ?? '';
             
-            // Store the running balance for this transaction
-            $transaction['running_balance'] = $running_balance;
+            // Store the running balance for this transaction (convert to whole number)
+            $transaction['running_balance'] = convertToWholeNumber($running_balance, $item_unit_name);
             $transaction['running_total_cost'] = $running_balance * $transaction['unit_cost'];
             
             // Adjust running balance based on transaction type
             if ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') {
                 // For stock_in, subtract the quantity to get previous balance
-                $running_balance -= $transaction['quantity'];
+                $running_balance -= $transaction_quantity;
             } elseif ($transaction['change_type'] === 'issuance') {
                 // For issuance, add the quantity to get previous balance
-                $running_balance += $transaction['quantity'];
+                $running_balance += $transaction_quantity;
             }
+            
+            // Ensure running balance doesn't go negative and convert to whole number
+            $running_balance = max(0, $running_balance);
+            $running_balance = convertToWholeNumber($running_balance, $item_unit_name);
         }
         
         // Reverse back to chronological order
@@ -204,15 +233,16 @@ function getTransactionOrder($type) {
     }
 }
 
-// Prepare data for Word export
-$word_data = [
+// Prepare data for export
+$export_data = [
     'stock_number' => $stock['stock_number'] ?? 'N/A',
     'item_name' => strtoupper($stock['item_name'] ?? 'N/A'),
     'description' => $stock['description'] ?? 'N/A',
     'unit_of_measurement' => $stock['unit_name'] ?? 'N/A',
     'fund_cluster' => $stock['fund_cluster'] ?? 'N/A',
     'reorder_point' => '',
-    'transactions' => $stock_transactions
+    'transactions' => $stock_transactions,
+    'export_type' => 'excel'
 ];
 ?>
 
@@ -343,21 +373,27 @@ table.table-bordered td {
 table.table-bordered thead th {
     border-bottom: 2px solid #000;
 }
+
+/* Ensure quantity numbers display as whole numbers */
+.quantity-cell {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+}
 </style>
 
 </head>
 <body>
 
 <div class="button-container">
-    <button class="action-btn print-btn" onclick="window.print()">
-        <i class="fa-solid fa-print"></i> Print
-    </button>
-    <button class="action-btn word-btn" onclick="exportToWord()">
-        <i class="fa-solid fa-file-word"></i> Export to Word
-    </button>
-    <button class="action-btn excel-btn" onclick="exportToExcel()">
-        <i class="fa-solid fa-file-excel"></i> Export to Excel
-    </button>
+    <!-- UPDATED: Changed action to export_stock_excel.php -->
+    <form method="POST" action="export_stock_excel.php" target="_blank" style="margin: 0; width: 100%;">
+        <input type="hidden" name="export_data" value='<?= json_encode($export_data) ?>'>
+        <input type="hidden" name="export_type" value="excel">
+        <button type="submit" class="action-btn excel-btn">
+            <i class="fa-solid fa-file-excel"></i> Export to Excel
+        </button>
+    </form>
+    
     <button class="action-btn close-btn" onclick="closeWindow()">
         <i class="fa-solid fa-times"></i> Close
     </button>
@@ -478,7 +514,7 @@ table.table-bordered thead th {
           <td><?= $transaction['reference'] ?? '' ?></td>
           
           <!-- Receipt Columns -->
-          <td>
+          <td class="quantity-cell">
             <?= ($transaction['change_type'] === 'stock_in' || $transaction['change_type'] === 'carry_forward') ? $transaction['quantity'] : '' ?>
           </td>
           <td>
@@ -486,7 +522,7 @@ table.table-bordered thead th {
           </td>
           
           <!-- Issuance Columns -->
-          <td>
+          <td class="quantity-cell">
             <?= $transaction['change_type'] === 'issuance' ? $transaction['quantity'] : '' ?>
           </td>
           <td>
@@ -500,7 +536,7 @@ table.table-bordered thead th {
           </td>
           
           <!-- Balance Columns -->
-          <td><?= $transaction['running_balance'] ?? 0 ?></td>
+          <td class="quantity-cell"><?= $transaction['running_balance'] ?? 0 ?></td>
           <td><?= number_format($transaction['running_total_cost'] ?? 0, 2) ?></td>
           <td></td> <!-- No. of Days to Consume -->
           <td>
@@ -552,105 +588,26 @@ function closeWindow() {
     }
 }
 
-function exportToWord() {
-    // Create a temporary form to submit data to Word template
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'export_stock_card.php';
-    form.target = '_blank';
-    
-    // Add data as hidden inputs with template reference
-    const data = <?= json_encode($word_data); ?>;
-    
-    // Add template reference
-    const templateInput = document.createElement('input');
-    templateInput.type = 'hidden';
-    templateInput.name = 'template';
-    templateInput.value = 'STOCKCARD_Template';
-    form.appendChild(templateInput);
-    
-    // Add all data fields
-    for (const key in data) {
-        if (key === 'transactions') {
-            // Handle transactions array
-            data[key].forEach((transaction, index) => {
-                for (const field in transaction) {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = `transactions[${index}][${field}]`;
-                    input.value = transaction[field];
-                    form.appendChild(input);
-                }
-            });
-        } else {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = data[key];
-            form.appendChild(input);
-        }
-    }
-    
-    // Add calculated fields
-    const currentDateInput = document.createElement('input');
-    currentDateInput.type = 'hidden';
-    currentDateInput.name = 'current_date';
-    currentDateInput.value = new Date().toISOString().split('T')[0];
-    form.appendChild(currentDateInput);
-    
-    const generationDateInput = document.createElement('input');
-    generationDateInput.type = 'hidden';
-    generationDateInput.name = 'generation_date';
-    generationDateInput.value = new Date().toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    });
-    form.appendChild(generationDateInput);
-    
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
-}
-
+// Optional: Updated JavaScript function to use export_stock_excel.php
 function exportToExcel() {
-    // Create a temporary form to submit data to Excel export
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = 'export_stock_card_excel.php';
+    form.action = 'export_stock_excel.php';
     form.target = '_blank';
     
-    // Add data as hidden inputs
-    const data = <?= json_encode($word_data); ?>;
+    const exportData = <?= json_encode($export_data); ?>;
     
-    // Add all data fields
-    for (const key in data) {
-        if (key === 'transactions') {
-            // Handle transactions array
-            data[key].forEach((transaction, index) => {
-                for (const field in transaction) {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = `transactions[${index}][${field}]`;
-                    input.value = transaction[field];
-                    form.appendChild(input);
-                }
-            });
-        } else {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = data[key];
-            form.appendChild(input);
-        }
-    }
+    const dataInput = document.createElement('input');
+    dataInput.type = 'hidden';
+    dataInput.name = 'export_data';
+    dataInput.value = JSON.stringify(exportData);
+    form.appendChild(dataInput);
     
-    // Add current date
-    const currentDateInput = document.createElement('input');
-    currentDateInput.type = 'hidden';
-    currentDateInput.name = 'export_date';
-    currentDateInput.value = new Date().toISOString().split('T')[0];
-    form.appendChild(currentDateInput);
+    const typeInput = document.createElement('input');
+    typeInput.type = 'hidden';
+    typeInput.name = 'export_type';
+    typeInput.value = 'excel';
+    form.appendChild(typeInput);
     
     document.body.appendChild(form);
     form.submit();

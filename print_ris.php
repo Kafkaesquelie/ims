@@ -240,8 +240,8 @@ $all_items_available = ($request_status == 'Completed');
 
         .action-buttons {
             position: fixed;
-            left: 20px;
-            top: 50%;
+            left: 280px;
+            top: 20%;
             transform: translateY(-50%);
             z-index: 1000;
         }
@@ -314,29 +314,31 @@ $all_items_available = ($request_status == 'Completed');
 <div class="action-buttons no-print">
     <!-- Print Button -->
     <button onclick="window.print()"
-        class="btn btn-outline-primary rounded-circle shadow-sm"
+        class="btn btn-primary rounded-circle shadow-sm"
         title="Print">
         <i class="fa-solid fa-print"></i>
     </button>
 
     <!-- Excel Export Button -->
-  <a href="export_ris_excel.php?ris_no=<?php echo $request_id; ?>" 
-   class="btn btn-outline-success rounded-circle shadow-sm"
-   title="Export to Excel">
+<!-- Excel Export Button -->
+<a href="export_ris_excel.php?ris_no=<?php echo $request_id; ?>" 
+   class="btn btn-success rounded-circle shadow-sm"
+   title="Export to Excel"
+   target="_blank">
     <i class="fa-solid fa-file-excel"></i>
 </a>
 
 
     <!-- Word Export Button -->
-    <button onclick="exportToWord()"
+    <!-- <button onclick="exportToWord()"
         class="btn btn-outline-info rounded-circle shadow-sm"
         title="Export to Word">
         <i class="fa-solid fa-file-word"></i>
-    </button>
+    </button> -->
 
     <!-- Back Button -->
     <a href="logs.php"
-        class="btn btn-outline-secondary rounded-circle shadow-sm"
+        class="btn btn-secondary rounded-circle shadow-sm"
         title="Back">
         <i class="fa-solid fa-arrow-left"></i>
     </a>
