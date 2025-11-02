@@ -6,143 +6,248 @@ header('Content-Type: application/json');
 $response = [
     'success' => false,
     'message' => '',
-    'document_number' => ''
+    'document_number' => '',
+    'debug' => []
 ];
 
-// Validate request method
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    $response['message'] = 'Invalid request method.';
-    echo json_encode($response);
-    exit;
-}
-
-// Retrieve POST data
-$doc_type     = $_POST['doc_type'] ?? '';
-$item_id      = (int)($_POST['item_id'] ?? 0);
-$requestor_id = (int)($_POST['requestor_id'] ?? 0);
-$issue_qty    = (int)($_POST['issue_qty'] ?? 0);
-$issue_date   = $_POST['issue_date'] ?? date('Y-m-d');
-$doc_number   = trim($_POST['doc_number'] ?? '');
-$remarks      = $_POST['remarks'] ?? '';
-
-if (!$doc_type || !$item_id || !$requestor_id || !$issue_qty || !$doc_number) {
-    $response['message'] = 'Please fill in all required fields.';
-    echo json_encode($response);
-    exit;
-}
-
-// Start transaction with foreign key checks disabled
-$db->query("SET FOREIGN_KEY_CHECKS=0");
-$db->query("START TRANSACTION");
-
 try {
-    // Identify table and quantity column
-    if ($doc_type === 'ics') {
-        $item_table = 'semi_exp_prop';
-        $doc_field  = 'ICS_No';
-        $qty_field  = 'qty_left';
-        $use_property_id = false; // Use item_id for semi-expendable
-    } elseif ($doc_type === 'par') {
-        $item_table = 'properties';
-        $doc_field  = 'PAR_No';
-        $qty_field  = 'qty';
-        $use_property_id = true; // Use property_id for PPE
-    } else {
-        throw new Exception('Invalid document type.');
+    // Validate request method
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        throw new Exception('Invalid request method. Only POST requests are allowed.');
     }
 
-    // Fetch item
-    $item = find_by_id($item_table, $item_id);
-    if (!$item) {
-        throw new Exception('Item not found in ' . $item_table . ' with ID: ' . $item_id);
+    // Retrieve and validate POST data
+    $doc_type = $_POST['doc_type'] ?? '';
+    $item_id = (int)($_POST['item_id'] ?? 0);
+    $requestor_id = (int)($_POST['requestor_id'] ?? 0);
+    $issue_qty = (int)($_POST['issue_qty'] ?? 0);
+    $issue_date = $_POST['issue_date'] ?? date('Y-m-d');
+    $doc_number = trim($_POST['doc_number'] ?? '');
+    $remarks = $_POST['remarks'] ?? '';
+    $item_type = $_POST['item_type'] ?? ''; // Added item_type for better handling
+
+    $response['debug']['received_data'] = [
+        'doc_type' => $doc_type,
+        'item_id' => $item_id,
+        'requestor_id' => $requestor_id,
+        'issue_qty' => $issue_qty,
+        'issue_date' => $issue_date,
+        'doc_number' => $doc_number,
+        'item_type' => $item_type
+    ];
+
+    // Comprehensive validation
+    if (empty($doc_type) || !in_array($doc_type, ['par', 'ics'])) {
+        throw new Exception('Invalid document type. Must be "par" or "ics".');
     }
 
-    // Stock validation
-    $available_qty = isset($item[$qty_field]) ? (int)$item[$qty_field] : 0;
-    if ($issue_qty > $available_qty) {
-        throw new Exception('Issued quantity exceeds available stock. Available: ' . $available_qty);
+    if ($item_id <= 0) {
+        throw new Exception('Invalid item selected.');
     }
 
-    // Generate document number
-    $yearMonth = date('Y-m');
-    $fullDocNo = "{$yearMonth}-" . str_pad($doc_number, 4, '0', STR_PAD_LEFT);
-
-    // Check for duplicate document number
-    $check_doc = $db->query("SELECT id FROM transactions WHERE {$doc_field} = '{$fullDocNo}' AND status = 'Issued'");
-    if ($db->num_rows($check_doc) > 0) {
-        throw new Exception('Document number already exists: ' . $fullDocNo);
+    if ($requestor_id <= 0) {
+        throw new Exception('Invalid requestor selected.');
     }
 
-    // Calculate return due date
-    $return_due_date = ($doc_type === 'par') ? null : date('Y-m-d', strtotime($issue_date . ' +3 years'));
-
-    // Check if property_id column exists in transactions table
-    $property_id_column_exists = false;
-    $check_column = $db->query("SHOW COLUMNS FROM transactions LIKE 'property_id'");
-    if ($db->num_rows($check_column) > 0) {
-        $property_id_column_exists = true;
+    if ($issue_qty <= 0) {
+        throw new Exception('Issue quantity must be greater than zero.');
     }
 
-    // Insert transaction - use different approaches based on item type
-    if ($use_property_id && $property_id_column_exists) {
-        // For PPE, use property_id field (if it exists)
-        $insert_sql = sprintf("
-            INSERT INTO transactions 
-            (employee_id, item_id, property_id, quantity, %s, transaction_type, transaction_date, status, remarks, return_due_date)
-            VALUES ('%d', 0, '%d', '%d', '%s', 'issue', '%s', 'Issued', '%s', '%s')
-        ",
-            $doc_field,
-            $requestor_id,
-            $item_id,
-            $issue_qty,
-            $db->escape($fullDocNo),
-            $db->escape($issue_date),
-            $db->escape($remarks),
-            $db->escape($return_due_date)
-        );
-    } else {
-        // For semi-expendable OR if property_id column doesn't exist, use item_id field normally
-        $insert_sql = sprintf("
-            INSERT INTO transactions 
-            (employee_id, item_id, quantity, %s, transaction_type, transaction_date, status, remarks, return_due_date)
-            VALUES ('%d', '%d', '%d', '%s', 'issue', '%s', 'Issued', '%s', '%s')
-        ",
-            $doc_field,
-            $requestor_id,
-            $item_id,
-            $issue_qty,
-            $db->escape($fullDocNo),
-            $db->escape($issue_date),
-            $db->escape($remarks),
-            $db->escape($return_due_date)
-        );
+    if (empty($doc_number)) {
+        throw new Exception('Document number is required.');
     }
 
-    if (!$db->query($insert_sql)) {
-        throw new Exception('Failed to record transaction: ' . $db->get_last_error());
+    if (!preg_match('/^\d{1,4}$/', $doc_number)) {
+        throw new Exception('Document number must be 1-4 digits.');
     }
 
-    // Update stock
-    $new_qty = $available_qty - $issue_qty;
-    $update_sql = "UPDATE {$item_table} SET {$qty_field} = '{$new_qty}' WHERE id = '{$item_id}'";
-
-    if (!$db->query($update_sql)) {
-        throw new Exception('Failed to update stock quantity: ' . $db->get_last_error());
+    // Validate issue date
+    if (!strtotime($issue_date)) {
+        throw new Exception('Invalid issue date format.');
     }
 
-    // Commit
-    $db->query("COMMIT");
-    $db->query("SET FOREIGN_KEY_CHECKS=1"); // Re-enable foreign key checks
+    // Determine item type if not provided
+    if (empty($item_type)) {
+        $item_type = ($doc_type === 'par') ? 'ppe' : 'semi';
+    }
 
-    $response['success'] = true;
-    $response['message'] = strtoupper($doc_type) . " issuance recorded successfully.";
-    $response['document_number'] = $fullDocNo;
-    $response['return_due_date'] = $return_due_date;
+    $response['debug']['determined_item_type'] = $item_type;
+
+    // Start transaction
+    $db->query("START TRANSACTION");
+
+    try {
+        // Identify table and document configuration
+        if ($doc_type === 'par') {
+            $item_table = 'properties';
+            $doc_field = 'PAR_No';
+            $doc_display = 'PAR';
+            $qty_field = 'qty';
+            $use_property_id = true;
+        } else {
+            $item_table = 'semi_exp_prop';
+            $doc_field = 'ICS_No';
+            $doc_display = 'ICS';
+            $qty_field = 'qty_left';
+            $use_property_id = false;
+        }
+
+        // Fetch and validate item
+        $item = find_by_id($item_table, $item_id);
+        if (!$item) {
+            throw new Exception("Item not found in {$item_table} with ID: {$item_id}");
+        }
+
+        $response['debug']['item_data'] = [
+            'id' => $item['id'],
+            'name' => $item['article'] ?? $item['item'] ?? 'Unknown',
+            'available_qty' => $item[$qty_field] ?? 0
+        ];
+
+        // Stock validation
+        $available_qty = isset($item[$qty_field]) ? (int)$item[$qty_field] : 0;
+        
+        if ($available_qty <= 0) {
+            throw new Exception('Item is out of stock.');
+        }
+
+        if ($issue_qty > $available_qty) {
+            throw new Exception("Issued quantity exceeds available stock. Available: {$available_qty}, Requested: {$issue_qty}");
+        }
+
+        // Generate full document number
+        $yearMonth = date('Y-m');
+        $fullDocNo = "{$yearMonth}-" . str_pad($doc_number, 4, '0', STR_PAD_LEFT);
+        $response['document_number'] = $fullDocNo;
+
+        // Check for duplicate document number
+        $check_sql = "SELECT id FROM transactions WHERE {$doc_field} = '{$db->escape($fullDocNo)}'";
+        $check_result = $db->query($check_sql);
+        
+        if ($db->num_rows($check_result) > 0) {
+            throw new Exception("{$doc_display} number {$fullDocNo} already exists. Please use a different document number.");
+        }
+
+        // Validate requestor exists
+        $requestor_check = find_by_id('employees', $requestor_id);
+        if (!$requestor_check) {
+            throw new Exception('Selected requestor not found in the system.');
+        }
+
+        // Calculate return due date (3 years for semi-expendable items)
+        $return_due_date = ($doc_type === 'par') ? null : date('Y-m-d', strtotime($issue_date . ' +3 years'));
+
+        // Check table structure for property_id column
+        $property_id_column_exists = false;
+        $check_column = $db->query("SHOW COLUMNS FROM transactions LIKE 'property_id'");
+        if ($db->num_rows($check_column) > 0) {
+            $property_id_column_exists = true;
+        }
+
+        $response['debug']['table_structure'] = [
+            'property_id_column_exists' => $property_id_column_exists,
+            'use_property_id' => $use_property_id
+        ];
+
+        // Build transaction insert query based on table structure and item type
+        if ($use_property_id && $property_id_column_exists) {
+            // For PPE items when property_id column exists
+            $insert_sql = sprintf(
+                "INSERT INTO transactions 
+                (employee_id, property_id, quantity, %s, transaction_type, transaction_date, status, remarks, return_due_date)
+                VALUES ('%d', '%d', '%d', '%s', 'issue', '%s', 'Issued', '%s', '%s')",
+                $doc_field,
+                $requestor_id,
+                $item_id,
+                $issue_qty,
+                $db->escape($fullDocNo),
+                $db->escape($issue_date),
+                $db->escape($remarks),
+                $db->escape($return_due_date)
+            );
+        } else {
+            // For semi-expendable items OR if property_id column doesn't exist
+            $insert_sql = sprintf(
+                "INSERT INTO transactions 
+                (employee_id, item_id, quantity, %s, transaction_type, transaction_date, status, remarks, return_due_date)
+                VALUES ('%d', '%d', '%d', '%s', 'issue', '%s', 'Issued', '%s', '%s')",
+                $doc_field,
+                $requestor_id,
+                $item_id,
+                $issue_qty,
+                $db->escape($fullDocNo),
+                $db->escape($issue_date),
+                $db->escape($remarks),
+                $db->escape($return_due_date)
+            );
+        }
+
+        $response['debug']['insert_sql'] = $insert_sql;
+
+        // Insert transaction record
+        if (!$db->query($insert_sql)) {
+            $error_msg = "Failed to record transaction: " . $db->get_last_error();
+            $response['debug']['insert_error'] = $error_msg;
+            throw new Exception($error_msg);
+        }
+
+        $transaction_id = $db->insert_id();
+        $response['debug']['transaction_id'] = $transaction_id;
+
+        // Update stock quantity
+        $new_qty = $available_qty - $issue_qty;
+        $update_sql = "UPDATE {$item_table} SET {$qty_field} = '{$new_qty}' WHERE id = '{$item_id}'";
+        
+        $response['debug']['update_sql'] = $update_sql;
+
+        if (!$db->query($update_sql)) {
+            $error_msg = "Failed to update stock quantity: " . $db->get_last_error();
+            $response['debug']['update_error'] = $error_msg;
+            throw new Exception($error_msg);
+        }
+
+        // Commit transaction
+        $db->query("COMMIT");
+
+        // Build success response
+        $item_name = $item['article'] ?? $item['item'] ?? 'Item';
+        $success_message = "{$doc_display} issuance successful! ";
+        $success_message .= "Issued {$issue_qty} of '{$item_name}' to ";
+        $success_message .= $requestor_check['first_name'] . ' ' . $requestor_check['last_name'];
+        $success_message .= " with {$doc_display} No: {$fullDocNo}";
+
+        if ($return_due_date) {
+            $success_message .= " (Due: " . date('M d, Y', strtotime($return_due_date)) . ")";
+        }
+
+        $response['success'] = true;
+        $response['message'] = $success_message;
+        $response['return_due_date'] = $return_due_date;
+        $response['issued_quantity'] = $issue_qty;
+        $response['item_name'] = $item_name;
+        $response['requestor_name'] = $requestor_check['first_name'] . ' ' . $requestor_check['last_name'];
+
+    } catch (Exception $e) {
+        // Rollback transaction on any error
+        $db->query("ROLLBACK");
+        throw new Exception("Transaction failed: " . $e->getMessage());
+    }
 
 } catch (Exception $e) {
-    $db->query("ROLLBACK");
-    $db->query("SET FOREIGN_KEY_CHECKS=1"); // Re-enable foreign key checks even on error
-    $response['message'] = 'Error: ' . $e->getMessage();
+    $response['message'] = $e->getMessage();
+    $response['success'] = false;
+    
+    // Log the error for debugging
+    error_log("Single Issue Error: " . $e->getMessage());
+    error_log("POST Data: " . print_r($_POST, true));
+}
+
+// For production, remove debug information
+if (isset($response['debug'])) {
+    // Uncomment the line below to include debug info in response
+    // $response['debug'] = $response['debug'];
+    // Or comment out the line below to remove debug info
+    unset($response['debug']);
 }
 
 echo json_encode($response);

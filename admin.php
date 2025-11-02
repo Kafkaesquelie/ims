@@ -6,7 +6,6 @@ if (!$session->isUserLoggedIn()) {
 }
 $page_title = 'Admin Home Page';
 
-
 // Checkin What level user has permission to view this page
 page_require_level(1);
 
@@ -21,8 +20,75 @@ $items_req    = find_highest_requested_items('10');
 $pending_requests = count_pending_requests();
 $total_users = count_by_id('users');
 $low_stock_items = count_low_stock_items();
-// $recent_activities = find_recent_activities('5');
 
+// Function to calculate total inventory value including all tables
+function calculate_total_inventory_value() {
+    global $db;
+    
+    $total_value = 0;
+    
+    // Calculate value from items table
+    $items_sql = "SELECT SUM(quantity * unit_price) as total_value FROM items WHERE archived = 0";
+    $items_result = $db->query($items_sql);
+    if ($items_result && $items_row = $items_result->fetch_assoc()) {
+        $total_value += $items_row['total_value'] ?? 0;
+    }
+    
+    // Calculate value from semi_exp_prop table
+    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop WHERE archived = 0";
+    $semi_result = $db->query($semi_sql);
+    if ($semi_result && $semi_row = $semi_result->fetch_assoc()) {
+        $total_value += $semi_row['total_value'] ?? 0;
+    }
+    
+    // Calculate value from properties table
+    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties WHERE archived = 0";
+    $prop_result = $db->query($prop_sql);
+    if ($prop_result && $prop_row = $prop_result->fetch_assoc()) {
+        $total_value += $prop_row['total_value'] ?? 0;
+    }
+    
+    return $total_value;
+}
+
+// Function to get detailed inventory breakdown
+function get_inventory_breakdown() {
+    global $db;
+    
+    $breakdown = [
+        'items' => 0,
+        'semi_expendable' => 0,
+        'properties' => 0,
+        'total' => 0
+    ];
+    
+    // Items value
+    $items_sql = "SELECT SUM(quantity * unit_price) as total_value FROM items WHERE archived = 0";
+    $items_result = $db->query($items_sql);
+    if ($items_result && $items_row = $items_result->fetch_assoc()) {
+        $breakdown['items'] = $items_row['total_value'] ?? 0;
+    }
+    
+    // Semi-expendable properties value
+    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop WHERE archived = 0";
+    $semi_result = $db->query($semi_sql);
+    if ($semi_result && $semi_row = $semi_result->fetch_assoc()) {
+        $breakdown['semi_expendable'] = $semi_row['total_value'] ?? 0;
+    }
+    
+    // Properties value
+    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties WHERE archived = 0";
+    $prop_result = $db->query($prop_sql);
+    if ($prop_result && $prop_row = $prop_result->fetch_assoc()) {
+        $breakdown['properties'] = $prop_row['total_value'] ?? 0;
+    }
+    
+    $breakdown['total'] = $breakdown['items'] + $breakdown['semi_expendable'] + $breakdown['properties'];
+    
+    return $breakdown;
+}
+
+$inventory_breakdown = get_inventory_breakdown();
 $low_count = $items_low->num_rows;
 $total_items_count = $c_item['total'];
 ?>
@@ -132,6 +198,18 @@ $total_items_count = $c_item['total'];
     font-size: 0.8rem;
     color: var(--text-light);
     margin-top: 0.3rem;
+}
+
+/* Value Breakdown */
+.value-breakdown {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 0.5rem;
+    line-height: 1.3;
+}
+
+.value-breakdown div {
+    margin-bottom: 0.2rem;
 }
 
 /* Notification Badge */
@@ -452,15 +530,13 @@ $total_items_count = $c_item['total'];
                 </span>
                 <div class="info-box-content">
                     <div class="info-box-number" style="color: #6f42c1;">
-                        <?php 
-                        // Calculate total inventory value
-                        $total_value = calculate_total_inventory_value();
-                        echo '₱' . number_format($total_value, 2);
-                        ?>
+                        <?php echo '₱' . number_format($inventory_breakdown['total'], 2); ?>
                     </div>
                     <span class="info-box-text">Inventory Value</span>
-                    <div class="info-box-description">
-                        Total worth
+                    <div class="value-breakdown">
+                        <div>Items: ₱<?php echo number_format($inventory_breakdown['items'], 2); ?></div>
+                        <div>Semi-Exp: ₱<?php echo number_format($inventory_breakdown['semi_expendable'], 2); ?></div>
+                        <div>Properties: ₱<?php echo number_format($inventory_breakdown['properties'], 2); ?></div>
                     </div>
                 </div>
             </div>
@@ -625,11 +701,10 @@ $total_items_count = $c_item['total'];
 
 <?php include_once('layouts/footer.php'); ?>
 
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
-  <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
-
-  <script>
+<script>
     $(document).ready(function() {
       var table = $('#lowStockTable').DataTable({
         pageLength: 5,
@@ -639,6 +714,5 @@ $total_items_count = $c_item['total'];
         autoWidth: false,
         fixedColumns: true
       });
- 
-      }); 
+    }); 
 </script>
