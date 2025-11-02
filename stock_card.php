@@ -680,7 +680,7 @@ if (!empty($smpi_items)) {
           <!-- Right Logos in a Row -->
           <div style="flex:0 0 auto; display:flex; gap:10px;">
             <img src="uploads/other/SPMO.png" alt="Logo Right 1" style="max-width:80px; height:auto;">
-            <img src="uploads/other/BP.PNg" alt="Logo Right 2" style="max-width:100px; height:auto;">
+            <img src="uploads/other/BP.png" alt="Logo Right 2" style="max-width:150px; height:auto;">
           </div>
         </div>
       </div>
@@ -840,6 +840,111 @@ if (!empty($smpi_items)) {
     </button>
   </div>
 
+
+   <!-- Semi-Expendable Property Card Tab -->
+  <div id="tab-smpi" class="tab-pane <?= $active_tab === 'smpi' ? 'active' : '' ?>">
+    <!-- Search and Filter Form for SMPI -->
+    <div class="card mb-3 filter-card" style="border-radius:8px; padding:15px;">
+      <div class="row align-items-center">
+        <div class="col-md-12">
+          <h5 class="mb-3"><i class="nav-icon fas fa-tools"></i> Semi-Expendable Property Card - Filters</h5>
+          <form method="GET" action="" class="row g-3 align-items-end">
+            <input type="hidden" name="tab" value="smpi">
+
+            <div class="col-md-4">
+              <label class="form-label"><strong>Fund Cluster</strong></label><br>
+              <select class="form-select w-100 p-2" name="fund_cluster">
+                <option value="">All Fund Clusters</option>
+                <?php foreach ($fund_clusters as $cluster): ?>
+                  <option value="<?= $cluster['fund_cluster'] ?>"
+                    <?= $fund_cluster_filter === $cluster['fund_cluster'] ? 'selected' : '' ?>>
+                    <?= $cluster['fund_cluster'] ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label"><strong>Value Range</strong></label>
+              <select class="form-select w-100 p-2" name="value_filter">
+                <option value="">All Values</option>
+                <option value="high" <?= $value_filter === 'high' ? 'selected' : '' ?>>High Value (₱5,000 - ₱50,000)</option>
+                <option value="low" <?= $value_filter === 'low' ? 'selected' : '' ?>>Low Value (Below ₱5,000)</option>
+              </select>
+            </div>
+
+            <div class="col-md-4">
+              <button type="submit" class="btn btn-success w-100">
+                <i class="fa-solid fa-filter"></i> Apply Filters
+              </button>
+              <?php if ($stock_card_input || $fund_cluster_filter || $value_filter): ?>
+                <a href="?tab=smpi" class="btn btn-outline-secondary w-100 mt-2">
+                  <i class="fa-solid fa-times"></i> Clear Filters
+                </a>
+              <?php endif; ?>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- SMPI Items Summary -->
+    <?php if (!empty($smpi_items)): ?>
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h6 class="mb-0"><i class="fas fa-list me-2"></i>Semi-Expendable Items (<?= count($smpi_items) ?> found)</h6>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm" id="smpiTable">
+              <thead class="table-light">
+                <tr>
+                  <th>Inventory Item No</th>
+                  <th>Item Name</th>
+                  <th>Description</th>
+                  <th>Fund Cluster</th>
+                  <th>Unit Cost</th>
+                  <th>Balance Qty</th>
+                  <th>Total Value</th>
+                  <th>Value Category</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($smpi_items as $item): ?>
+                  <?php
+                  $total_value = $item['unit_cost'] * $item['balance_qty'];
+                  $value_category = $item['unit_cost'] >= 5000 ? 'High Value' : 'Low Value';
+                  $value_class = $item['unit_cost'] >= 5000 ? 'text-danger fw-bold' : 'text-success';
+                  ?>
+                  <tr class="clickable-row" 
+                      data-item-id="<?= $item['id'] ?>" 
+                      style="cursor: pointer;"
+                      onclick="viewPropertyCard(<?= $item['id'] ?>)">
+                    <td><strong><?= $item['inv_item_no'] ?? 'N/A' ?></strong></td>
+                    <td><?= $item['item'] ?></td>
+                    <td><?= $item['item_description'] ?? 'N/A' ?></td>
+                    <td><?= $item['fund_cluster'] ?? 'N/A' ?></td>
+                    <td class="text-end">₱<?= number_format($item['unit_cost'], 2) ?></td>
+                    <td class="text-center"><?= $item['balance_qty'] ?></td>
+                    <td class="text-end">₱<?= number_format($total_value, 2) ?></td>
+                    <td class="<?= $value_class ?>"><?= $value_category ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <?php if (empty($smpi_items)): ?>
+      <div class="alert alert-warning text-center">
+        <i class="fa-solid fa-exclamation-triangle me-2"></i>
+        No semi-expendable items found matching your criteria.
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
   
 </div>
 
