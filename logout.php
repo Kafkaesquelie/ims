@@ -1,16 +1,9 @@
 <?php
-require_once('includes/load.php'); // include your class
+require_once('includes/load.php'); // This already starts the session
 
-$auth = new Session(); 
+$session->msg('s', 'You have successfully logged out.');
 
-// Call logout
-$auth->logout();
-// Destroy session completely
-session_destroy();
-// Add a logout confirmation message
-$auth->msg('s', 'You have successfully logged out.');
-// Redirect to login page 
-header("Location: index.php");
+$session->logout(); // This destroys the session fully
+
+header("Location: login.php");
 exit();
-?>
-
