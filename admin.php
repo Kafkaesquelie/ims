@@ -28,7 +28,7 @@ function calculate_total_inventory_value() {
     $total_value = 0;
     
     // Calculate value from items table
-    $items_sql = "SELECT SUM(quantity * unit_price) as total_value FROM items WHERE archived = 0";
+    $items_sql = "SELECT SUM(quantity * unit_cost) as total_value FROM items WHERE archived = 0";
     $items_result = $db->query($items_sql);
     if ($items_result && $items_row = $items_result->fetch_assoc()) {
         $total_value += $items_row['total_value'] ?? 0;
@@ -63,7 +63,7 @@ function get_inventory_breakdown() {
     ];
     
     // Items value
-    $items_sql = "SELECT SUM(quantity * unit_price) as total_value FROM items WHERE archived = 0";
+    $items_sql = "SELECT SUM(quantity * unit_cost) as total_value FROM items WHERE archived = 0";
     $items_result = $db->query($items_sql);
     if ($items_result && $items_row = $items_result->fetch_assoc()) {
         $breakdown['items'] = $items_row['total_value'] ?? 0;
