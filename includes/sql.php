@@ -862,13 +862,13 @@ function count_low_stock_items() {
 }
 
 
-function calculate_total_inventory_value() {
-    global $db;
-    $sql = "SELECT SUM(quantity * unit_cost) as total_value FROM items";
-    $result = $db->query($sql);
-    $data = $result->fetch_assoc();
-    return $data['total_value'] ? $data['total_value'] : 0;
-}
+// function calculate_total_inventory_value() {
+//     global $db;
+//     $sql = "SELECT SUM(quantity * unit_cost) as total_value FROM items";
+//     $result = $db->query($sql);
+//     $data = $result->fetch_assoc();
+//     return $data['total_value'] ? $data['total_value'] : 0;
+// }
 
 
 function find_current_school_year_id() {
