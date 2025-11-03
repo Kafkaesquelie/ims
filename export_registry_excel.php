@@ -13,8 +13,8 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-// Clear any previous output
-ob_clean();
+// Start output buffering at the very beginning
+ob_start();
 
 try {
     // Get the posted data
@@ -360,8 +360,8 @@ try {
     // Generate filename
     $filename = "Registry_Semi_Expendable_" . ($fund_cluster ?: 'All') . "_" . date('Y-m-d') . ".xlsx";
     
-    // Clean output buffer and set headers
-    while (ob_get_level()) {
+    // Clean output buffer completely before headers
+    while (ob_get_level() > 0) {
         ob_end_clean();
     }
     
@@ -382,7 +382,7 @@ try {
     
 } catch (Exception $e) {
     // Clean any output
-    while (ob_get_level()) {
+    while (ob_get_level() > 0) {
         ob_end_clean();
     }
     

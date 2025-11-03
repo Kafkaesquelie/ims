@@ -10,6 +10,14 @@ $response = [
     'debug' => []
 ];
 
+// Custom escape function that handles NULL values properly
+function safe_escape($db, $value) {
+    if ($value === null) {
+        return 'NULL';
+    }
+    return "'" . $db->escape($value) . "'";
+}
+
 try {
     // Validate request method
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -121,7 +129,7 @@ try {
         $response['document_number'] = $fullDocNo;
 
         // Check for duplicate document number
-        $check_sql = "SELECT id FROM transactions WHERE {$doc_field} = '{$db->escape($fullDocNo)}'";
+        $check_sql = "SELECT id FROM transactions WHERE {$doc_field} = " . safe_escape($db, $fullDocNo);
         $check_result = $db->query($check_sql);
         
         if ($db->num_rows($check_result) > 0) {
@@ -149,36 +157,36 @@ try {
             'use_property_id' => $use_property_id
         ];
 
-        // Build transaction insert query based on table structure and item type
+        // Build transaction insert query with proper NULL handling
         if ($use_property_id && $property_id_column_exists) {
             // For PPE items when property_id column exists
             $insert_sql = sprintf(
                 "INSERT INTO transactions 
                 (employee_id, property_id, quantity, %s, transaction_type, transaction_date, status, remarks, return_due_date)
-                VALUES ('%d', '%d', '%d', '%s', 'issue', '%s', 'Issued', '%s', '%s')",
+                VALUES (%d, %d, %d, %s, 'issue', %s, 'Issued', %s, %s)",
                 $doc_field,
                 $requestor_id,
                 $item_id,
                 $issue_qty,
-                $db->escape($fullDocNo),
-                $db->escape($issue_date),
-                $db->escape($remarks),
-                $db->escape($return_due_date)
+                safe_escape($db, $fullDocNo),
+                safe_escape($db, $issue_date),
+                safe_escape($db, $remarks),
+                safe_escape($db, $return_due_date)
             );
         } else {
             // For semi-expendable items OR if property_id column doesn't exist
             $insert_sql = sprintf(
                 "INSERT INTO transactions 
                 (employee_id, item_id, quantity, %s, transaction_type, transaction_date, status, remarks, return_due_date)
-                VALUES ('%d', '%d', '%d', '%s', 'issue', '%s', 'Issued', '%s', '%s')",
+                VALUES (%d, %d, %d, %s, 'issue', %s, 'Issued', %s, %s)",
                 $doc_field,
                 $requestor_id,
                 $item_id,
                 $issue_qty,
-                $db->escape($fullDocNo),
-                $db->escape($issue_date),
-                $db->escape($remarks),
-                $db->escape($return_due_date)
+                safe_escape($db, $fullDocNo),
+                safe_escape($db, $issue_date),
+                safe_escape($db, $remarks),
+                safe_escape($db, $return_due_date)
             );
         }
 

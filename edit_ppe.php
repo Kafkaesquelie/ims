@@ -20,8 +20,14 @@ if (!$property) {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
-    $req_fields = array('fund_cluster', 'property_no', 'subcategory_id', 'article', 'description', 'unit', 'unit_cost', 'qty', 'date_acquired');
+    $req_fields = array('fund_cluster', 'property_no', 'subcategory_id', 'article', 'description', 'unit', 'unit_cost', 'qty');
     validate_fields($req_fields);
+
+    // Check for errors
+    if (isset($errors) && !empty($errors)) {
+        $session->msg("d", $errors);
+        redirect('edit_ppe.php?id=' . $property_id, false);
+    }
 
     if (empty($errors)) {
         $fund_cluster   = remove_junk($db->escape($_POST['fund_cluster']));
@@ -35,6 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
         $date_acquired  = !empty($_POST['date_acquired']) ? $db->escape($_POST['date_acquired']) : NULL;
         $remarks        = remove_junk($db->escape($_POST['remarks']));
 
+        // Add current timestamp for last_edited
+        $current_time = date('Y-m-d H:i:s');
+        
         $query = "UPDATE properties SET 
                     fund_cluster='{$fund_cluster}', 
                     property_no='{$property_no}', 
@@ -45,19 +54,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
                     unit_cost='{$unit_cost}', 
                     qty='{$qty}', 
                     date_acquired='{$date_acquired}', 
-                    remarks='{$remarks}' 
+                    remarks='{$remarks}',
+                    date_updated='{$current_time}'
                   WHERE id='{$property_id}'";
 
         if ($db->query($query)) {
             $session->msg("s", "Property updated successfully.");
             redirect('ppe.php', false);
         } else {
-            $session->msg("d", "Sorry, failed to update property.");
-            redirect('ppe.php', false);
+            $session->msg("d", "Sorry, failed to update property: " . $db->get_last_error());
+            redirect('edit_ppe.php?id=' . $property_id, false);
         }
-    } else {
-        $session->msg("d", $errors);
-        redirect('edit_ppe.php?id=' . $property_id, false);
     }
 }
 
@@ -372,6 +379,9 @@ $all_subcategories = find_all('subcategories');
                     <h5 class="mb-0"><i class="fas fa-edit me-2 p-2"></i> Property Information</h5>
                 </div>
                 <div class="card-body-custom">
+                    <!-- Display messages -->
+                    <?php echo display_msg($msg); ?>
+                    
                     <!-- Metadata -->
                     <div class="metadata-container">
                         <div class="row">
@@ -398,11 +408,12 @@ $all_subcategories = find_all('subcategories');
 
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
-                                <label class="form-label-custom">Fund Cluster</label><br>
+                                <label class="form-label-custom">Fund Cluster</label>
                                 <select class="form-select-custom" id="fund_cluster" name="fund_cluster" required>
                                     <option value="">Select Fund Cluster</option>
                                     <?php foreach ($fund_clusters as $cluster): ?>
-                                        <option value="<?php echo remove_junk($cluster['name']); ?>">
+                                        <option value="<?php echo remove_junk($cluster['name']); ?>"
+                                            <?php if ($property['fund_cluster'] == $cluster['name']) echo 'selected'; ?>>
                                             <?php echo remove_junk($cluster['name']); ?>
                                         </option>
                                     <?php endforeach; ?>
@@ -450,7 +461,7 @@ $all_subcategories = find_all('subcategories');
                         <div class="row g-3 mb-4">
                             <div class="col-12">
                                 <textarea name="description" class="form-control-custom w-100"
-                                    placeholder="Enter property description"><?php echo remove_junk($property['description']); ?></textarea>
+                                    placeholder="Enter property description" required><?php echo remove_junk($property['description']); ?></textarea>
                             </div>
                         </div>
 
@@ -484,7 +495,6 @@ $all_subcategories = find_all('subcategories');
                                     <input type="number" name="qty" class="form-control-custom"
                                         value="<?php echo remove_junk($property['qty']); ?>"
                                         min="0" required>
-                                
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -500,7 +510,7 @@ $all_subcategories = find_all('subcategories');
 
                         <!-- Value Calculation -->
                         <div class="value-calculation">
-                            <div class="row text-center"> 
+                            <div class="row text-center">
                                 <div class="col-md-4">
                                     <small class="text-muted d-block">Unit Cost</small>
                                     <div class="cost-display">₱<?php echo number_format($property['unit_cost'], 2); ?></div>
@@ -530,8 +540,7 @@ $all_subcategories = find_all('subcategories');
                             <div class="col-md-8">
                                 <label class="form-label-custom">Remarks</label><br>
                                 <textarea name="remarks" class="form-control-custom w-100"
-                                    placeholder="Enter any remarks or notes">
-                                          <?php echo remove_junk($property['remarks']); ?></textarea>
+                                    placeholder="Enter any remarks or notes"><?php echo remove_junk($property['remarks']); ?></textarea>
                             </div>
                         </div>
 

@@ -644,7 +644,7 @@ $total_properties = $equipment_count;
       <h5><i class="fas fa-plus-circle me-2"></i> Add New Equipment</h5>
     </div>
 
-    <form method="post" action="equipment.php" class="needs-validation" novalidate>
+    <form method="post" action="ppe.php" class="needs-validation" novalidate>
       <div class="form-section">
         <h6 class="section-title">Basic Information</h6>
         <div class="row">
@@ -653,7 +653,7 @@ $total_properties = $equipment_count;
               <label for="fund_cluster" class="form-label fw-bold">
                 Fund Cluster <span class="text-danger">*</span>
               </label>
-              <select class="form-control" id="fund_cluster" name="fund_cluster" required>
+              <select class="form-control w-100 " id="fund_cluster" name="fund_cluster" required>
                 <option value="">Select Fund Cluster</option>
                 <?php foreach ($fund_clusters as $cluster): ?>
                   <option value="<?php echo remove_junk($cluster['name']); ?>">
@@ -669,8 +669,8 @@ $total_properties = $equipment_count;
 
           <div class="col-md-6 mb-3">
             <div class="form-group">
-              <label for="property_no" class="form-label fw-bold">Property No. <span class="text-danger">*</span></label>
-              <input type="text" class="form-control" id="property_no" name="property_no" required>
+              <label for="property_no" class="form-label fw-bold">Property No. <span class="text-danger">*</span></label><br>
+              <input type="text" class="form-control w-100" id="property_no" name="property_no" required>
               <div class="invalid-feedback">
                 Please provide a property number.
               </div>

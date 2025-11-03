@@ -98,105 +98,6 @@ if (!empty($item)) {
         ];
     }
 }
-
-// =====================
-// Excel Export Functionality
-// =====================
-if (isset($_POST['export_excel']) && $item) {
-    header('Content-Type: application/vnd.ms-excel');
-    header('Content-Disposition: attachment;filename="SMPI_Card_' . $item['inv_item_no'] . '_' . date('Y-m-d') . '.xls"');
-    header('Cache-Control: max-age=0');
-    
-    // Create Excel content
-    $excel_content = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel' xmlns='http://www.w3.org/TR/REC-html40'>";
-    $excel_content .= "<head><meta charset='UTF-8'></head><body>";
-    
-    $excel_content .= "<table border='1' style='border-collapse: collapse; width: 100%;'>";
-    
-    // Header
-    $excel_content .= "<tr><td colspan='11' style='text-align: center; font-size: 16px; font-weight: bold; background-color: #f2f2f2;'>PROPERTY CARD FOR SEMI-EXPENDABLE PROPERTY</td></tr>";
-    
-    // Item Details
-    $excel_content .= "<tr><td colspan='11' style='background-color: #e6e6e6; font-weight: bold;'>ITEM DETAILS</td></tr>";
-    $excel_content .= "<tr><td colspan='2'><strong>Entity Name:</strong></td><td colspan='4'>BENGUET STATE UNIVERSITY - BOKOD CAMPUS</td><td colspan='2'><strong>Fund Cluster:</strong></td><td colspan='3'>" . ($item['fund_cluster'] ?? 'N/A') . "</td></tr>";
-    $excel_content .= "<tr><td colspan='2'><strong>Item Description:</strong></td><td colspan='9'>" . strtoupper($item['item'] ?? 'N/A') . "</td></tr>";
-    $excel_content .= "<tr><td colspan='2'><strong>Description:</strong></td><td colspan='9'>" . ($item['item_description'] ?? 'N/A') . "</td></tr>";
-    $excel_content .= "<tr><td colspan='2'><strong>Inventory Item No:</strong></td><td colspan='4'>" . ($item['inv_item_no'] ?? 'N/A') . "</td><td colspan='2'><strong>Unit Cost:</strong></td><td colspan='3'>₱" . number_format($item['unit_cost'], 2) . "</td></tr>";
-    
-    // Empty row
-    $excel_content .= "<tr><td colspan='11'></td></tr>";
-    
-    // Table Headers
-    $excel_content .= "<tr style='background-color: #d9d9d9; font-weight: bold; text-align: center;'>";
-    $excel_content .= "<td rowspan='2'>Date</td>";
-    $excel_content .= "<td rowspan='2'>Reference</td>";
-    $excel_content .= "<td colspan='3'>RECEIPT</td>";
-    $excel_content .= "<td colspan='3'>ISSUE/TRANSFER/DISPOSAL</td>";
-    $excel_content .= "<td rowspan='2'>Balance</td>";
-    $excel_content .= "<td rowspan='2'>Amount</td>";
-    $excel_content .= "<td rowspan='2'>Remarks</td>";
-    $excel_content .= "</tr>";
-    $excel_content .= "<tr style='background-color: #d9d9d9; font-weight: bold; text-align: center;'>";
-    $excel_content .= "<td>Qty</td>";
-    $excel_content .= "<td>Unit Cost</td>";
-    $excel_content .= "<td>Total Cost</td>";
-    $excel_content .= "<td>Item No.</td>";
-    $excel_content .= "<td>Qty.</td>";
-    $excel_content .= "<td>Office/officer</td>";
-    $excel_content .= "</tr>";
-    
-    // Transactions
-    if (!empty($smpi_transactions)) {
-        $running_balance = $item['balance_qty'];
-        $running_amount = $item['balance_qty'] * $item['unit_cost'];
-        
-        foreach ($smpi_transactions as $row) {
-            // Calculate running balance and amount
-            if ($row['transaction_type'] === 'Issue' || $row['transaction_type'] === 'Transfer') {
-                $running_balance -= $row['issued_qty'];
-                $running_amount = $running_balance * $row['unit_cost'];
-            } elseif ($row['transaction_type'] === 'Receipt') {
-                $running_balance += $row['issued_qty'];
-                $running_amount = $running_balance * $row['unit_cost'];
-            }
-            
-            $excel_content .= "<tr>";
-            $excel_content .= "<td>" . (!empty($row['transaction_date']) ? date('m/d/Y', strtotime($row['transaction_date'])) : '-') . "</td>";
-            $excel_content .= "<td>" . ($row['ICS_No'] ?? $row['PAR_No'] ?? $row['RRSP_No'] ?? $row['transaction_type'] ?? '-') . "</td>";
-            $excel_content .= "<td style='text-align: center;'>" . ($row['transaction_type'] === 'Receipt' ? $row['issued_qty'] : '') . "</td>";
-            $excel_content .= "<td style='text-align: right;'>" . ($row['transaction_type'] === 'Receipt' ? number_format($row['unit_cost'], 2) : '') . "</td>";
-            $excel_content .= "<td style='text-align: right;'>" . ($row['transaction_type'] === 'Receipt' ? number_format($row['total_cost'], 2) : '') . "</td>";
-            $excel_content .= "<td>" . ($item['inv_item_no'] ?? 'N/A') . "</td>";
-            $excel_content .= "<td style='text-align: center;'>" . (($row['transaction_type'] === 'Issue' || $row['transaction_type'] === 'Transfer') ? $row['issued_qty'] : '') . "</td>";
-            $excel_content .= "<td>" . ($row['officer'] ?? ($row['department'] ?? '-')) . "</td>";
-            $excel_content .= "<td style='text-align: center;'>" . number_format($running_balance, 0) . "</td>";
-            $excel_content .= "<td style='text-align: right;'>" . number_format($running_amount, 2) . "</td>";
-            $excel_content .= "<td>" . ($row['transaction_type'] ?? '') . (!empty($row['return_date']) ? ' (Returned: ' . date('m/d/Y', strtotime($row['return_date'])) . ')' : '') . "</td>";
-            $excel_content .= "</tr>";
-        }
-    } else {
-        $excel_content .= "<tr><td colspan='11' style='text-align: center;'>No transaction data found.</td></tr>";
-    }
-    
-    // Add empty rows for printing
-    $count = !empty($smpi_transactions) ? count($smpi_transactions) : 0;
-    $empty_rows = 15 - $count;
-    if ($empty_rows > 0) {
-        for ($i = 0; $i < $empty_rows; $i++) {
-            $excel_content .= "<tr>";
-            for ($j = 0; $j < 11; $j++) {
-                $excel_content .= "<td>&nbsp;</td>";
-            }
-            $excel_content .= "</tr>";
-        }
-    }
-    
-    $excel_content .= "</table>";
-    $excel_content .= "</body></html>";
-    
-    echo $excel_content;
-    exit;
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -550,55 +451,51 @@ if (isset($_POST['export_excel']) && $item) {
         <?php endif; ?>
     </div>
 
-    <!-- Action Buttons -->
-    <div class="action-buttons no-print">
-        <?php if ($item): ?>
-            <!-- Excel Export Form -->
-            <form method="post" style="display: inline;">
-                <button type="submit" name="export_excel" class="action-btn excel-btn">
-                    <i class="fas fa-file-excel btn-icon"></i>
-                    Export to Excel
-                </button>
-            </form>
-        <?php endif; ?>
-        
-        <!-- <button onclick="window.print()" class="action-btn print-btn">
-            <i class="fas fa-print btn-icon"></i>
-            Print
-        </button> -->
-        
-        <button onclick="window.close()" class="action-btn close-btn">
-            <i class="fas fa-times btn-icon"></i>
-            Close
-        </button>
-    </div>
+   <!-- Action Buttons -->
+<div class="action-buttons no-print">
+    <?php if ($item): ?>
+        <!-- Excel Export Button -->
+        <a href="export_property.php?item_id=<?= $item['id'] ?>&fund_cluster=<?= urlencode($fund_cluster_filter) ?>&value_filter=<?= urlencode($value_filter) ?>" 
+           class="action-btn excel-btn" id="exportExcelBtn">
+            <i class="fas fa-file-excel btn-icon"></i>
+            Export to Excel
+        </a>
+    <?php endif; ?>
+    
+    <button onclick="window.close()" class="action-btn close-btn">
+        <i class="fas fa-times btn-icon"></i>
+        Close
+    </button>
+</div>
 
-    <script>
-        // Auto-print when page loads
-        window.onload = function() {
-            // Optional: Add a small delay before auto-printing
-            setTimeout(function() {
-                window.print();
-            }, 1000);
-        };
+<script>
+// Auto-print when page loads
+window.onload = function() {
+    // Optional: Add a small delay before auto-printing
+    setTimeout(function() {
+        window.print();
+    }, 1000);
+};
 
-        // Handle Excel export confirmation
-        document.addEventListener('DOMContentLoaded', function() {
-            const excelForm = document.querySelector('form[method="post"]');
-            if (excelForm) {
-                excelForm.addEventListener('submit', function(e) {
-                    const button = this.querySelector('button[name="export_excel"]');
-                    button.innerHTML = '<i class="fas fa-spinner fa-spin btn-icon"></i> Exporting...';
-                    button.disabled = true;
-                    
-                    // Re-enable button after 3 seconds in case of failure
-                    setTimeout(() => {
-                        button.innerHTML = '<i class="fas fa-file-excel btn-icon"></i> Export to Excel';
-                        button.disabled = false;
-                    }, 3000);
-                });
-            }
+// Handle Excel export confirmation and loading state
+document.addEventListener('DOMContentLoaded', function() {
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', function(e) {
+            const button = this;
+            const originalHTML = button.innerHTML;
+            
+            button.innerHTML = '<i class="fas fa-spinner fa-spin btn-icon"></i> Exporting...';
+            button.style.pointerEvents = 'none';
+            
+            // Re-enable button after 10 seconds in case of failure
+            setTimeout(() => {
+                button.innerHTML = originalHTML;
+                button.style.pointerEvents = 'auto';
+            }, 10000);
         });
-    </script>
+    }
+});
+</script>
 </body>
 </html>

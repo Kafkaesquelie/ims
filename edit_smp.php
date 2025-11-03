@@ -16,11 +16,14 @@ if (!$item) {
     redirect('smp.php');
 }
 
+// ✅ Fetch fund clusters for dropdown
+$fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name ASC");
+
 // ✅ Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_item'])) {
     $fund_cluster     = remove_junk($db->escape($_POST['fund_cluster']));
     $inv_item_no      = trim($_POST['inv_item_no']) !== '' ? "'" . $db->escape($_POST['inv_item_no']) . "'" : "NULL";
-    $item = remove_junk($db->escape($_POST['item']));
+    $item_name        = remove_junk($db->escape($_POST['item']));
     $item_description = remove_junk($db->escape($_POST['item_description']));
     $unit             = remove_junk($db->escape($_POST['unit']));
     $unit_cost        = (float)$_POST['unit_cost'];
@@ -31,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_item'])) {
     $query  = "UPDATE semi_exp_prop SET 
         fund_cluster='{$fund_cluster}',
         inv_item_no={$inv_item_no},
-        item='{$item}',
+        item='{$item_name}',
         item_description='{$item_description}',
         unit='{$unit}',
         unit_cost='{$unit_cost}',
@@ -335,16 +338,22 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                         
                         <div class="row g-3 mb-4">
                             <div class="col-md-4">
-                                <label class="form-label-custom">Fund Cluster</label>
-                                <input type="text" class="form-control-custom" name="fund_cluster" 
-                                       value="<?= $item['fund_cluster'] ?>" 
-                                       placeholder="Enter fund cluster" required>
+                                <label class="form-label-custom">Fund Cluster</label><br>
+                                <select class="form-select-custom" name="fund_cluster" required>
+                                    <option value="">Select Fund Cluster</option>
+                                    <?php foreach ($fund_clusters as $cluster): ?>
+                                        <option value="<?php echo remove_junk($cluster['name']); ?>"
+                                            <?php if ($item['fund_cluster'] == $cluster['name']) echo 'selected'; ?>>
+                                            <?php echo remove_junk($cluster['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
-                               <div class="col-md-4">
+                            <div class="col-md-4">
                                 <label class="form-label-custom">SE-PROPERTY NAME</label>
                                 <input type="text" class="form-control-custom" name="item" 
                                        value="<?= $item['item'] ?>"
-                                       placeholder="Enter property name">
+                                       placeholder="Enter property name" required>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label-custom">Inventory Item No.</label>
@@ -352,7 +361,6 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                                        value="<?= $item['inv_item_no'] ?>"
                                        placeholder="Enter inventory item number">
                             </div>
-                         
                         </div>
 
                         <!-- Section 2: Item Details -->
@@ -412,16 +420,16 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label-custom">Status</label>
-                                    <?php 
-                                    $status_class = 'status-' . $item['status'];
-                                    $status_text = ucfirst($item['status']);
-                                    ?>
-                                    <span class="status-badge <?= $status_class ?>">
-                                        <i class="fas fa-circle me-1" style="font-size: 0.3rem;"></i>
-                                       <?= $status_text ?>
-                                    </span>
+                                <?php 
+                                $status_class = 'status-' . $item['status'];
+                                $status_text = ucfirst($item['status']);
+                                ?>
+                                <span class="status-badge <?= $status_class ?>">
+                                    <i class="fas fa-circle me-1" style="font-size: 0.3rem;"></i>
+                                   <?= $status_text ?>
+                                </span>
                                 <br>
-                                <select class="form-select-custom  w-100" name="status">
+                                <select class="form-select-custom w-100 mt-1" name="status">
                                     <option value="available" <?= $item['status']=='available'?'selected':''; ?>>Available</option>
                                     <option value="issued" <?= $item['status']=='issued'?'selected':''; ?>>Issued</option>
                                     <option value="returned" <?= $item['status']=='returned'?'selected':''; ?>>Returned</option>
@@ -429,7 +437,6 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                                     <option value="disposed" <?= $item['status']=='disposed'?'selected':''; ?>>Disposed</option>
                                     <option value="archived" <?= $item['status']=='archived'?'selected':''; ?>>Archived</option>
                                 </select>
-                               
                             </div>
                         </div>
 
@@ -475,11 +482,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const newStatus = this.value;
             const statusText = this.options[this.selectedIndex].text;
             
-            // Remove all status classes
+            // Remove all status classes and add new one
             statusBadge.className = 'status-badge status-' + newStatus;
             
             // Update text
-            statusBadge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.6rem;"></i>New: ' + statusText;
+            statusBadge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.6rem;"></i>' + statusText;
         });
     }
 });

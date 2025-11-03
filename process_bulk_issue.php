@@ -94,12 +94,14 @@ try {
             $doc_type = 'PAR';
             $qty_field = 'qty';
             $id_field = 'properties_id';
+            $other_id_field = 'item_id'; // This will be set to NULL for PPE items
         } else {
             $item_table = 'semi_exp_prop';
             $doc_field = 'ICS_No';
             $doc_type = 'ICS';
             $qty_field = 'qty_left';
             $id_field = 'item_id';
+            $other_id_field = 'properties_id'; // This will be set to NULL for semi items
         }
 
         // Generate full document number
@@ -164,7 +166,7 @@ try {
                 continue;
             }
 
-            // Prepare transaction data
+            // Prepare transaction data - FIXED: Only set the appropriate ID field
             $transaction_data = [
                 'employee_id' => $requestor_id,
                 'quantity' => $issue_qty,
@@ -173,17 +175,29 @@ try {
                 'transaction_date' => $issue_date,
                 'status' => 'Issued',
                 'remarks' => $remarks,
-                'return_due_date' => $return_due_date
+                'return_due_date' => $return_due_date,
             ];
 
-            // Set the appropriate ID field based on item type
+            // Set the appropriate ID field based on item type and set the other to NULL
             $transaction_data[$id_field] = $item_id;
+            $transaction_data[$other_id_field] = null; // Set the other ID field to NULL
 
-            // Build insert query
-            $columns = implode(', ', array_keys($transaction_data));
-            $values = "'" . implode("', '", array_map([$db, 'escape'], array_values($transaction_data))) . "'";
+            // Build insert query with proper NULL handling
+            $columns = [];
+            $values = [];
             
-            $insert_sql = "INSERT INTO transactions ({$columns}) VALUES ({$values})";
+            foreach ($transaction_data as $key => $value) {
+                $columns[] = $key;
+                if ($value === null) {
+                    $values[] = 'NULL';
+                } else {
+                    $values[] = "'" . $db->escape($value) . "'";
+                }
+            }
+            
+            $columns_str = implode(', ', $columns);
+            $values_str = implode(', ', $values);
+            $insert_sql = "INSERT INTO transactions ({$columns_str}) VALUES ({$values_str})";
             
             $response['debug']['insert_sql'] = $insert_sql;
 
@@ -202,7 +216,6 @@ try {
                 $error_msg = "Failed to update stock for {$item['name']}: " . $db->get_last_error();
                 $errors[] = $error_msg;
                 $response['debug']['update_error'] = $error_msg;
-                // Rollback the transaction insert for this item
                 continue;
             }
 

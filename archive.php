@@ -140,6 +140,7 @@ if (!empty($msg) && is_array($msg)):
   .archive-badge.items {
     background: #007bff;
   }
+
   .archive-badge.employees {
     background: #1313beff;
   }
@@ -299,6 +300,8 @@ if (!empty($msg) && is_array($msg)):
                 $field1 = $data['inv_item_no'] ?? ($data['item'] ?? 'N/A');
               } elseif ($archive['classification'] === 'properties') {
                 $field1 = $data['property_no'] ?? ($data['article'] ?? 'N/A');
+              } elseif ($archive['classification'] === 'signatories') {
+                $field1 = $data['name'] ?? ($data['name'] ?? 'N/A');
               }
               ?>
 
@@ -312,25 +315,27 @@ if (!empty($msg) && is_array($msg)):
                 <td class="text-start">
                   <div class="d-flex align-items-center">
                     <?php if ($archive['classification'] === 'users'): ?>
-                      <i class="fas fa-user me-2 text-muted"></i>
+                      <i class="fas fa-user me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'items'): ?>
-                      <i class="fas fa-box me-2 text-muted"></i>
+                      <i class="fas fa-box me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'categories'): ?>
-                      <i class="fas fa-folder me-2 text-muted"></i>
+                      <i class="fas fa-folder me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'logs'): ?>
-                      <i class="fas fa-history me-2 text-muted"></i>
+                      <i class="fas fa-history me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'offices'): ?>
-                      <i class="fas fa-bookmark me-2 text-muted"></i>
+                      <i class="fas fa-bookmark me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'divisions'): ?>
-                      <i class="fas fa-bookmark me-2 text-muted"></i>
+                      <i class="fas fa-bookmark me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'fund_clusters'): ?>
-                      <i class="fas fa-bookmark me-2 text-muted"></i>
+                      <i class="fas fa-bookmark me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'requests'): ?>
-                      <i class="fas fa-file-alt me-2 text-muted"></i>
+                      <i class="fas fa-file-alt me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'semi_exp_prop'): ?>
-                      <i class="fas fa-boxes me-2 text-muted"></i>
+                      <i class="fas fa-boxes me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'properties'): ?>
-                      <i class="fas fa-warehouse me-2 text-muted"></i>
+                      <i class="fas fa-warehouse me-2 text-muted p-1"></i>
+                    <?php elseif ($archive['classification'] === 'signatories'): ?>
+                      <i class="fas fa-signature me-2 text-muted p-1"></i>
 
                     <?php endif; ?>
 

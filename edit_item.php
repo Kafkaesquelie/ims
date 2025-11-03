@@ -21,6 +21,7 @@ if (!$item) {
 $base_units = find_all('base_units');
 $units = find_all('units');
 $categories = find_all('categories');
+$fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name ASC");
 
 if (isset($_POST['update_item'])) {
     $req_fields = ['name', 'categorie_id', 'unit_id', 'quantity', 'unit_cost'];
@@ -544,9 +545,15 @@ if (isset($_POST['update_item'])) {
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Fund Cluster</label>
-                                        <input type="text" class="form-control-custom w-100" name="fund_cluster"
-                                            value="<?php echo remove_junk($item['fund_cluster']); ?>"
-                                            placeholder="Enter fund cluster">
+                                        <select class="form-select-custom w-100" name="fund_cluster" required>
+                                            <option value="">Select Fund Cluster</option>
+                                            <?php foreach ($fund_clusters as $cluster): ?>
+                                                <option value="<?php echo remove_junk($cluster['name']); ?>"
+                                                    <?php if ($item['fund_cluster'] == $cluster['name']) echo 'selected'; ?>>
+                                                    <?php echo remove_junk($cluster['name']); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Stock Number</label>
