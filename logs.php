@@ -1,6 +1,10 @@
 <?php
 $page_title = 'All Requests Logs';
 require_once('includes/load.php');
+if (!$session->isUserLoggedIn()) {
+  header("Location: admin.php");
+  exit();
+}
 page_require_level(1);
 
 // Fetch all approved/rejected requests
@@ -224,7 +228,7 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
                   <?php echo remove_junk(get_request_items_list($req['id'])); ?>
                 </td>
                 <td class="text-center">
-                  <?php echo date("M d, Y ", strtotime($req['date'])); ?>
+                  <?php echo date("M d, Y ", strtotime($req['date_completed'])); ?>
                 </td>
                 <td class="text-center">
                   <?php if ($req['status'] == 'Completed'): ?>
@@ -516,6 +520,14 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
     background-color: #007bff !important;
     color: white !important;
   }
+  .table th {
+        background: #005113ff;
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1rem;
+        text-align: center;
+    }
 </style>
 
 <?php include_once('layouts/footer.php'); ?>

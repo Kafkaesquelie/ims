@@ -109,10 +109,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $req_id = $db->insert_id();
 
-    // --- Generate Partial RIS No (last 4 digits left blank for admin) ---
+    // --- Generate RIS No with 4 zeros in middle and user_id as last 4 digits ---
     $year = date("Y");
-    $month = date("m");
-    $ris_no = "{$year}-{$month}-"; // Admin fills last 4 digits later
+    // Format user_id to 4 digits with leading zeros
+    $user_id_formatted = str_pad($user_id, 4, '0', STR_PAD_LEFT);
+    $ris_no = "{$year}-0000-{$user_id_formatted}";
 
     // Save RIS No
     if (!$db->query("UPDATE requests SET ris_no = '{$ris_no}' WHERE id = '{$req_id}'")) {
@@ -260,7 +261,29 @@ foreach ($all_items as &$item) {
 
     // Calculate display quantity
     $item['display_quantity'] = calculate_display_quantity($item);
+    
+    // Add stock status for sorting
+    $quantity = (float)$item['quantity'];
+    if ($quantity == 0) {
+        $item['stock_status'] = 0; // Out of stock - show last
+    } elseif ($quantity <= 5) {
+        $item['stock_status'] = 1; // Low stock
+    } elseif ($quantity <= 15) {
+        $item['stock_status'] = 2; // Medium stock
+    } else {
+        $item['stock_status'] = 3; // High stock - show first
+    }
 }
+
+// Sort items: available items first (high stock -> medium -> low -> out of stock)
+usort($all_items, function($a, $b) {
+    // First sort by stock status (descending - available first)
+    if ($a['stock_status'] != $b['stock_status']) {
+        return $b['stock_status'] - $a['stock_status'];
+    }
+    // Then sort by item name alphabetically
+    return strcmp($a['name'], $b['name']);
+});
 ?>
 
 <?php include_once('layouts/header.php'); 
@@ -285,10 +308,7 @@ if (!empty($msg) && is_array($msg)):
 <?php endif; ?>
 
 <style>
-    .table-success {
-        background-color: #e8f5e9 !important;
-    }
-
+   
     .form-control:focus {
         border-color: #006205;
         box-shadow: 0 0 0 0.2rem rgba(0, 98, 5, 0.25);
@@ -342,6 +362,289 @@ if (!empty($msg) && is_array($msg)):
         transform: translateY(-50%);
         color: var(--secondary);
     }
+
+    /* Subtle color indicators for stock status */
+    .stock-high {
+        background-color: rgba(40, 167, 69, 0.05) !important;
+        border-left: 4px solid #28a745;
+    }
+
+    .stock-medium {
+        background-color: rgba(255, 193, 7, 0.05) !important;
+        border-left: 4px solid #ffc107;
+    }
+
+    .stock-low {
+        background-color: rgba(253, 126, 20, 0.05) !important;
+        border-left: 4px solid #fd7e14;
+    }
+
+    .stock-out {
+        background-color: rgba(108, 117, 125, 0.15) !important;
+        border-left: 4px solid #6c757d;
+        color: #6c757d !important;
+    }
+
+    /* Darkened row for out-of-stock items */
+    .stock-out td {
+        background-color: #f8f9fa !important;
+        color: #6c757d !important;
+        opacity: 0.7;
+    }
+
+    .stock-out .text-muted {
+        color: #8a939b !important;
+    }
+
+    .table th {
+        background: #005113ff;
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    /* Stock status indicators in Available Qty column */
+    .stock-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+
+    .indicator-high { background-color: #28a745; }
+    .indicator-medium { background-color: #ffc107; }
+    .indicator-low { background-color: #fd7e14; }
+    .indicator-out { background-color: #6c757d; }
+
+    /* Rounded dropdowns */
+    .unit-select {
+        border-radius: 8px !important;
+        border: 2px solid #e2e8f0;
+        transition: all 0.3s ease;
+        font-size: 0.875rem;
+    }
+
+    .unit-select:focus {
+        border-color: #006205;
+        box-shadow: 0 0 0 0.2rem rgba(0, 98, 5, 0.25);
+    }
+
+    /* Rounded quantity inputs */
+    .qty-input {
+        border-radius: 8px !important;
+        border: 2px solid #e2e8f0;
+        transition: all 0.3s ease;
+        font-size: 0.875rem;
+    }
+
+    .qty-input:focus {
+        border-color: #006205;
+        box-shadow: 0 0 0 0.2rem rgba(0, 98, 5, 0.25);
+    }
+
+    /* Table row hover effects */
+    .table-hover tbody tr:hover:not(.stock-out) {
+        background-color: rgba(0, 98, 5, 0.02) !important;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+
+    /* Disable hover effect for out-of-stock items */
+    .table-hover tbody tr.stock-out:hover {
+        background-color: #f8f9fa !important;
+        transform: none;
+        box-shadow: none;
+    }
+
+    /* Subtle badge styles */
+    .stock-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 10px;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+    .badge-high {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #155724;
+        border-color: #28a745;
+    }
+
+    .badge-medium {
+        background-color: rgba(255, 193, 7, 0.1);
+        color: #856404;
+        border-color: #ffc107;
+    }
+
+    .badge-low {
+        background-color: rgba(253, 126, 20, 0.1);
+        color: #cc5500;
+        border-color: #fd7e14;
+    }
+
+    .badge-out {
+        background-color: rgba(108, 117, 125, 0.1);
+        color: #495057;
+        border-color: #6c757d;
+    }
+
+    /* Style disabled inputs for out-of-stock items */
+    .stock-out .unit-select:disabled,
+    .stock-out .qty-input:disabled {
+        background-color: #e9ecef;
+        border-color: #ced4da;
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+        .table-responsive {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            overflow-x: auto;
+        }
+        
+        /* Stack table headers for mobile */
+        #itemsTable thead {
+            display: none;
+        }
+        
+        #itemsTable tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            background: white;
+        }
+        
+        #itemsTable tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            border: none;
+            border-bottom: 1px solid #f8f9fa;
+        }
+        
+        #itemsTable tbody td:last-child {
+            border-bottom: none;
+        }
+        
+        #itemsTable tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.875rem;
+            min-width: 120px;
+        }
+        
+        /* Adjust form controls for mobile */
+        .unit-select, .qty-input {
+            width: 100% !important;
+            max-width: none !important;
+            font-size: 1rem;
+        }
+        
+        .qty-input {
+            text-align: center;
+        }
+        
+        /* Card adjustments */
+        .card-body {
+            padding: 1rem;
+        }
+        
+        /* Button adjustments */
+        .btn-success {
+            font-size: 1rem;
+            padding: 0.75rem 1rem;
+        }
+        
+        /* Search box adjustments */
+        .search-box {
+            max-width: 100%;
+            margin-bottom: 1rem;
+        }
+        
+        /* Header adjustments */
+        .row.mb-2 {
+            flex-direction: column;
+        }
+        
+        .col-sm-9, .col-sm-3 {
+            width: 100%;
+        }
+        
+        .col-sm-3 {
+            margin-top: 1rem;
+        }
+        
+        /* Form row adjustments */
+        .row.mb-3 {
+            margin-bottom: 1rem !important;
+        }
+        
+        .col-md-6, .col-md-9, .col-md-3 {
+            margin-bottom: 1rem;
+        }
+        
+        /* Modal adjustments */
+        .modal-dialog {
+            margin: 0.5rem;
+        }
+        
+        .modal-content {
+            border-radius: 0.5rem;
+        }
+    }
+    
+    /* Small mobile devices */
+    @media (max-width: 576px) {
+        #itemsTable tbody td {
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 0.75rem 0.5rem;
+        }
+        
+        #itemsTable tbody td::before {
+            margin-bottom: 0.25rem;
+            min-width: auto;
+        }
+        
+        .unit-select, .qty-input {
+            width: 100% !important;
+        }
+        
+        .card {
+            margin: 0 -0.75rem;
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+        }
+        
+        .container-fluid {
+            padding: 0;
+        }
+    }
+    
+    /* Medium devices adjustment */
+    @media (max-width: 992px) and (min-width: 769px) {
+        .table-responsive {
+            font-size: 0.9rem;
+        }
+        
+        .unit-select, .qty-input {
+            font-size: 0.8rem;
+        }
+    }
 </style>
 
 <div class="row mb-2 align-items-center" style="border-top: 5px solid #006205; border-radius: 10px;">
@@ -370,7 +673,7 @@ if (!empty($msg) && is_array($msg)):
         </div>
       </div>
 
-      <label class="fw-bold text-success">Available Items</label>
+      <label class="fw-bold text-success">Available Items <small class="text-muted">(Sorted by availability)</small></label>
       <div class="table-responsive mb-3">
         <?php if(!empty($all_items)): ?>
         <table class="table table-striped table-hover align-middle" id="itemsTable">
@@ -384,33 +687,66 @@ if (!empty($msg) && is_array($msg)):
             </tr>
           </thead>
           <tbody>
-            <?php foreach($all_items as $it): ?>
-            <tr <?= $it['quantity'] == 0 ? 'class="table-danger"' : '' ?>>
-              <td><?= htmlspecialchars($it['stock_card']); ?></td>         
-              <td>
+            <?php 
+            $current_stock_status = null;
+            foreach($all_items as $it): 
+                $quantity = (float)$it['quantity'];
+                $conversion_rate = (float)$it['conversion_rate'];
+                
+                // Determine stock status and color class
+                if ($quantity == 0) {
+                    $stock_class = 'stock-out';
+                    $indicator_class = 'indicator-out';
+                    $stock_badge = '<span class="stock-badge badge-out">Out of Stock</span>';
+                    $stock_status_text = 'Out of Stock';
+                } elseif ($quantity <= 5) {
+                    $stock_class = 'stock-low';
+                    $indicator_class = 'indicator-low';
+                    $stock_badge = '<span class="stock-badge badge-low">Low</span>';
+                    $stock_status_text = 'Low Stock';
+                } elseif ($quantity <= 15) {
+                    $stock_class = 'stock-medium';
+                    $indicator_class = 'indicator-medium';
+                    $stock_badge = '<span class="stock-badge badge-medium">Medium</span>';
+                    $stock_status_text = 'Medium Stock';
+                } else {
+                    $stock_class = 'stock-high';
+                    $indicator_class = 'indicator-high';
+                    $stock_badge = '<span class="stock-badge badge-high">High</span>';
+                    $stock_status_text = 'High Stock';
+                }
+            ?>
+            <tr class="<?= $stock_class ?>" data-quantity="<?= $quantity ?>">
+              <td data-label="Stock Card"><?= htmlspecialchars($it['stock_card']); ?></td>         
+              <td data-label="Item Name">
                 <strong><?= htmlspecialchars($it['name']); ?></strong><br>
                 <small class="text-muted"><?= htmlspecialchars($it['cat_name']); ?></small>
               </td>
-              <td class="text-center">
-                <strong><?= $it['display_quantity']; ?></strong>
+              <td class="text-center" data-label="Available Qty">
+                <div class="d-flex align-items-center justify-content-center">
+                  <strong><?= $it['display_quantity']; ?></strong>
+                </div>
               </td>
-              <td class="text-center">
+              <td class="text-center" data-label="Request Unit">
                 <select name="unit_type[<?= (int)$it['id']; ?>]"
                         class="form-select form-select-sm p-2 w-100 unit-select"
                         style="width: 120px;"
                         data-itemid="<?= (int)$it['id']; ?>"
                         data-conversion="<?= $it['conversion_rate']; ?>"
                         data-mainunit="<?= htmlspecialchars($it['main_unit_name']); ?>"
-                        data-baseunit="<?= htmlspecialchars($it['base_unit_name']); ?>">
+                        data-baseunit="<?= htmlspecialchars($it['base_unit_name']); ?>"
+                        <?= $quantity == 0 ? 'disabled' : '' ?>>
                     <?php if ($it['conversion_rate'] > 1 && $it['main_unit_name'] !== $it['base_unit_name']): ?>
+                        <!-- Items with conversion - show both units -->
                         <option value="<?= $it['main_unit_name']; ?>"><?= $it['main_unit_name']; ?></option>
                         <option value="<?= $it['base_unit_name']; ?>"><?= $it['base_unit_name']; ?></option>
                     <?php else: ?>
-                        <option value="<?= $it['main_unit_name']; ?>" selected><?= $it['main_unit_name']; ?></option>
+                        <!-- Items without conversion or same units - show only main unit -->
+                        <option value="<?= $it['main_unit_name']; ?>"><?= $it['main_unit_name']; ?></option>
                     <?php endif; ?>
                 </select>
               </td>
-              <td class="text-center">
+              <td class="text-center" data-label="Request Qty">
                 <input type="number" 
                        name="qty[<?= (int)$it['id']; ?>]" 
                        min="0" 
@@ -418,9 +754,9 @@ if (!empty($msg) && is_array($msg)):
                        value="0" 
                        class="form-control text-center border-success qty-input" 
                        style="max-width:120px;" 
-                       <?= $it['quantity'] == 0 ? 'disabled' : '' ?>
+                       <?= $quantity == 0 ? 'disabled' : '' ?>
                        data-itemid="<?= (int)$it['id']; ?>"
-                       data-available="<?= (float)$it['quantity']; ?>"
+                       data-available="<?= $quantity; ?>"
                        data-conversion="<?= $it['conversion_rate']; ?>"
                        data-mainunit="<?= htmlspecialchars($it['main_unit_name']); ?>"
                        data-baseunit="<?= htmlspecialchars($it['base_unit_name']); ?>"
@@ -687,6 +1023,36 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 });
+
+// Mobile-specific adjustments
+function handleMobileLayout() {
+    const isMobile = window.innerWidth <= 768;
+    const table = document.getElementById('itemsTable');
+    
+    if (isMobile) {
+        // Add mobile-specific classes
+        table.classList.add('mobile-table');
+        
+        // Adjust form controls for mobile
+        document.querySelectorAll('.unit-select, .qty-input').forEach(input => {
+            input.style.fontSize = '1rem';
+            input.style.padding = '0.5rem';
+        });
+    } else {
+        // Remove mobile-specific classes
+        table.classList.remove('mobile-table');
+        
+        // Reset form controls for desktop
+        document.querySelectorAll('.unit-select, .qty-input').forEach(input => {
+            input.style.fontSize = '';
+            input.style.padding = '';
+        });
+    }
+}
+
+// Initialize mobile layout on load and resize
+window.addEventListener('load', handleMobileLayout);
+window.addEventListener('resize', handleMobileLayout);
 </script>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
@@ -699,6 +1065,26 @@ $(document).ready(function () {
         ordering: true,
         searching: false,
         autoWidth: true,
+        responsive: true,
+        columnDefs: [
+            { orderable: false, targets: [3, 4] } // Make action columns non-orderable
+        ],
+        // Initial sort by available quantity (descending)
+        order: [[2, 'desc']],
+        // Mobile responsive settings
+        responsive: {
+            details: {
+                display: $.fn.dataTable.Responsive.display.modal({
+                    header: function (row) {
+                        var data = row.data();
+                        return 'Details for ' + data[1];
+                    }
+                }),
+                renderer: $.fn.dataTable.Responsive.renderer.tableAll({
+                    tableClass: 'table'
+                })
+            }
+        }
     });
 });
 </script>

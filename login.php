@@ -278,7 +278,7 @@
       <img src="uploads/other/bsulogo.png" alt="BSU Logo" >
     </div>
 
-    <h1>Welcome Back</h1>
+    <h1>Welcome</h1>
     <p id="typing-text" class="typing-animation"></p>
 <!-- Message Display Area -->
 <div id="message-container">

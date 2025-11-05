@@ -601,6 +601,7 @@ foreach ($all_items as &$item) {
         background-color: white;
         border-color: #006205;
     }
+    
 </style>
 
 <!-- Header Card -->

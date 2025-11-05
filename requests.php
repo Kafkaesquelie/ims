@@ -184,7 +184,8 @@ if (isset($_GET['issued'])) {
     exit;
 }
 
-// ✅ MODIFIED: Exclude completed requests from the query
+// ✅ MODIFIED: Show all active requests including canceled ones
+// Exclude completed and archived requests
 $sql = "
     SELECT 
         r.*,
@@ -192,7 +193,8 @@ $sql = "
         COALESCE(u.position, e.position) as position,
         COALESCE(ud.division_name, ed.division_name, u.division, e.division) as division,
         COALESCE(uo.office_name, eo.office_name, u.office, e.office) as office,
-        COALESCE(u.image, e.image, 'no_image.png') as image
+        COALESCE(u.image, e.image, 'no_image.png') as image,
+        TIMESTAMPDIFF(MINUTE, r.date, NOW()) as minutes_old
     FROM requests r
     LEFT JOIN users u ON r.requested_by = u.id
     LEFT JOIN employees e ON r.requested_by = e.id
@@ -207,7 +209,12 @@ $sql = "
     WHERE r.status != 'archived' 
     AND r.status != 'completed'  -- ✅ ADDED: Exclude completed requests
     AND LOWER(r.status) != 'completed'  -- ✅ ADDED: Case-insensitive check
-    ORDER BY r.date DESC
+    ORDER BY 
+        CASE 
+            WHEN r.status = 'Canceled' OR r.status = 'Cancelled' THEN 2  -- Show canceled requests at the bottom
+            ELSE 1 
+        END,
+        r.date DESC
 ";
 
 $requests = find_by_sql($sql);
@@ -248,6 +255,9 @@ if (!empty($msg) && is_array($msg)):
     --hover-shadow: 0 15px 50px rgba(30, 126, 52, 0.25);
     --gradient-primary: linear-gradient(135deg, #1e7e34 0%, #28a745 100%);
     --gradient-secondary: linear-gradient(135deg, #28a745 0%, #34ce57 100%);
+    --canceled-color: #6c757d;
+    --canceled-bg: #f8f9fa;
+    --expiring-color: #dc3545;
 }
 
 body {
@@ -272,7 +282,6 @@ body {
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
-
 
 .card-header-custom {
     background: var(--gradient-primary);
@@ -341,7 +350,6 @@ body {
 }
 
 .table-custom thead th {
-    
     border: none;
     padding: 1.5rem 1rem;
     font-weight: 700;
@@ -364,6 +372,50 @@ body {
 
 .table-custom tbody tr:hover {
     background: linear-gradient(90deg, var(--light-bg) 0%, rgba(212, 237, 218, 0.3) 100%);
+}
+
+/* Canceled row styling */
+.table-custom tbody tr.canceled-row {
+    background-color: var(--canceled-bg);
+    opacity: 0.8;
+    position: relative;
+}
+
+.table-custom tbody tr.canceled-row:hover {
+    background: linear-gradient(90deg, #e9ecef 0%, #dee2e6 100%);
+}
+
+.table-custom tbody tr.canceled-row.expiring-soon {
+    background: linear-gradient(90deg, #fff5f5 0%, #fed7d7 100%);
+    border-left: 4px solid var(--expiring-color);
+}
+
+.table-custom tbody tr.canceled-row.expired {
+    display: none; /* Hide expired canceled requests */
+}
+
+.table-custom tbody tr.canceled-row td {
+    color: var(--canceled-color);
+    border-color: #dee2e6;
+}
+
+.expiry-timer {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    background: var(--expiring-color);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
 }
 
 .btn-action {
@@ -414,6 +466,15 @@ body {
     background: linear-gradient(135deg, #c82333, #a71e2a);
 }
 
+.btn-secondary {
+    background: linear-gradient(135deg, #6c757d, #5a6268);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #5a6268, #495057);
+}
+
 .profile-img {
     width: 50px;
     height: 50px;
@@ -447,6 +508,18 @@ body {
     background: linear-gradient(135deg, #f8d7da, #f5c6cb);
     color: #721c24;
     border-color: #f5c6cb;
+}
+
+.badge-canceled {
+    background: linear-gradient(135deg, #e9ecef, #dee2e6);
+    color: #495057;
+    border-color: #ced4da;
+}
+
+.badge-issued {
+    background: linear-gradient(135deg, #d1ecf1, #bee5eb);
+    color: #0c5460;
+    border-color: #bee5eb;
 }
 
 .empty-state {
@@ -541,6 +614,13 @@ body {
         font-size: 1rem;
         padding: 0.6rem 1.2rem;
     }
+    
+    .expiry-timer {
+        position: relative;
+        top: 0;
+        right: 0;
+        margin-bottom: 5px;
+    }
 }
 
 /* Floating action button for new request */
@@ -572,6 +652,14 @@ body {
     box-shadow: 0 12px 40px rgba(30, 126, 52, 0.6);
     color: white;
 }
+.table th {
+        background: #005113ff;
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1rem;
+        text-align: center;
+    }
 </style>
 
 <div class="card-container">
@@ -582,7 +670,7 @@ body {
                 <i class="fas fa-clipboard-list"></i> Active Stock Requests
             </h5>
             <div class="stats-counter">
-                <i class="fas fa-chart-line me-2"></i>Active: <?php echo count($requests); ?> requests
+                <i class="fas fa-chart-line me-2"></i>Active: <span id="activeCount"><?php echo count($requests); ?></span> requests
             </div>
         </div>
         
@@ -595,58 +683,125 @@ body {
                                 <th class="text-center">RIS NO</th>
                                 <th class="text-center">Profile</th>
                                 <th>Requested By</th>
-                                <th>Division</th>
                                 <th>Office</th>
                                 <th class="text-center">Date</th>
+                                <th>Status</th>
                                 <th>Remarks</th>               
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($requests as $req): ?>
-                                <tr>
-                                    <td class="text-center fw-bold" style="color: var(--primary-green);">
+                                <?php 
+                                $status = strtolower($req['status']);
+                                $isCanceled = ($status === 'canceled' || $status === 'cancelled');
+                                $minutesOld = isset($req['minutes_old']) ? (int)$req['minutes_old'] : 0;
+                                $isExpiringSoon = $isCanceled && $minutesOld >= 25; // Show warning at 25 minutes
+                                $isExpired = $isCanceled && $minutesOld >= 30; // Hide after 30 minutes
+                                $timeLeft = 30 - $minutesOld;
+                                ?>
+                                <tr class="<?php echo $isCanceled ? 'canceled-row' : ''; echo $isExpiringSoon ? ' expiring-soon' : ''; echo $isExpired ? ' expired' : ''; ?>" 
+                                    data-canceled="<?php echo $isCanceled ? 'true' : 'false'; ?>"
+                                    data-minutes-old="<?php echo $minutesOld; ?>">
+                                    <?php if ($isCanceled && $isExpiringSoon && !$isExpired): ?>
+                                        <div class="expiry-timer">
+                                            <i class="fas fa-clock me-1"></i><?php echo max(0, $timeLeft); ?>m
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <td class="text-center fw-bold" style="color: <?php echo $isCanceled ? 'var(--canceled-color)' : 'var(--primary-green)'; ?>;">
                                         <?php echo remove_junk($req['ris_no']); ?>
                                     </td>
                                     <td class="text-center">
                                         <img src="uploads/users/<?php echo !empty($req['image']) ? $req['image'] : 'no_image.png'; ?>" 
-                                             alt="Profile" class="profile-img">
+                                             alt="Profile" class="profile-img" style="<?php echo $isCanceled ? 'opacity: 0.7;' : ''; ?>">
                                     </td>
                                     <td>
                                         <div class="d-flex flex-column">
-                                            <strong class="text-dark"><?php echo remove_junk($req['req_by']); ?></strong>
+                                            <strong class="<?php echo $isCanceled ? 'text-muted' : 'text-dark'; ?>">
+                                                <?php echo remove_junk($req['req_by']); ?>
+                                            </strong>
                                             <small class="text-muted"><?php echo remove_junk($req['position']); ?></small>
                                         </div>
                                     </td>
-                                    <td class="fw-medium text-dark"><?php echo remove_junk($req['division']); ?></td>
-                                    <td class="fw-medium text-dark"><?php echo remove_junk($req['office']); ?></td>
+                                    <td class="fw-medium <?php echo $isCanceled ? 'text-muted' : 'text-dark'; ?>">
+                                        <?php echo remove_junk($req['office']); ?>
+                                    </td>
                                     
                                     <td class="text-center">
-                                        <span class="badge bg-light text-dark rounded-pill px-3 py-2 border">
+                                        <span class="badge rounded-pill px-3 py-2 border <?php echo $isCanceled ? 'bg-light text-muted' : 'bg-light text-dark'; ?>">
                                             <i class="far fa-calendar-alt me-2"></i><?php echo date("M d, Y", strtotime($req['date'])); ?>
                                         </span>
                                     </td>
+                                    <td class="text-center">
+                                        <?php 
+                                            $badgeClass = 'badge-secondary';
+                                            
+                                            switch($status) {
+                                                case 'pending':
+                                                    $badgeClass = 'badge-pending';
+                                                    break;
+                                                case 'approved':
+                                                    $badgeClass = 'badge-approved';
+                                                    break;
+                                                case 'issued':
+                                                    $badgeClass = 'badge-issued';
+                                                    break;
+                                                case 'canceled':
+                                                case 'cancelled':
+                                                    $badgeClass = 'badge-canceled';
+                                                    break;
+                                                default:
+                                                    $badgeClass = 'badge-secondary';
+                                            }
+                                        ?>
+                                        <span class="status-badge <?php echo $badgeClass; ?>">
+                                            <i class="fas 
+                                                <?php 
+                                                switch($status) {
+                                                    case 'pending': echo 'fa-clock'; break;
+                                                    case 'approved': echo 'fa-thumbs-up'; break;
+                                                    case 'issued': echo 'fa-box'; break;
+                                                    case 'canceled':
+                                                    case 'cancelled': echo 'fa-ban'; break;
+                                                    default: echo 'fa-info-circle';
+                                                }
+                                                ?> me-1">
+                                            </i>
+                                            <?php echo ucfirst($req['status']); ?>
+                                        </span>
+                                    </td>
                                     <td>
-                                        <span class="text-muted fst-italic">
+                                        <span class="<?php echo $isCanceled ? 'text-muted fst-italic' : 'text-muted fst-italic'; ?>">
                                             <?php echo !empty($req['remarks']) ? htmlspecialchars($req['remarks']) : 'No remarks'; ?>
                                         </span>
                                     </td>
                                     <td>
                                         <div class="d-flex gap-2 justify-content-center">
-                                            <?php if (strtolower($req['status']) == 'approved'): ?>
+                                            <?php if ($isCanceled): ?>
+                                                <!-- Canceled requests - View only -->
+                                                <a href="r_view.php?id=<?php echo (int)$req['id']; ?>" 
+                                                    class="btn-action btn-secondary" 
+                                                    title="View Canceled Request">
+                                                    <i class="fas fa-eye"></i> View
+                                                </a>
+                                            <?php elseif (strtolower($req['status']) == 'approved'): ?>
                                                 <!-- Approved → Show Issue button -->
                                                 <a href="?issued=<?php echo (int)$req['id']; ?>" 
                                                     class="btn-action btn-warning issue-btn" 
                                                     title="Mark as Issued">
                                                     <i class="fa-solid fa-box-open"></i> Issue
                                                 </a>
-
+                                                <a href="r_view.php?id=<?php echo (int)$req['id']; ?>" 
+                                                    class="btn-action btn-view" 
+                                                    title="View Request Details">
+                                                    <i class="fas fa-eye"></i> 
+                                                </a>
                                             <?php elseif (strtolower($req['status']) == 'issued'): ?>
                                                 <!-- For Confirmation → Show loader text -->
                                                 <span class="badge bg-warning text-dark px-3 py-2 rounded-pill shadow-sm d-flex align-items-center gap-2">
                                                     <i class="fa-solid fa-spinner fa-spin"></i> For Confirmation
                                                 </span>
-
                                             <?php else: ?>
                                                 <!-- Default View + Archive -->
                                                 <a href="r_view.php?id=<?php echo (int)$req['id']; ?>" 
@@ -691,6 +846,38 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Function to update expired canceled requests
+    function updateExpiredRequests() {
+        const canceledRows = document.querySelectorAll('tr.canceled-row');
+        let activeCount = 0;
+        
+        canceledRows.forEach(row => {
+            const minutesOld = parseInt(row.getAttribute('data-minutes-old')) || 0;
+            
+            if (minutesOld >= 30) {
+                // Mark as expired and hide
+                row.classList.add('expired');
+                row.style.display = 'none';
+            } else {
+                // Count as active if not expired
+                activeCount++;
+            }
+        });
+        
+        // Count non-canceled rows
+        const nonCanceledRows = document.querySelectorAll('tr:not(.canceled-row)');
+        activeCount += nonCanceledRows.length;
+        
+        // Update active count
+        document.getElementById('activeCount').textContent = activeCount;
+    }
+    
+    // Initial update
+    updateExpiredRequests();
+    
+    // Update every minute
+    setInterval(updateExpiredRequests, 60000); // 1 minute
+
     document.querySelectorAll('.issue-btn').forEach(function(button) {
         button.addEventListener('click', function(e) {
             e.preventDefault();
@@ -764,6 +951,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+
+    // Auto-refresh the page every 10 minutes for data consistency
+    setInterval(function() {
+        location.reload();
+    }, 600000); // 10 minutes
 });
 </script>
 
@@ -810,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', function() {
             autoWidth: false,
             responsive: true,
             language: {
-                 search: "" ,
+                search: "",
                 lengthMenu: "Show _MENU_ entries",
                 info: "Showing _START_ to _END_ of _TOTAL_ requests",
                 paginate: {

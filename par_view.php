@@ -1,6 +1,10 @@
 <?php
 $page_title = 'View PAR';
 require_once('includes/load.php');
+if (!$session->isUserLoggedIn()) {
+  header("Location: admin.php");
+  exit();
+}
 page_require_level(1);
 
 $current_user = current_user();

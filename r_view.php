@@ -22,7 +22,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_ris'])) {
         redirect("r_view.php?id={$request_id}", false);
     }
     
-    // Check if RIS number is duplicate (excluding current request)
+    // Check RIS format
+    $ris_parts = explode('-', $new_ris_no);
+    if (count($ris_parts) !== 3) {
+        $session->msg("d", "Invalid RIS Number format. Should be YYYY-MMDD-XXXX.");
+        redirect("r_view.php?id={$request_id}", false);
+    }
+    
+    // Check middle digits should not be 0000
+    if ($ris_parts[1] === '0000') {
+        $session->msg("d", "RIS Number middle digits cannot be '0000'. Please edit the middle part.");
+        redirect("r_view.php?id={$request_id}", false);
+    }
+    
+    // Check if middle digits are duplicate
+    $middle_digits = $ris_parts[1];
+    $check_middle_sql = "SELECT r.id 
+                        FROM requests r 
+                        WHERE r.ris_no LIKE '%-{$middle_digits}-%' 
+                        AND r.id != '{$request_id}' 
+                        LIMIT 1";
+    $check_middle_result = $db->query($check_middle_sql);
+    
+    if ($db->num_rows($check_middle_result) > 0) {
+        $session->msg("d", "Middle digits '{$middle_digits}' are already used in another RIS Number. Please use different middle digits.");
+        redirect("r_view.php?id={$request_id}", false);
+    }
+    
+    // Check if full RIS number is duplicate (excluding current request)
     $check_sql = "SELECT id FROM requests WHERE ris_no = '{$new_ris_no}' AND id != '{$request_id}' LIMIT 1";
     $check_result = $db->query($check_sql);
     
@@ -95,22 +122,48 @@ $current_user_position = $current_user['position'] ?? 'Administrator';
 $current_ris_no = $request['ris_no'] ?? '';
 $is_ris_missing = empty($current_ris_no);
 $is_ris_duplicate = false;
+$is_ris_default_middle = false;
+$is_middle_duplicate = false;
 
 if (!$is_ris_missing) {
+    // Check for duplicate full RIS number
     $check_duplicate_sql = "SELECT id FROM requests WHERE ris_no = '{$current_ris_no}' AND id != '{$request_id}' LIMIT 1";
     $duplicate_result = $db->query($check_duplicate_sql);
     $is_ris_duplicate = $db->num_rows($duplicate_result) > 0;
+    
+    // Parse RIS number parts
+    $ris_parts = explode('-', $current_ris_no);
+    if (count($ris_parts) === 3) {
+        $is_ris_default_middle = ($ris_parts[1] === '0000');
+        
+        // Check for duplicate middle digits
+        $middle_digits = $ris_parts[1];
+        $check_middle_sql = "SELECT r.id 
+                            FROM requests r 
+                            WHERE r.ris_no LIKE '%-{$middle_digits}-%' 
+                            AND r.id != '{$request_id}' 
+                            LIMIT 1";
+        $check_middle_result = $db->query($check_middle_sql);
+        $is_middle_duplicate = $db->num_rows($check_middle_result) > 0;
+    }
 }
 
 // Check if approval is allowed
-$can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['status']) !== 'approved';
+$can_approve = !$is_ris_missing && 
+               !$is_ris_duplicate && 
+               !$is_ris_default_middle &&
+               !$is_middle_duplicate &&
+               strtolower($request['status']) !== 'approved' && 
+               strtolower($request['status']) !== 'canceled';
+
+// Check if request is canceled
+$is_canceled = strtolower($request['status']) === 'canceled';
 
 ?>
 
 <?php include_once('layouts/header.php'); ?>
 
 <style>
-/* Your existing CSS styles remain the same */
 :root {
     --primary-green: #1e7e34;
     --secondary-green: #28a745;
@@ -330,7 +383,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
 }
 
-/* RIS Input Group - New container for better organization */
 .ris-input-group {
     display: flex;
     flex-direction: column;
@@ -345,7 +397,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     flex-wrap: wrap;
 }
 
-/* Editable middle input styling */
 .ris-input.editable-middle {
     background: white;
     color: var(--dark-green);
@@ -368,7 +419,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     font-size: 1.1rem;
 }
 
-/* Table Styling */
 .items-table {
     width: 100%;
     border-collapse: collapse;
@@ -427,7 +477,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     color: #dc3545;
 }
 
-/* Signatures Section */
 .signatures-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -471,7 +520,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     margin-top: 0.25rem;
 }
 
-/* Action Buttons */
 .action-buttons {
     position: fixed;
     bottom: 30px;
@@ -543,7 +591,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     background: var(--primary-green);
 }
 
-/* Print Styles */
 @media print {
     body * {
         visibility: hidden;
@@ -594,7 +641,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     }
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
     .info-grid {
         grid-template-columns: 1fr;
@@ -647,7 +693,6 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
     }
 }
 
-/* Additional Green Accents */
 .ris-form::before {
     content: '';
     position: absolute;
@@ -737,12 +782,16 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
                                         <i class="fas fa-times"></i> Cancel
                                     </button>
                                 </div>
-                                <!-- RIS Status Display - Now positioned directly under the input field -->
+                                <!-- RIS Status Display -->
                                 <div class="ris-status" id="risStatus">
                                     <?php if ($is_ris_missing): ?>
                                         <span class="ris-invalid"><i class="fas fa-exclamation-triangle"></i> RIS Number required</span>
                                     <?php elseif ($is_ris_duplicate): ?>
                                         <span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>
+                                    <?php elseif ($is_ris_default_middle): ?>
+                                        <span class="ris-invalid"><i class="fas fa-exclamation-circle"></i> Edit middle digits (cannot be 0000)</span>
+                                    <?php elseif ($is_middle_duplicate): ?>
+                                        <span class="ris-invalid"><i class="fas fa-times-circle"></i> Middle digits already used</span>
                                     <?php else: ?>
                                         <span class="ris-valid"><i class="fas fa-check-circle"></i> Valid RIS Number</span>
                                     <?php endif; ?>
@@ -783,11 +832,9 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
                                         <td><?= remove_junk($item['item_name']) ?></td>
                                         <td><strong><?= (float)$item['qty'] ?></strong></td>
                                         <td>
-                                            <!-- ✅ ALWAYS SHOW YES - Users can't request if no stock -->
                                             <span class="stock-check stock-yes">✔</span>
                                         </td>
                                         <td>
-                                            <!-- ❌ NEVER SHOW NO - Empty column -->
                                         </td>
                                         <td><strong><?= (float)$item['qty'] ?></strong></td>
                                         <td><small><?= remove_junk($item['remarks']) ?: '-' ?></small></td>
@@ -853,7 +900,7 @@ $can_approve = !$is_ris_missing && !$is_ris_duplicate && strtolower($request['st
         <i class="fas fa-arrow-left"></i> Back
     </a>
 
-    <?php if(strtolower($request['status']) !== 'approved'): ?>
+    <?php if(!$is_canceled && strtolower($request['status']) !== 'approved'): ?>
     <a href="approve_req.php?id=<?= (int)$request['id'] ?>" 
        class="action-btn btn-approve approve-btn" 
        id="approveBtn"
@@ -901,7 +948,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateMiddleDigits(middle) {
-        return /^\d{4}$/.test(middle);
+        return /^\d{4}$/.test(middle) && middle !== '0000';
+    }
+
+    function isDefaultMiddleDigits(middle) {
+        return middle === '0000';
     }
 
     // Initialize RIS number if empty
@@ -946,7 +997,8 @@ document.addEventListener('DOMContentLoaded', function() {
         editableInput.style.fontWeight = 'bold';
         editableInput.maxLength = 4;
         editableInput.pattern = '[0-9]{4}';
-        editableInput.title = 'Enter 4 digits for the middle part';
+        editableInput.title = 'Enter 4 digits for the middle part (cannot be 0000)';
+        editableInput.placeholder = '0000';
         
         // Last part (fixed)
         const sequenceSpan = document.createElement('span');
@@ -978,6 +1030,21 @@ document.addEventListener('DOMContentLoaded', function() {
             if (this.value.length > 4) {
                 this.value = this.value.slice(0, 4);
             }
+            
+            // Real-time validation
+            const middleValue = this.value;
+            if (middleValue.length === 4) {
+                if (isDefaultMiddleDigits(middleValue)) {
+                    this.style.borderColor = '#dc3545';
+                    this.style.backgroundColor = '#fff5f5';
+                } else {
+                    this.style.borderColor = '#28a745';
+                    this.style.backgroundColor = '#f8fff9';
+                }
+            } else {
+                this.style.borderColor = '#ffc107';
+                this.style.backgroundColor = '#fffbf0';
+            }
         });
 
         // Handle Enter key to save
@@ -996,8 +1063,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const middleValue = editableInput.value;
         
-        if (!validateMiddleDigits(middleValue)) {
+        // Validate middle digits
+        if (middleValue.length !== 4) {
             showAlert('Invalid Input', 'Middle part must be exactly 4 digits.', 'error');
+            editableInput.focus();
+            editableInput.select();
+            return;
+        }
+        
+        if (isDefaultMiddleDigits(middleValue)) {
+            showAlert('Invalid Input', 'Middle digits cannot be "0000". Please enter a different 4-digit number.', 'error');
             editableInput.focus();
             editableInput.select();
             return;
@@ -1008,10 +1083,27 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Reconstruct full RIS number
         const newRIS = formatRISNumber(parts.year, middleValue, parts.sequence);
-        risInput.value = newRIS;
         
-        // Submit the form
-        risForm.submit();
+        // Check for duplicates before saving
+        checkRISDuplicate(newRIS, middleValue).then(({isDuplicate, isMiddleDuplicate}) => {
+            if (isDuplicate && newRIS !== originalRisValue) {
+                showAlert('Duplicate RIS', 'This RIS Number is already used by another request. Please use a different number.', 'error');
+                editableInput.focus();
+                editableInput.select();
+                return;
+            }
+            
+            if (isMiddleDuplicate && middleValue !== parseRISNumber(originalRisValue).middle) {
+                showAlert('Duplicate Middle Digits', 'Middle digits "' + middleValue + '" are already used in another RIS Number. Please use different middle digits.', 'error');
+                editableInput.focus();
+                editableInput.select();
+                return;
+            }
+            
+            // If no duplicates, proceed with saving
+            risInput.value = newRIS;
+            risForm.submit();
+        });
     }
 
     // Cancel RIS edit
@@ -1061,16 +1153,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const parts = parseRISNumber(risValue);
-        if (!validateMiddleDigits(parts.middle)) {
+        if (parts.middle.length !== 4) {
             showAlert('Invalid Format', 'Middle part must be exactly 4 digits.', 'error');
+            e.preventDefault();
+            return;
+        }
+        
+        if (isDefaultMiddleDigits(parts.middle)) {
+            showAlert('Invalid Format', 'Middle digits cannot be "0000". Please edit the middle part.', 'error');
             e.preventDefault();
             return;
         }
 
         // Check for duplicate RIS number
-        checkRISDuplicate(risValue).then(isDuplicate => {
+        checkRISDuplicate(risValue, parts.middle).then(({isDuplicate, isMiddleDuplicate}) => {
             if (isDuplicate && risValue !== originalRisValue) {
                 showAlert('Duplicate RIS', 'This RIS Number is already used by another request. Please use a different number.', 'error');
+                e.preventDefault();
+                return;
+            }
+            
+            if (isMiddleDuplicate && parts.middle !== parseRISNumber(originalRisValue).middle) {
+                showAlert('Duplicate Middle Digits', 'Middle digits "' + parts.middle + '" are already used in another RIS Number. Please use different middle digits.', 'error');
                 e.preventDefault();
                 return;
             }
@@ -1089,7 +1193,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!risValue) {
                     message = 'RIS Number is required before approval. Please set a valid RIS Number.';
                 } else {
-                    message = 'RIS Number is either missing or duplicate. Please fix the RIS Number before approval.';
+                    const parts = parseRISNumber(risValue);
+                    if (isDefaultMiddleDigits(parts.middle)) {
+                        message = 'RIS Number middle digits cannot be "0000". Please edit the middle part before approval.';
+                    } else {
+                        message = 'RIS Number is either missing, duplicate, or has duplicate middle digits. Please fix the RIS Number before approval.';
+                    }
                 }
                 
                 showAlert('Cannot Approve', message, 'warning');
@@ -1126,15 +1235,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const parts = parseRISNumber(risValue);
-        if (!validateMiddleDigits(parts.middle)) {
+        if (parts.middle.length !== 4) {
             risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-times-circle"></i> Middle part must be 4 digits</span>';
             updateApproveButton(false);
             return;
         }
+        
+        if (isDefaultMiddleDigits(parts.middle)) {
+            risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-exclamation-circle"></i> Edit middle digits (cannot be 0000)</span>';
+            updateApproveButton(false);
+            return;
+        }
 
-        checkRISDuplicate(risValue).then(isDuplicate => {
+        checkRISDuplicate(risValue, parts.middle).then(({isDuplicate, isMiddleDuplicate}) => {
             if (isDuplicate && risValue !== originalRisValue) {
                 risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>';
+                updateApproveButton(false);
+            } else if (isMiddleDuplicate && parts.middle !== parseRISNumber(originalRisValue).middle) {
+                risStatus.innerHTML = '<span class="ris-invalid"><i class="fas fa-times-circle"></i> Middle digits already used</span>';
                 updateApproveButton(false);
             } else {
                 risStatus.innerHTML = '<span class="ris-valid"><i class="fas fa-check-circle"></i> Valid RIS Number</span>';
@@ -1143,21 +1261,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function checkRISDuplicate(risValue) {
+    function checkRISDuplicate(risValue, middleDigits) {
         return fetch('check_ris_duplicate.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: 'ris_no=' + encodeURIComponent(risValue) + '&exclude_id=<?= $request_id ?>'
+            body: 'ris_no=' + encodeURIComponent(risValue) + 
+                  '&middle_digits=' + encodeURIComponent(middleDigits) + 
+                  '&exclude_id=<?= $request_id ?>'
         })
         .then(response => response.json())
         .then(data => {
-            return data.exists || false;
+            return {
+                isDuplicate: data.exists || false,
+                isMiddleDuplicate: data.middle_exists || false
+            };
         })
         .catch(error => {
             console.error('Error checking RIS duplicate:', error);
-            return false;
+            return { isDuplicate: false, isMiddleDuplicate: false };
         });
     }
 

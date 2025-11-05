@@ -588,6 +588,7 @@ function find_all_req_logs() {
             r.date, 
             r.status,
             r.ris_no,
+            r.date_completed,
             COALESCE(ou.office_name, eo.office_name) AS office_name,
             COALESCE(u.id, e.id) AS requestor_id,
             COALESCE(u.name, CONCAT(e.first_name, ' ', e.last_name)) AS req_name,
@@ -598,8 +599,8 @@ function find_all_req_logs() {
         LEFT JOIN employees e ON r.requested_by = e.id
         LEFT JOIN offices ou ON u.office = ou.id   -- user's office
         LEFT JOIN offices eo ON e.office = eo.id   -- employee's office
-        WHERE r.status IN ('Completed','Archived','Issued')
-        ORDER BY r.date DESC
+        WHERE r.status IN ('Completed','Archived','Issued','Canceled')
+        ORDER BY r.date_completed DESC
     ";
     return $db->query($sql)->fetch_all(MYSQLI_ASSOC);
 }
@@ -618,7 +619,7 @@ function find_all_user_req_logs() {
     $sql .= "JOIN items i ON ri.item_id = i.id ";
     $sql .= "WHERE r.status IN ('Completed','Archived') ";
     $sql .= "GROUP BY r.id ";
-    $sql .= "ORDER BY r.date DESC";
+    $sql .= "ORDER BY r.date_completed DESC";
     return find_by_sql($sql);
 }
 

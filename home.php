@@ -6,7 +6,6 @@ page_require_level(3);
 $current_user = current_user();
 $user_id = $current_user['id'];
 
-
 if (isset($_GET['received'])) {
     $request_id = (int)$_GET['received'];
     $sql = "UPDATE requests 
@@ -14,7 +13,6 @@ if (isset($_GET['received'])) {
             WHERE id = '{$request_id}'";
 
     if ($db->query($sql)) {
-        // Optional: move to logs table
         $session->msg("s", "Request marked as completed and moved to logs.");
     } else {
         $session->msg("d", "Failed to update request.");
@@ -22,6 +20,63 @@ if (isset($_GET['received'])) {
     redirect($_SERVER['PHP_SELF']);
 }
 
+// Handle cancel request - UPDATED to only use items table
+if (isset($_GET['cancel'])) {
+    $request_id = (int)$_GET['cancel'];
+
+    // Check if request exists and belongs to user
+    $request = find_by_id('requests', $request_id);
+    if (
+        $request
+        && $request['requested_by'] == $user_id
+        && in_array(strtolower($request['status']), ['pending', 'approved', 'issued'])
+    ) {
+
+
+        // Start transaction for data consistency
+        $db->query('START TRANSACTION');
+
+        try {
+            // Get all request items
+            $request_items = find_by_sql("SELECT * FROM request_items WHERE req_id = '{$request_id}'");
+
+            foreach ($request_items as $item) {
+                // Only restore quantity to items table (not semi_exp_prop or properties)
+                if (!empty($item['item_id'])) {
+                    $item_record = find_by_id('items', $item['item_id']);
+                    if ($item_record) {
+                        // Restore quantity to items table
+                        $new_quantity = $item_record['quantity'] + $item['qty'];
+                        $update_sql = "UPDATE items SET quantity = '{$new_quantity}' WHERE id = '{$item['item_id']}'";
+                        if (!$db->query($update_sql)) {
+                            throw new Exception("Failed to update items quantity");
+                        }
+                    }
+                }
+            }
+
+            // Update request status to canceled
+            $update_request_sql = "UPDATE requests 
+                                  SET status = 'Canceled', date_completed = NOW() 
+                                  WHERE id = '{$request_id}'";
+
+            if (!$db->query($update_request_sql)) {
+                throw new Exception("Failed to update request status");
+            }
+
+            // Commit transaction if all queries succeeded
+            $db->query('COMMIT');
+            $session->msg("s", "Request has been cancelled successfully and quantities restored to items.");
+        } catch (Exception $e) {
+            // Rollback transaction if any query failed
+            $db->query('ROLLBACK');
+            $session->msg("d", "Failed to cancel request: " . $e->getMessage());
+        }
+    } else {
+        $session->msg("d", "Cannot cancel this request. It may have already been processed or you don't have permission.");
+    }
+    redirect($_SERVER['PHP_SELF']);
+}
 
 // Total requests for this user
 $total_requests = count_user_requests($user_id);
@@ -31,17 +86,14 @@ $pending_count   = count_user_requests_by_status($user_id, 'pending');
 $approved_count  = count_user_requests_by_status($user_id, 'approved');
 $completed_count = count_user_requests_by_status($user_id, 'completed');
 
-// (Optional) Fetch user's pending requests for the table
-$pending_requests = find_by_sql("
-    SELECT * 
-    FROM requests 
-    WHERE requested_by = '{$db->escape($user_id)}' 
-       AND status IN ('Pending', 'Approved', 'Issued')
-    ORDER BY date DESC
-");
-
-// Fetch pending requests for this user
-$pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$user_id}' AND status IN ('Pending','Approved','Issued') ORDER BY date DESC");
+// Fetch pending requests for this user with item details from items table only
+$pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count 
+                                FROM requests r 
+                                LEFT JOIN request_items ri ON r.id = ri.req_id 
+                                WHERE r.requested_by = '{$user_id}' 
+                                AND r.status IN ('Pending','Approved','Issued') 
+                                GROUP BY r.id 
+                                ORDER BY r.date DESC");
 ?>
 
 <?php include_once('layouts/header.php'); ?>
@@ -427,6 +479,254 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
         transform: translateY(0);
         box-shadow: 0 2px 10px rgba(0, 123, 255, 0.3);
     }
+
+    .btn-cancel-elegant {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        color: #dc3545;
+        padding: 0.6rem 1.3rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        border: 2px solid #dc3545;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+        letter-spacing: 0.5px;
+        margin-left: 0.5rem;
+    }
+
+    .btn-cancel-elegant:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        transition: all 0.4s ease;
+        z-index: -1;
+    }
+
+    .btn-cancel-elegant:hover {
+        color: white;
+        text-decoration: none;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.3);
+        border-color: #dc3545;
+    }
+
+    .btn-cancel-elegant:hover:before {
+        left: 0;
+    }
+
+    .btn-cancel-elegant:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 10px rgba(220, 53, 69, 0.3);
+    }
+
+    /* Print Button Styles */
+    .btn-print-elegant {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        color: #fd7e14;
+        padding: 0.6rem 1.3rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+        border: 2px solid #fd7e14;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+        letter-spacing: 0.5px;
+    }
+
+    .btn-print-elegant:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #fd7e14, #e55a00);
+        transition: all 0.4s ease;
+        z-index: -1;
+    }
+
+    .btn-print-elegant:hover {
+        color: white;
+        text-decoration: none;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(253, 126, 20, 0.3);
+        border-color: #fd7e14;
+    }
+
+    .btn-print-elegant:hover:before {
+        left: 0;
+    }
+
+    .btn-print-elegant:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 10px rgba(253, 126, 20, 0.3);
+    }
+
+    .action-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    /* Mobile Responsive Styles for Table */
+    @media (max-width: 768px) {
+        .action-buttons {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .btn-cancel-elegant,
+        .btn-print-elegant {
+            margin-left: 0;
+            margin-top: 0.5rem;
+        }
+
+        .table th,
+        .table td {
+            padding: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .progress {
+            height: 16px;
+        }
+
+        .progress-bar {
+            font-size: 0.7rem;
+        }
+
+        .badge {
+            padding: 0.4rem 0.6rem;
+            font-size: 0.8rem;
+        }
+    }
+
+    @media (max-width: 576px) {
+
+        /* Hide desktop table on mobile */
+        .desktop-table {
+            display: none;
+        }
+
+        .mobile-cards-container {
+            display: block;
+        }
+
+        /* Mobile Card Styles */
+        .mobile-request-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--primary-green);
+        }
+
+        .mobile-card-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .mobile-request-no {
+            font-weight: 700;
+            color: var(--dark-green);
+            font-size: 1rem;
+        }
+
+        .mobile-status-badge {
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .mobile-card-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            padding: 0.25rem 0;
+        }
+
+        .mobile-card-label {
+            color: var(--text-light);
+            font-weight: 500;
+            font-size: 0.8rem;
+        }
+
+        .mobile-card-value {
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-align: right;
+        }
+
+        .mobile-progress-container {
+            margin: 0.75rem 0;
+        }
+
+        .mobile-progress-label {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-bottom: 0.25rem;
+        }
+
+        .mobile-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .mobile-actions .btn {
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        /* Mobile print button */
+        .mobile-print-btn {
+            background: linear-gradient(135deg, #fd7e14, #e55a00);
+            border: none;
+            color: white;
+        }
+
+        .mobile-print-btn:hover {
+            background: linear-gradient(135deg, #e55a00, #cc5500);
+            color: white;
+        }
+    }
+
+    @media (min-width: 577px) {
+        .mobile-cards-container {
+            display: none;
+        }
+
+        .desktop-table {
+            display: block;
+        }
+    }
 </style>
 
 <!-- Dashboard Header -->
@@ -485,7 +785,6 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
         <div class="info-box d-flex align-items-center">
             <span class="info-box-icon" style="background: linear-gradient(135deg, var(--light-green), var(--primary-green));">
                 <i class="fa-solid fa-check-circle"></i>
-
             </span>
             <div class="info-box-content">
                 <div class="info-box-number"><?php echo $completed_count; ?></div>
@@ -553,130 +852,270 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
                 </h3>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
-                    <?php if (!empty($pending_requests)) : ?>
-                        <table class="table table-hover align-middle" id="pendingRequestsTable">
-                            <thead>
-                                <tr>
-                                    <th>Request No</th>
-                                    <th>Date Requested</th>
-                                    <th>Items Count</th>
-                                    <th>Status</th>
-                                    <th>Progress</th>
-                                    <th class="text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($pending_requests as $index => $req):
-                                    //Count items in this request
-                                    $item_count = count_request_items($req['id']);
-                                ?>
+                <!-- Desktop Table View -->
+                <div class="desktop-table">
+                    <div class="table-responsive p-2">
+                        <?php if (!empty($pending_requests)) : ?>
+                            <table class="table table-hover align-middle" id="pendingRequestsTable">
+                                <thead>
                                     <tr>
-                                        <td>
-                                            <strong><?php echo ($req['ris_no']); ?></strong>
-                                        </td>
-                                        <td class="text-center">
-                                            <i class="fa-regular fa-calendar-days me-1 text-muted"></i>
-                                            <?php echo date("F j, Y", strtotime($req['date'])); ?><br>
-                                            <i class="fa-regular fa-clock me-1 text-muted"></i>
-                                            <?php echo date('h:i A', strtotime($req['date'])); ?>
-                                        </td>
-
-
-                                        <td>
-                                            <span><?php echo $item_count; ?> Items</span>
-                                        </td>
-                                        <td class="text-center">
-                                            <?php
-                                            $status = strtolower($req['status']);
-                                            $badgeClass = 'secondary'; // default color
-
-                                            if ($status == 'pending') {
-                                                $badgeClass = 'warning';
-                                            } elseif ($status == 'approved') {
-                                                $badgeClass = 'primary';
-                                            } elseif ($status == 'issued') {
-                                                $badgeClass = 'success';
-                                            } elseif ($status == 'rejected') {
-                                                $badgeClass = 'danger';
-                                            }
-                                            ?>
-                                            <span class="badge bg-<?php echo $badgeClass; ?>">
-                                                <i class="fa-solid 
-                                                    <?php echo ($status == 'pending') ? 'fa-clock' : (($status == 'approved') ? 'fa-thumbs-up' : (($status == 'issued') ? 'fa-circle-check' : (($status == 'rejected') ? 'fa-xmark' : 'fa-info-circle'))); ?> me-1"></i>
-                                                <?php echo ucfirst($req['status']); ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <?php
-                                            $status = strtolower($req['status']);
-                                            $progress_class = 'bg-warning';
-                                            $progress_width = 25;
-                                            $progress_text = 'Pending';
-
-                                            if ($status === 'approved') {
-                                                $progress_class = 'bg-primary';
-                                                $progress_width = 50;
-                                                $progress_text = 'Approved';
-                                            } elseif ($status === 'issued' || $status === 'for confirmation') {
-                                                $progress_class = 'bg-warning progress-bar-striped progress-bar-animated';
-                                                $progress_width = 75;
-                                                $progress_text = 'Issued - Waiting Confirmation';
-                                            } elseif ($status === 'completed') {
-                                                $progress_class = 'bg-success progress-bar-striped';
-                                                $progress_width = 100;
-                                                $progress_text = 'Completed';
-                                            } elseif ($status === 'rejected') {
-                                                $progress_class = 'bg-danger';
-                                                $progress_width = 100;
-                                                $progress_text = 'Rejected';
-                                            }
-                                            ?>
-                                            <div class="progress" style="height: 20px; border-radius: 10px;">
-                                                <div class="progress-bar <?php echo $progress_class; ?>"
-                                                    role="progressbar"
-                                                    style="width: <?php echo $progress_width; ?>%;"
-                                                    aria-valuenow="<?php echo $progress_width; ?>"
-                                                    aria-valuemin="0"
-                                                    aria-valuemax="100">
-                                                    <?php echo $progress_text; ?>
-                                                </div>
-                                            </div>
-                                            <small class="text-muted d-block mt-1">
-                                                Pending → Approved → Issued → Completed
-                                            </small>
-                                        </td>
-
-                                        <td class="text-center">
-                                            <?php if (strtolower($req['status']) == 'issued'): ?>
-                                                <a href="?received=<?php echo (int)$req['id']; ?>"
-                                                    class="btn-received-outline receive-btn"
-                                                    title="Mark as Received">
-                                                    <i class="fa-solid fa-hand-holding-box me-2"></i>
-                                                    Received
-                                                </a>
-                                            <?php else: ?>
-                                                <a href="view_user_request.php?id=<?php echo (int)$req['id']; ?>"
-                                                    class="btn-view-elegant"
-                                                    title="View Request Details">
-                                                    <i class="fa fa-eye me-2"></i>
-                                                    View
-                                                </a>
-                                            <?php endif; ?>
-                                        </td>
-
+                                        <th>Request No</th>
+                                        <th>Date Requested</th>
+                                        <th>Items Count</th>
+                                        <th>Status</th>
+                                        <th>Progress</th>
+                                        <th class="text-center">Actions</th>
                                     </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($pending_requests as $index => $req):
+                                        $item_count = $req['item_count'];
+                                    ?>
+                                        <tr>
+                                            <td>
+                                                <strong><?php echo ($req['ris_no']); ?></strong>
+                                            </td>
+                                            <td class="text-center">
+                                                <i class="fa-regular fa-calendar-days me-1 text-muted"></i>
+                                                <?php echo date("F j, Y", strtotime($req['date'])); ?><br>
+                                                <i class="fa-regular fa-clock me-1 text-muted"></i>
+                                                <?php echo date('h:i A', strtotime($req['date'])); ?>
+                                            </td>
+                                            <td>
+                                                <span><?php echo $item_count; ?> Items</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <?php
+                                                $status = strtolower($req['status']);
+                                                $badgeClass = 'secondary'; // default color
+
+                                                if ($status == 'pending') {
+                                                    $badgeClass = 'warning';
+                                                } elseif ($status == 'approved') {
+                                                    $badgeClass = 'primary';
+                                                } elseif ($status == 'issued') {
+                                                    $badgeClass = 'success';
+                                                } elseif ($status == 'rejected') {
+                                                    $badgeClass = 'danger';
+                                                }
+                                                ?>
+                                                <span class="badge bg-<?php echo $badgeClass; ?>">
+                                                    <i class="fa-solid 
+                                                        <?php echo ($status == 'pending') ? 'fa-clock' : (($status == 'approved') ? 'fa-thumbs-up' : (($status == 'issued') ? 'fa-circle-check' : (($status == 'rejected') ? 'fa-xmark' : 'fa-info-circle'))); ?> me-1"></i>
+                                                    <?php echo ucfirst($req['status']); ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <?php
+                                                $status = strtolower($req['status']);
+                                                $progress_class = 'bg-warning';
+                                                $progress_width = 25;
+                                                $progress_text = 'Pending';
+
+                                                if ($status === 'approved') {
+                                                    $progress_class = 'bg-primary';
+                                                    $progress_width = 50;
+                                                    $progress_text = 'Approved';
+                                                } elseif ($status === 'issued' || $status === 'for confirmation') {
+                                                    $progress_class = 'bg-warning progress-bar-striped progress-bar-animated';
+                                                    $progress_width = 75;
+                                                    $progress_text = 'Issued - Waiting Confirmation';
+                                                } elseif ($status === 'completed') {
+                                                    $progress_class = 'bg-success progress-bar-striped';
+                                                    $progress_width = 100;
+                                                    $progress_text = 'Completed';
+                                                } elseif ($status === 'rejected') {
+                                                    $progress_class = 'bg-danger';
+                                                    $progress_width = 100;
+                                                    $progress_text = 'Rejected';
+                                                }
+                                                ?>
+                                                <div class="progress" style="height: 20px; border-radius: 10px;">
+                                                    <div class="progress-bar <?php echo $progress_class; ?>"
+                                                        role="progressbar"
+                                                        style="width: <?php echo $progress_width; ?>%;"
+                                                        aria-valuenow="<?php echo $progress_width; ?>"
+                                                        aria-valuemin="0"
+                                                        aria-valuemax="100">
+                                                        <?php echo $progress_text; ?>
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted d-block mt-1">
+                                                    Pending → Approved → Issued → Completed
+                                                </small>
+                                            </td>
+
+                                            <td class="text-center">
+                                                <div class="action-buttons">
+                                                    <?php if (strtolower($req['status']) == 'issued'): ?>
+                                                        <!-- Issued: Show only Received button -->
+                                                        <a href="?received=<?php echo (int)$req['id']; ?>"
+                                                            class="btn-received-outline receive-btn"
+                                                            title="Mark as Received">
+                                                            <i class="fa-solid fa-hand-holding-box me-2"></i>
+                                                            Received
+                                                        </a>
+                                                    <?php elseif (strtolower($req['status']) == 'approved'): ?>
+                                                        <!-- Approved: Show only Print RIS button -->
+                                                        <a href="print_ris_user.php?id=<?php echo (int)$req['id']; ?>"
+                                                            class="btn-print-elegant print-btn"
+                                                            title="Print RIS Form"
+                                                            target="_blank">
+                                                            <i class="fa-solid fa-print me-2"></i>
+                                                            Print RIS
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <!-- Pending: Show View and Cancel buttons -->
+                                                        <a href="view_user_request.php?id=<?php echo (int)$req['id']; ?>"
+                                                            class="btn-view-elegant"
+                                                            title="View Request Details">
+                                                            <i class="fa fa-eye me-2"></i>
+                                                            View
+                                                        </a>
+
+                                                        <?php if (strtolower($req['status']) == 'pending'): ?>
+                                                            <a href="?cancel=<?php echo (int)$req['id']; ?>"
+                                                                class="btn-cancel-elegant cancel-btn"
+                                                                title="Cancel Request"
+                                                                onclick="return confirmCancel(event, this);">
+                                                                <i class="fa-solid fa-times me-2"></i>
+                                                                Cancel
+                                                            </a>
+                                                        <?php endif; ?>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php else: ?>
+                            <!-- Message if no pending requests -->
+                            <div class="text-center p-5">
+                                <i class="fa fa-folder-open fa-4x text-muted mb-3"></i>
+                                <h5 class="text-muted">No Pending Requests Found</h5>
+                                <p class="text-muted">You haven't submitted any requests yet. Start by creating a new request!</p>
+                                <a href="requests_form.php" class="btn btn-success">
+                                    <i class="fa-solid fa-plus me-2"></i>Submit First Request
+                                </a>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Mobile Card View -->
+                <div class="mobile-cards-container">
+                    <?php if (!empty($pending_requests)) : ?>
+                        <?php foreach ($pending_requests as $index => $req):
+                            $item_count = $req['item_count'];
+                            $status = strtolower($req['status']);
+
+                            // Determine badge class and progress
+                            $badgeClass = 'secondary';
+                            $progress_class = 'bg-warning';
+                            $progress_width = 25;
+                            $progress_text = 'Pending';
+
+                            if ($status == 'pending') {
+                                $badgeClass = 'warning';
+                            } elseif ($status == 'approved') {
+                                $badgeClass = 'primary';
+                                $progress_class = 'bg-primary';
+                                $progress_width = 50;
+                                $progress_text = 'Approved';
+                            } elseif ($status == 'issued') {
+                                $badgeClass = 'success';
+                                $progress_class = 'bg-warning progress-bar-striped progress-bar-animated';
+                                $progress_width = 75;
+                                $progress_text = 'Issued - Waiting Confirmation';
+                            } elseif ($status == 'rejected') {
+                                $badgeClass = 'danger';
+                                $progress_class = 'bg-danger';
+                                $progress_width = 100;
+                                $progress_text = 'Rejected';
+                            }
+                        ?>
+                            <div class="mobile-request-card">
+                                <div class="mobile-card-header">
+                                    <div class="mobile-request-no"><?php echo ($req['ris_no']); ?></div>
+                                    <span class="badge mobile-status-badge bg-<?php echo $badgeClass; ?>">
+                                        <?php echo ucfirst($req['status']); ?>
+                                    </span>
+                                </div>
+
+                                <div class="mobile-card-row">
+                                    <span class="mobile-card-label">Date Requested:</span>
+                                    <span class="mobile-card-value">
+                                        <?php echo date("M j, Y", strtotime($req['date'])); ?><br>
+                                        <small><?php echo date('h:i A', strtotime($req['date'])); ?></small>
+                                    </span>
+                                </div>
+
+                                <div class="mobile-card-row">
+                                    <span class="mobile-card-label">Items:</span>
+                                    <span class="mobile-card-value"><?php echo $item_count; ?> Items</span>
+                                </div>
+
+                                <div class="mobile-progress-container">
+                                    <div class="mobile-progress-label">Progress: <?php echo $progress_text; ?></div>
+                                    <div class="progress" style="height: 12px;">
+                                        <div class="progress-bar <?php echo $progress_class; ?>"
+                                            style="width: <?php echo $progress_width; ?>%;">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        Pending → Approved → Issued → Completed
+                                    </small>
+                                </div>
+
+                                <div class="mobile-actions">
+                                    <?php if (strtolower($req['status']) == 'issued'): ?>
+                                        <!-- Issued: Show only Received button -->
+                                        <a href="?received=<?php echo (int)$req['id']; ?>"
+                                            class="btn btn-success receive-btn"
+                                            style="flex: 1; min-width: 120px;">
+                                            <i class="fa-solid fa-hand-holding-box me-1"></i>
+                                            Received
+                                        </a>
+                                    <?php elseif (strtolower($req['status']) == 'approved'): ?>
+                                        <!-- Approved: Show only Print RIS button -->
+                                        <a href="print_ros_user.php?id=<?php echo (int)$req['id']; ?>"
+                                            class="btn mobile-print-btn"
+                                            style="flex: 1; min-width: 120px;"
+                                            target="_blank">
+                                            <i class="fa-solid fa-print me-1"></i>
+                                            Print ROS
+                                        </a>
+                                    <?php else: ?>
+                                        <!-- Pending: Show View and Cancel buttons -->
+                                        <a href="view_user_request.php?id=<?php echo (int)$req['id']; ?>"
+                                            class="btn btn-primary"
+                                            style="flex: 1; min-width: 120px;">
+                                            <i class="fa fa-eye me-1"></i>
+                                            View
+                                        </a>
+
+                                        <?php if (strtolower($req['status']) == 'pending'): ?>
+                                            <a href="?cancel=<?php echo (int)$req['id']; ?>"
+                                                class="btn btn-danger cancel-btn"
+                                                style="flex: 1; min-width: 120px;"
+                                                onclick="return confirmCancel(event, this);">
+                                                <i class="fa-solid fa-times me-1"></i>
+                                                Cancel
+                                            </a>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     <?php else: ?>
-                        <!-- Message if no pending requests -->
-                        <div class="text-center p-5">
-                            <i class="fa fa-folder-open fa-4x text-muted mb-3"></i>
-                            <h5 class="text-muted">No Pending Requests Found</h5>
-                            <p class="text-muted">You haven't submitted any requests yet. Start by creating a new request!</p>
-                            <a href="requests_form.php" class="btn btn-success">
-                                <i class="fa-solid fa-plus me-2"></i>Submit First Request
+                        <!-- Mobile empty state -->
+                        <div class="text-center p-4">
+                            <i class="fa fa-folder-open fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted">No Pending Requests</h6>
+                            <p class="text-muted small">Submit your first request to get started.</p>
+                            <a href="requests_form.php" class="btn btn-success btn-sm">
+                                <i class="fa-solid fa-plus me-1"></i>New Request
                             </a>
                         </div>
                     <?php endif; ?>
@@ -688,40 +1127,38 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.confirm-received-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const requestId = this.dataset.id;
+    function confirmCancel(event, element) {
+        event.preventDefault();
+        const url = element.getAttribute('href');
+
+        Swal.fire({
+            title: 'Cancel Request?',
+            text: "Are you sure you want to cancel this request? The item quantities will be restored to inventory.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, cancel it!',
+            cancelButtonText: 'No, keep it'
+        }).then((result) => {
+            if (result.isConfirmed) {
                 Swal.fire({
-                    title: 'Confirm Receipt',
-                    text: 'Have you received all requested items?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#28a745',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: 'Yes, Confirm'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        fetch('confirm_received.php?id=' + requestId)
-                            .then(res => res.json())
-                            .then(data => {
-                                if (data.success) {
-                                    Swal.fire('Confirmed!', 'Your request has been marked as received.', 'success')
-                                        .then(() => location.reload());
-                                } else {
-                                    Swal.fire('Error', data.message || 'Unable to confirm receipt.', 'error');
-                                }
-                            })
-                            .catch(() => Swal.fire('Error', 'Network issue while confirming.', 'error'));
+                    title: 'Cancelling...',
+                    html: 'Restoring quantities and cancelling request...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                        window.location.href = url;
                     }
                 });
-            });
+            }
         });
-    });
-</script>
 
-<script>
+        return false;
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        // Receive button confirmation
         document.querySelectorAll('.receive-btn').forEach(function(button) {
             button.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -755,6 +1192,7 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
 </script>
 
 <?php include_once('layouts/footer.php'); ?>
+
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 <!-- DataTables JS -->
@@ -769,21 +1207,12 @@ $pending_requests = find_by_sql("SELECT * FROM requests WHERE requested_by = '{$
             order: [
                 [1, 'desc']
             ],
-            searchinh: 'false',
+            searching: false,
+            responsive: true,
             columnDefs: [{
-                    orderable: false,
-                    targets: 5
-                } // Disable sorting on Actions
-            ],
-
+                orderable: false,
+                targets: 5
+            }]
         });
-    });
-</script>
-
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Add any custom JavaScript here for user interactions
-        console.log('User dashboard loaded successfully');
     });
 </script>

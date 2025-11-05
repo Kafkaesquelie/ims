@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     $position    = $db->escape($_POST['position']);
     $division    = $db->escape($_POST['division']);
     $office      = $db->escape($_POST['office']);
-    $status      = $db->escape($_POST['status']);
+    $status      = isset($_POST['status']) ? 'Active' : 'Inactive'; // Checkbox value
 
     // Handle file upload
     $image_name = '';
@@ -196,6 +196,47 @@ if (!empty($msg) && is_array($msg)):
     color: #6c757d;
     text-align: center;
   }
+  
+  .table th {
+    background: #005113ff;
+    color: white;
+    font-weight: 600;
+    border: none;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  /* Checkbox styling */
+  .status-checkbox {
+    transform: scale(1.2);
+    margin-right: 0.5rem;
+  }
+
+  .form-check-label {
+    font-weight: 500;
+    color: #495057;
+  }
+
+  .status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+
+  .status-active {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+
+  .status-inactive {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
 </style>
 
 <div class="container-fluid mt-3">
@@ -292,6 +333,15 @@ if (!empty($msg) && is_array($msg)):
             <input type="file" name="image" id="imageInput" accept="image/*">
           </div>
           <small class="text-muted mt-2 d-block">Recommended: 200x200px, JPG/PNG</small>
+          
+          <!-- Status Preview -->
+          <div class="profile-info mt-3">
+            <h5><i class="fa-solid fa-info-circle me-2"></i>Status Preview</h5>
+            <div id="statusPreview" class="status-indicator status-inactive">
+              <i class="fa-solid fa-circle"></i>
+              <span>Inactive</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -369,11 +419,12 @@ if (!empty($msg) && is_array($msg)):
             </div>
             <div class="row">
               <div class="col-md-6 mb-3">
-                <label class="form-label">Employment Status <span class="text-danger">*</span></label>
-                <select name="status" class="form-control" required>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
+                <label class="form-label">Employment Status</label>
+                <div class="form-check mt-2">
+                  <input type="checkbox" class="form-check-input status-checkbox" name="status" id="status" value="1">
+                  <label class="form-check-label" for="status">Active Employee</label>
+                </div>
+                <small class="text-muted">Check this box to set the employee as active</small>
               </div>
             </div>
           </div>
@@ -408,6 +459,8 @@ document.addEventListener("DOMContentLoaded", function() {
   const tableWrapper = document.getElementById('employeeTableWrapper');
   const imageInput = document.getElementById('imageInput');
   const imagePreview = document.getElementById('imagePreview');
+  const statusCheckbox = document.getElementById('status');
+  const statusPreview = document.getElementById('statusPreview');
 
   // Image preview functionality
   imageInput.addEventListener('change', function() {
@@ -442,6 +495,21 @@ document.addEventListener("DOMContentLoaded", function() {
     imagePreview.className = 'profile-image-preview';
   }
 
+  // Status checkbox functionality
+  statusCheckbox.addEventListener('change', function() {
+    updateStatusPreview(this.checked);
+  });
+
+  function updateStatusPreview(isActive) {
+    if (isActive) {
+      statusPreview.className = 'status-indicator status-active';
+      statusPreview.innerHTML = '<i class="fa-solid fa-circle"></i> <span>Active</span>';
+    } else {
+      statusPreview.className = 'status-indicator status-inactive';
+      statusPreview.innerHTML = '<i class="fa-solid fa-circle"></i> <span>Inactive</span>';
+    }
+  }
+
   // Show/hide form
   addBtn.addEventListener('click', () => {
     addForm.style.display = 'block';
@@ -456,7 +524,11 @@ document.addEventListener("DOMContentLoaded", function() {
     // Reset form and image preview
     document.querySelector('form').reset();
     resetImagePreview();
+    updateStatusPreview(false); // Reset to inactive
   });
+
+  // Initialize status preview
+  updateStatusPreview(false);
 });
 </script>
 

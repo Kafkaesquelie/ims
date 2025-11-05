@@ -229,6 +229,14 @@ if (!empty($msg) && is_array($msg)):
     background: #ffc107;
     /* yellow */
   }
+  .table th {
+        background: #005113ff;
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1rem;
+        text-align: center;
+    }
 </style>
 
 <div class="container-fluid">
