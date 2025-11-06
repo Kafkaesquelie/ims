@@ -99,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $db->query("START TRANSACTION");
 
     // ✅ Insert the request header ONCE
-    $query_request = "INSERT INTO requests (requested_by, date, status, remarks)
-                      VALUES ('{$user_id}', NOW(), 'Pending', '{$remarks}')";
+    $query_request = "INSERT INTO requests (requested_by, date, status)
+                      VALUES ('{$user_id}', NOW(), 'Pending')";
     if (!$db->query($query_request)) {
         $db->query("ROLLBACK");
         $session->msg("d", "❌ Failed to create request: " . $db->error());

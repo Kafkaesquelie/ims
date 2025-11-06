@@ -33,6 +33,7 @@ require_once(LIB_PATH_INC . 'session.php');
 require_once(LIB_PATH_INC . 'upload.php');
 require_once(LIB_PATH_INC . 'database.php');
 require_once(LIB_PATH_INC . 'sql.php');
+require_once(LIB_PATH_INC . 'cache.php');
 
 // Clean accidental output to prevent header issues
 ob_end_clean();
