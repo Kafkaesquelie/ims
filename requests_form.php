@@ -98,9 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Start transaction
     $db->query("START TRANSACTION");
 
-    // ✅ Insert the request header ONCE
-    $query_request = "INSERT INTO requests (requested_by, date, status)
-                      VALUES ('{$user_id}', NOW(), 'Pending')";
+    // --- Generate RIS No with 4 zeros in middle and user_id as last 4 digits ---
+    $year = date("Y");
+    // Format user_id to 4 digits with leading zeros
+    $user_id_formatted = str_pad($user_id, 4, '0', STR_PAD_LEFT);
+    $ris_no = "{$year}-0000-{$user_id_formatted}";
+
+    // ✅ Insert the request header WITH ris_no
+    $query_request = "INSERT INTO requests (requested_by, date, status, ris_no)
+                      VALUES ('{$user_id}', NOW(), 'Pending', '{$ris_no}')";
     if (!$db->query($query_request)) {
         $db->query("ROLLBACK");
         $session->msg("d", "❌ Failed to create request: " . $db->error());
@@ -108,19 +114,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     $req_id = $db->insert_id();
-
-    // --- Generate RIS No with 4 zeros in middle and user_id as last 4 digits ---
-    $year = date("Y");
-    // Format user_id to 4 digits with leading zeros
-    $user_id_formatted = str_pad($user_id, 4, '0', STR_PAD_LEFT);
-    $ris_no = "{$year}-0000-{$user_id_formatted}";
-
-    // Save RIS No
-    if (!$db->query("UPDATE requests SET ris_no = '{$ris_no}' WHERE id = '{$req_id}'")) {
-        $db->query("ROLLBACK");
-        $session->msg("d", "❌ Failed to generate RIS No.");
-        redirect('requests_form.php', false);
-    }
 
     // ✅ Insert request items
     foreach ($qtys as $item_id => $qty) {

@@ -283,7 +283,7 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
         <tbody>
           <?php foreach ($ics_grouped as $ics): ?>
             <tr>
-              <td><strong><?php echo remove_junk($ics['ics_no']); ?></strong></td>
+              <td style="color:success"><strong><?php echo remove_junk($ics['ics_no']); ?></strong></td>
               <td class="text-center">
                 <img src="uploads/users/<?php echo remove_junk($ics['image']); ?>"
                   alt="Profile"
