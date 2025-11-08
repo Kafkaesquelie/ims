@@ -245,31 +245,7 @@ $all_items = find_by_sql("
 
 // Process items for display
 foreach ($all_items as &$item) {
-    $item['cat_name'] = get_category_name($item['categorie_id']);
-
-    // Get main unit from units table and base unit from base_units table
-    $item['main_unit_name'] = get_unit_name($item['unit_id']);
-    $item['base_unit_name'] = get_base_unit_name($item['base_unit_id']);
-
-    // Get conversion data
-    $conversion = find_by_sql("SELECT conversion_rate, from_unit_id, to_unit_id 
-                              FROM unit_conversions WHERE item_id = '{$item['id']}' LIMIT 1");
-
-    if ($conversion && count($conversion) > 0) {
-        $item['conversion_rate'] = (float)$conversion[0]['conversion_rate'];
-        $item['from_unit_id'] = $conversion[0]['from_unit_id'];
-        $item['to_unit_id'] = $conversion[0]['to_unit_id'];
-
-        // Use proper unit names from respective tables
-        $item['main_unit_name'] = get_unit_name($item['from_unit_id']);
-        $item['base_unit_name'] = get_base_unit_name($item['to_unit_id']);
-    } else {
-        $item['conversion_rate'] = 1;
-        // Keep the original values from items table
-        $item['main_unit_name'] = get_unit_name($item['unit_id']);
-        $item['base_unit_name'] = get_base_unit_name($item['base_unit_id']);
-    }
-
+   
     // Calculate display quantity
     $item['display_quantity'] = calculate_display_quantity($item);
     
@@ -1071,12 +1047,15 @@ window.addEventListener('resize', handleMobileLayout);
 <script>
 $(document).ready(function () {
     var table = $('#itemsTable').DataTable({
-        pageLength: 5,
+        pageLength: 10,
         lengthMenu: [5, 10, 25, 50],
         ordering: true,
         searching: false,
         autoWidth: true,
         responsive: true,
+        deferRender: true,        // loads rows only as needed
+        processing: true,
+        serverSide: false,        
         columnDefs: [
             { orderable: false, targets: [3, 4] } // Make action columns non-orderable
         ],
