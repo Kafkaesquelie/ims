@@ -541,6 +541,9 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
     $('#datatable').DataTable({
       "pageLength": 5,
       "lengthMenu": [5, 10, 25, 50, 100],
+       "deferRender": true,        
+      "processing": true,
+      "serverSide": false,
       "order": [
         [5, "desc"]
       ],
@@ -583,6 +586,9 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
     $('#icsTable').DataTable({
       "pageLength": 5,
       "lengthMenu": [5, 10, 25, 50, 100],
+      "deferRender": true,        
+      "processing": true,
+      "serverSide": false,
       "order": [
         [6, "desc"]
       ],
@@ -591,6 +597,9 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
     $('#parTable').DataTable({
       "pageLength": 5,
       "lengthMenu": [5, 10, 25, 50, 100],
+       "deferRender": true,        
+      "processing": true,
+      "serverSide": false,
       "order": [
         [6, "desc"]
       ],

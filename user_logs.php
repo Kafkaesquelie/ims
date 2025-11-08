@@ -508,6 +508,9 @@ $(document).ready(function () {
         searching: true,
         autoWidth: false,
         responsive: true,
+        deferRender: true,        
+        processing: true,
+        serverSide: false,
         language: {
             search: "Search transactions:",
             lengthMenu: "Show _MENU_ entries",

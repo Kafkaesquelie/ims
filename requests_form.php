@@ -1053,7 +1053,7 @@ $(document).ready(function () {
         searching: false,
         autoWidth: true,
         responsive: true,
-        deferRender: true,        // loads rows only as needed
+        deferRender: true,        
         processing: true,
         serverSide: false,        
         columnDefs: [

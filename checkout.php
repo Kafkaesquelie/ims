@@ -3,124 +3,110 @@ $page_title = 'Request Form';
 require_once('includes/load.php');
 page_require_level(1);
 
-// Fetch all available items
-$all_items = find_all('items');
-
-// ✅ Get helper functions
-function get_unit_name($unit_id)
-{
+// -----------------------------
+// Helper Functions
+// -----------------------------
+function get_unit_name($unit_id) {
     global $db;
     $res = $db->query("SELECT name FROM units WHERE id = '{$unit_id}' LIMIT 1");
     return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : '';
 }
 
-// ✅ Get base unit name from base_units table
-function get_base_unit_name($base_unit_id)
-{
+function get_base_unit_name($base_unit_id) {
     global $db;
     $res = $db->query("SELECT name FROM base_units WHERE id = '{$base_unit_id}' LIMIT 1");
     return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : 'Unit';
 }
 
-// get logged-in user
-$current_user = current_user();
-$current_user_id = $current_user['id'] ?? null;
-$current_user_name = $current_user['name'] ?? $current_user['username'] ?? '';
-
-function get_users_table()
-{
+function get_users_table() {
     global $db;
-    // fetch common user fields and build a display name
-    $sql = "SELECT * FROM users ORDER BY name ASC";
-    $result = $db->query($sql);
     $users = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            // build a reasonable display name from whatever columns exist
-            if (!empty($row['name'])) {
-                $display = $row['name'];
-            } elseif (!empty($row['first_name'])) {
-                $display = trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            } else {
-                $display = $row['username'] ?? ('User ' . $row['id']);
-            }
-            $users[] = [
-                'id' => $row['id'],
-                'full_name' => $display,
-                'position' => $row['position'] ?? '',
-            ];
-        }
+    $result = $db->query("SELECT * FROM users ORDER BY name ASC");
+    while ($row = $result->fetch_assoc()) {
+        $display = !empty($row['name']) ? $row['name'] : trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+        $display = $display ?: ($row['username'] ?? 'User ' . $row['id']);
+        $users[] = ['id' => $row['id'], 'full_name' => $display, 'position' => $row['position'] ?? ''];
     }
     return $users;
 }
 
-// Get employees WITHOUT user accounts
-function get_employees_without_users()
-{
+function get_employees_without_users() {
     global $db;
-    $sql = "SELECT * FROM employees WHERE (user_id IS NULL OR user_id = 0) AND status = 1 ORDER BY last_name ASC, first_name ASC";
-    $result = $db->query($sql);
     $employees = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $full_name = trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . $row['last_name']);
-            $employees[] = [
-                'id' => $row['id'],
-                'full_name' => $full_name,
-                'position' => $row['position'] ?? ''
-            ];
-        }
+    $result = $db->query("SELECT * FROM employees WHERE (user_id IS NULL OR user_id = 0) AND status = 1 ORDER BY last_name ASC, first_name ASC");
+    while ($row = $result->fetch_assoc()) {
+        $full_name = trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . $row['last_name']);
+        $employees[] = ['id' => $row['id'], 'full_name' => $full_name, 'position' => $row['position'] ?? ''];
     }
     return $employees;
 }
 
-function get_requestors()
-{
-    // Only include users and employees without user accounts
+function get_requestors() {
     $requestors = [];
-    $users = get_users_table();
-    foreach ($users as $u) {
-        $requestors[] = [
-            'source' => 'users',
-            'id' => $u['id'],
-            'full_name' => $u['full_name'],
-            'position' => $u['position'] ?? ''
-        ];
-    }
-
-    // Only include employees without user accounts
-    $employees = get_employees_without_users();
-    foreach ($employees as $e) {
-        $requestors[] = [
-            'source' => 'employees',
-            'id' => $e['id'],
-            'full_name' => $e['full_name'],
-            'position' => $e['position'] ?? ''
-        ];
-    }
+    foreach (get_users_table() as $u) $requestors[] = ['source'=>'users','id'=>$u['id'],'full_name'=>$u['full_name'],'position'=>$u['position']];
+    foreach (get_employees_without_users() as $e) $requestors[] = ['source'=>'employees','id'=>$e['id'],'full_name'=>$e['full_name'],'position'=>$e['position']];
     return $requestors;
 }
 
-// Build list used in the select
-$requestors = get_requestors();
-
-// default selected requestor value (current logged user if present in users)
-$default_selected = 'users_' . ($current_user_id ?? '0');
-
-function is_ris_no_duplicate($ris_no)
-{
+function get_category_name($cat_id) {
     global $db;
-    $ris_no = $db->escape($ris_no);
-    $result = $db->query("SELECT id FROM requests WHERE ris_no = '{$ris_no}' LIMIT 1");
-    return $db->num_rows($result) > 0;
+    $res = $db->query("SELECT name FROM categories WHERE id = ".(int)$cat_id." LIMIT 1");
+    return ($res && $row = $res->fetch_assoc()) ? $row['name'] : 'Unknown';
 }
 
-// Get current year and admin-set middle part
-$current_year = date("Y");
-// Get admin-set middle part from settings or use default
-$admin_middle = '0000'; // Default, will be updated via AJAX
+function calculate_display_quantity($item) {
+    $quantity = (float)$item['quantity'];
+    if ($item['conversion_rate'] <= 1 || $item['main_unit_name'] === $item['base_unit_name']) {
+        return number_format($quantity, 2) . " " . $item['main_unit_name'];
+    }
+    $full_main = floor($quantity);
+    $remaining_base = ($quantity - $full_main) * $item['conversion_rate'];
+    if ($full_main > 0 && $remaining_base > 0) return $full_main . " " . $item['main_unit_name'] . " | " . (int)$remaining_base . " " . $item['base_unit_name'];
+    elseif ($full_main > 0) return $full_main . " " . $item['main_unit_name'];
+    else return (int)$remaining_base . " " . $item['base_unit_name'];
+}
 
-// ---------- Form submission handling ----------
+function is_ris_no_duplicate($ris_no) {
+    global $db;
+    $ris_no = $db->escape($ris_no);
+    $res = $db->query("SELECT id FROM requests WHERE ris_no = '{$ris_no}' LIMIT 1");
+    return $db->num_rows($res) > 0;
+}
+
+// -----------------------------
+// Fetch Data
+// -----------------------------
+$current_user = current_user();
+$current_user_id = $current_user['id'] ?? null;
+$current_user_name = $current_user['name'] ?? $current_user['username'] ?? '';
+
+$requestors = get_requestors();
+$default_selected = 'users_' . ($current_user_id ?? '0');
+$current_year = date("Y");
+$all_items = find_by_sql("SELECT * FROM items WHERE archived = 0");
+
+// Process items for display (quantity, unit names, stock badge)
+foreach ($all_items as &$item) {
+    $item['cat_name'] = get_category_name($item['categorie_id']);
+    $conversion = find_by_sql("SELECT conversion_rate, from_unit_id, to_unit_id FROM unit_conversions WHERE item_id = '{$item['id']}' LIMIT 1");
+    if ($conversion && count($conversion) > 0) {
+        $item['conversion_rate'] = (float)$conversion[0]['conversion_rate'];
+        $item['main_unit_name'] = get_unit_name($conversion[0]['from_unit_id']);
+        $item['base_unit_name'] = get_base_unit_name($conversion[0]['to_unit_id']);
+    } else {
+        $item['conversion_rate'] = 1;
+        $item['main_unit_name'] = get_unit_name($item['unit_id']);
+        $item['base_unit_name'] = get_base_unit_name($item['base_unit_id']);
+    }
+    $item['display_quantity'] = calculate_display_quantity($item);
+    if ($item['quantity'] == 0) $item['stock_badge'] = '<span class="badge bg-danger stock-badge"><i class="fas fa-times-circle"></i> Out of Stock</span>';
+    elseif ($item['quantity'] <= 5) $item['stock_badge'] = '<span class="badge bg-warning text-dark stock-badge"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>';
+    else $item['stock_badge'] = '<span class="badge bg-success stock-badge"><i class="fas fa-check-circle"></i> In Stock</span>';
+}
+
+// -----------------------------
+// Handle Form Submission
+// -----------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     global $db;
     $selected = $_POST['requestor'] ?? '';
@@ -133,242 +119,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $remarks = remove_junk($db->escape($_POST['remarks'] ?? ''));
     $qtys = array_filter($_POST['qty'] ?? [], fn($q) => (int)$q > 0);
 
-    if (empty($qtys)) {
-        $session->msg("d", "❌ No items selected.");
-        redirect('checkout.php', false);
-    }
-
-    // Check duplicate pending requests
-    foreach ($qtys as $item_id => $qty) {
-        $check = $db->query("SELECT r.id 
-                             FROM requests r 
-                             JOIN request_items ri ON r.id = ri.req_id
-                             WHERE r.requested_by = '{$rid}' 
-                               AND ri.item_id = '{$item_id}' 
-                               AND r.status = 'Pending' LIMIT 1");
-        if ($db->num_rows($check) > 0) {
-            $item = find_by_id('items', $item_id);
-            $session->msg("d", "❌ You already have a pending request for item: {$item['name']}");
-            redirect('checkout.php', false);
-        }
-    }
+    if (empty($qtys)) { $session->msg("d", "❌ No items selected."); redirect('checkout.php', false); }
 
     $db->query("START TRANSACTION");
-    
-    // Get RIS number parts
-    $year_part = $_POST['ris_year'] ?? $current_year;
-    $middle_part = $_POST['ris_middle'] ?? '0000';
-    $employee_part = $_POST['ris_employee'] ?? '0000';
-    
-    // Build complete RIS number
-    $ris_no = $year_part . '-' . $middle_part . '-' . $employee_part;
 
-    $query_request = "INSERT INTO requests (requested_by, date, status, ris_no)
-                      VALUES ('{$rid}', NOW(), 'Pending', '{$ris_no}')";
-    if (!$db->query($query_request)) {
-        $db->query("ROLLBACK");
-        $session->msg("d", "❌ Failed to create request.");
-        redirect('checkout.php', false);
-    }
-
+    $ris_no = ($_POST['ris_year'] ?? $current_year) . '-' . ($_POST['ris_middle'] ?? '0000') . '-' . ($_POST['ris_employee'] ?? '0000');
+    $db->query("INSERT INTO requests (requested_by, date, status, ris_no) VALUES ('{$rid}', NOW(), 'Pending', '{$ris_no}')");
     $req_id = $db->insert_id();
     $all_ok = true;
 
-    // Handle each item
     foreach ($qtys as $item_id => $qty) {
-        $item_id = (int)$item_id;
-        $qty = (float)$qty;
-
+        $item_id = (int)$item_id; $qty = (float)$qty;
         $item = find_by_id('items', $item_id);
         if (!$item) continue;
-
-        // Get conversion data
-        $conversion = find_by_sql("SELECT conversion_rate, from_unit_id, to_unit_id 
-                                   FROM unit_conversions WHERE item_id = '{$item_id}' LIMIT 1");
+        $conversion = find_by_sql("SELECT conversion_rate, from_unit_id, to_unit_id FROM unit_conversions WHERE item_id = '{$item_id}' LIMIT 1");
         $conversion_rate = $conversion ? (float)$conversion[0]['conversion_rate'] : 1;
-        $from_unit_id = $conversion ? $conversion[0]['from_unit_id'] : $item['unit_id'];
-        $to_unit_id = $conversion ? $conversion[0]['to_unit_id'] : $item['unit_id'];
-
         $unit_name = get_unit_name($item['unit_id']);
         $base_unit_name = get_base_unit_name($item['base_unit_id']);
-
-        // Determine requested unit type
         $requested_unit_type = $_POST['unit_type'][$item_id] ?? $unit_name;
-        $is_requesting_base_unit = ($requested_unit_type === $base_unit_name);
+        $qty_to_deduct = ($requested_unit_type === $base_unit_name && $conversion_rate > 1) ? $qty / $conversion_rate : $qty;
 
-        // Calculate quantity to deduct from inventory
-        if ($is_requesting_base_unit && $conversion_rate > 1) {
-            // Requesting pieces but stored in boxes: convert to boxes
-            $qty_to_deduct = $qty / $conversion_rate;
-        } else {
-            // Same unit or no conversion needed
-            $qty_to_deduct = $qty;
-        }
-
-     // ✅ Check stock availability
-if ($qty_to_deduct > $item['quantity']) {
-    $all_ok = false;
-
-    // Determine which unit to display available stock in based on what was requested
-    if ($is_requesting_base_unit && $conversion_rate > 1) {
-        // User requested base units, so show available in both units for clarity
-        $available_main = floor($item['quantity']);
-        $remaining_decimal = $item['quantity'] - $available_main;
-        $available_base = (int)($remaining_decimal * $conversion_rate); // Cast to int to remove decimals
-
-        if ($available_main > 0 && $available_base > 0) {
-            $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
-        } elseif ($available_main > 0) {
-            $available_display = $available_main . " " . $unit_name;
-        } else {
-            $available_display = $available_base . " " . $base_unit_name;
-        }
-    } else {
-        // User requested main units or no conversion, show in main units
-        $available_main = floor($item['quantity']);
-        $remaining_decimal = $item['quantity'] - $available_main;
-        $available_base = (int)($remaining_decimal * $conversion_rate);
-        
-        if ($available_main > 0 && $available_base > 0) {
-            $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
-        } elseif ($available_main > 0) {
-            $available_display = $available_main . " " . $unit_name;
-        } else {
-            $available_display = $available_base . " " . $base_unit_name;
-        }
-    }
-
-    $session->msg("d", "❌ Not enough stock for item: {$item['name']} (Requested {$qty} {$requested_unit_type}, Available {$available_display})");
-    break;
-}
-
-        // Compute price
-        $unit_cost = (float)$item['unit_cost'];
-        $price = $unit_cost * $qty_to_deduct;
-
-        // Insert into request_items
-        $query_item = "INSERT INTO request_items (req_id, item_id, qty, unit, price, remarks) 
-                       VALUES ('{$req_id}', '{$item_id}', '{$qty}', '{$requested_unit_type}', '{$price}', '{$remarks}')";
-        if (!$db->query($query_item)) {
+        if ($qty_to_deduct > $item['quantity']) {
             $all_ok = false;
+            $session->msg("d", "❌ Not enough stock for item: {$item['name']}");
             break;
         }
 
-        // 🔻 Update stock
-        $db->query("UPDATE items SET quantity = quantity - {$qty_to_deduct} WHERE id = '{$item_id}'");
-
-        // Update yearly stock
-        $school_year = find_by_sql("SELECT id FROM school_years WHERE is_current = 1 LIMIT 1");
-        $school_year_id = $school_year ? $school_year[0]['id'] : 0;
-        $check_stock = $db->query("SELECT id FROM item_stocks_per_year 
-                                   WHERE item_id = '{$item_id}' AND school_year_id = '{$school_year_id}' LIMIT 1");
-        if ($db->num_rows($check_stock) > 0) {
-            $db->query("UPDATE item_stocks_per_year 
-                        SET stock = stock - {$qty_to_deduct}, updated_at = NOW()
-                        WHERE item_id = '{$item_id}' AND school_year_id = '{$school_year_id}'");
-        } else {
-            $db->query("INSERT INTO item_stocks_per_year (item_id, school_year_id, stock, updated_at)
-                        VALUES ('{$item_id}', '{$school_year_id}', 0, NOW())");
+        $price = (float)$item['unit_cost'] * $qty_to_deduct;
+        if (!$db->query("INSERT INTO request_items (req_id, item_id, qty, unit, price, remarks) VALUES ('{$req_id}', '{$item_id}', '{$qty}', '{$requested_unit_type}', '{$price}', '{$remarks}')")) {
+            $all_ok = false; break;
         }
+
+        $db->query("UPDATE items SET quantity = quantity - {$qty_to_deduct} WHERE id = '{$item_id}'");
     }
 
-    if ($all_ok) {
-        $db->query("COMMIT");
-        $session->msg("s", "✅ Request successfully submitted!");
-    } else {
-        $db->query("ROLLBACK");
-        $session->msg("d", "❌ Failed to submit request.");
-    }
+    if ($all_ok) { $db->query("COMMIT"); $session->msg("s", "✅ Request successfully submitted!"); }
+    else { $db->query("ROLLBACK"); $session->msg("d", "❌ Failed to submit request."); }
     redirect('checkout.php', false);
 }
 
-function get_category_name($cat_id)
-{
-    global $db;
-    $id = (int)$cat_id;
-    $result = $db->query("SELECT name FROM categories WHERE id = {$id} LIMIT 1");
-    if ($result && $row = $result->fetch_assoc()) {
-        return $row['name'];
-    }
-    return 'Unknown';
-}
-
-$all_items = find_by_sql("SELECT * FROM items WHERE archived = 0");
-
-function calculate_display_quantity($item)
-{
-    $quantity = (float)$item['quantity'];
-    
-    // If no conversion or conversion rate is 1, return simple quantity
-    if ($item['conversion_rate'] <= 1 || $item['main_unit_name'] === $item['base_unit_name']) {
-        return number_format($quantity, 2) . " " . $item['main_unit_name'];
-    }
-
-    // Calculate full main units and remaining base units
-    $full_main_units = floor($quantity);
-    $remaining_main_decimal = $quantity - $full_main_units;
-    $remaining_base_units = $remaining_main_decimal * $item['conversion_rate'];
-
-    // Format the display - ensure whole numbers for main units
-    if ($full_main_units > 0 && $remaining_base_units > 0) {
-        return $full_main_units . " " . $item['main_unit_name'] . " | " . 
-               (int)$remaining_base_units . " " . $item['base_unit_name'];
-    } elseif ($full_main_units > 0) {
-        return $full_main_units . " " . $item['main_unit_name'];
-    } else {
-        return (int)$remaining_base_units . " " . $item['base_unit_name'];
-    }
-}
-
-// Process items for display
-foreach ($all_items as &$item) {
-    $item['cat_name'] = get_category_name($item['categorie_id']);
-
-    // FIXED: Get main unit from units table and base unit from base_units table
-    $item['main_unit_name'] = get_unit_name($item['unit_id']);  // From units table
-    $item['base_unit_name'] = get_base_unit_name($item['base_unit_id']);  // From base_units table
-
-    // Get conversion data
-    $conversion = find_by_sql("SELECT conversion_rate, from_unit_id, to_unit_id 
-                              FROM unit_conversions WHERE item_id = '{$item['id']}' LIMIT 1");
-
-    if ($conversion && count($conversion) > 0) {
-        $item['conversion_rate'] = (float)$conversion[0]['conversion_rate'];
-        $item['from_unit_id'] = $conversion[0]['from_unit_id'];
-        $item['to_unit_id'] = $conversion[0]['to_unit_id'];
-
-        // FIXED: Use proper unit names from respective tables
-        $item['main_unit_name'] = get_unit_name($item['from_unit_id']);  // From units table
-        $item['base_unit_name'] = get_base_unit_name($item['to_unit_id']);  // From base_units table
-    } else {
-        $item['conversion_rate'] = 1;
-        // Keep the original values from items table
-        $item['main_unit_name'] = get_unit_name($item['unit_id']);
-        $item['base_unit_name'] = get_base_unit_name($item['base_unit_id']);
-    }
-
-    // Calculate display quantity using the FIXED function
-    $item['display_quantity'] = calculate_display_quantity($item);
-
-    // Determine stock status
-    $item['stock_status'] = 'good';
-    $item['stock_badge'] = '';
-    
-    if ($item['quantity'] == 0) {
-        $item['stock_status'] = 'out-of-stock';
-        $item['stock_badge'] = '<span class="badge bg-danger stock-badge"><i class="fas fa-times-circle"></i> Out of Stock</span>';
-    } elseif ($item['quantity'] <= 5) {
-        $item['stock_status'] = 'low-stock';
-        $item['stock_badge'] = '<span class="badge bg-warning text-dark stock-badge"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>';
-    } else {
-        $item['stock_status'] = 'good';
-        $item['stock_badge'] = '<span class="badge bg-success stock-badge"><i class="fas fa-check-circle"></i> In Stock</span>';
-    }
-}
-
+include_once('layouts/header.php');
 ?>
 
-<?php include_once('layouts/header.php'); ?>
 
 <style>
     /* Table column adjustments */
