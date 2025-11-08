@@ -221,9 +221,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $session->msg("s", "✅ Request successfully created! RIS No: {$ris_no}");
     redirect('requests_form.php', false);
 }
+ 
 
 // Fetch items and process for display
-$all_items = find_by_sql("SELECT * FROM items WHERE archived = 0");
+// $all_items = find_by_sql("SELECT * FROM items WHERE archived = 0");
+$all_items = find_by_sql("
+    SELECT 
+        i.*, 
+        c.name AS cat_name,
+        u.name AS main_unit_name,
+        bu.name AS base_unit_name,
+        COALESCE(uc.conversion_rate, 1) AS conversion_rate,
+        uc.from_unit_id,
+        uc.to_unit_id
+    FROM items i
+    LEFT JOIN categories c ON i.categorie_id = c.id
+    LEFT JOIN units u ON i.unit_id = u.id
+    LEFT JOIN base_units bu ON i.base_unit_id = bu.id
+    LEFT JOIN unit_conversions uc ON i.id = uc.item_id
+    WHERE i.archived = 0
+");
+
 
 // Process items for display
 foreach ($all_items as &$item) {
