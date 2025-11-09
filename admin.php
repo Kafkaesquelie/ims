@@ -1,8 +1,8 @@
 <?php
 require_once('includes/load.php');
 if (!$session->isUserLoggedIn()) {
-  header("Location: admin.php");
-  exit();
+    header("Location: admin.php");
+    exit();
 }
 $page_title = 'Admin Home Page';
 
@@ -12,7 +12,7 @@ page_require_level(1);
 $c_categorie  = count_by_id('categories');
 $c_item = find_by_sql("SELECT COUNT(*) AS total FROM items WHERE archived = 0")[0];
 $c_req        = count_requests();
-$c_smp       = count_by_id('semi_exp_prop');
+// $c_smp       = count_by_id('semi_exp_prop');
 $items_low    = find_lacking_items('10');
 $recent_items = find_recent_item_added('5');
 $items_req    = find_highest_requested_items('10');
@@ -22,69 +22,60 @@ $total_users = count_by_id('users');
 $low_stock_items = count_low_stock_items();
 
 // Function to calculate total inventory value including all tables
-function calculate_total_inventory_value() {
+function calculate_total_inventory_value()
+{
     global $db;
-    
+
+    // Single query approach using subqueries
+    $sql = "
+        SELECT 
+            IFNULL(SUM(i.quantity * i.unit_cost), 0) AS items_total,
+            IFNULL((SELECT SUM(unit_cost) FROM semi_exp_prop)) AS semi_total,
+            IFNULL((SELECT SUM(unit_cost) FROM properties)) AS prop_total
+        FROM items i
+        WHERE i.archived = 0
+    ";
+
+    $result = $db->query($sql);
     $total_value = 0;
-    
-    // Calculate value from items table
-    $items_sql = "SELECT SUM(quantity * unit_cost) as total_value FROM items WHERE archived = 0";
-    $items_result = $db->query($items_sql);
-    if ($items_result && $items_row = $items_result->fetch_assoc()) {
-        $total_value += $items_row['total_value'] ?? 0;
+
+    if ($result && $row = $result->fetch_assoc()) {
+        $total_value = $row['items_total'] + $row['semi_total'] + $row['prop_total'];
     }
-    
-    // Calculate value from semi_exp_prop table
-    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop" ;
-    $semi_result = $db->query($semi_sql);
-    if ($semi_result && $semi_row = $semi_result->fetch_assoc()) {
-        $total_value += $semi_row['total_value'] ?? 0;
-    }
-    
-    // Calculate value from properties table
-    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties" ;
-    $prop_result = $db->query($prop_sql);
-    if ($prop_result && $prop_row = $prop_result->fetch_assoc()) {
-        $total_value += $prop_row['total_value'] ?? 0;
-    }
-    
+
     return $total_value;
 }
 
+
 // Function to get detailed inventory breakdown
-function get_inventory_breakdown() {
+function get_inventory_breakdown()
+{
     global $db;
-    
+
+    $sql = "
+    SELECT 
+        IFNULL(SUM(i.quantity * i.unit_cost),0) AS items_total,
+        IFNULL((SELECT SUM(unit_cost) FROM semi_exp_prop),0) AS semi_total,
+        IFNULL((SELECT SUM(unit_cost) FROM properties),0) AS prop_total
+    FROM items i
+    WHERE i.archived = 0
+    ";
+
+    $result = $db->query($sql);
     $breakdown = [
         'items' => 0,
         'semi_expendable' => 0,
         'properties' => 0,
         'total' => 0
     ];
-    
-    // Items value
-    $items_sql = "SELECT SUM(quantity * unit_cost) as total_value FROM items WHERE archived = 0";
-    $items_result = $db->query($items_sql);
-    if ($items_result && $items_row = $items_result->fetch_assoc()) {
-        $breakdown['items'] = $items_row['total_value'] ?? 0;
+
+    if ($result && $row = $result->fetch_assoc()) {
+        $breakdown['items'] = $row['items_total'];
+        $breakdown['semi_expendable'] = $row['semi_total'];
+        $breakdown['properties'] = $row['prop_total'];
+        $breakdown['total'] = $breakdown['items'] + $breakdown['semi_expendable'] + $breakdown['properties'];
     }
-    
-    // Semi-expendable properties value
-    $semi_sql = "SELECT SUM(unit_cost) as total_value FROM semi_exp_prop ";
-    $semi_result = $db->query($semi_sql);
-    if ($semi_result && $semi_row = $semi_result->fetch_assoc()) {
-        $breakdown['semi_expendable'] = $semi_row['total_value'] ?? 0;
-    }
-    
-    // Properties value
-    $prop_sql = "SELECT SUM(unit_cost) as total_value FROM properties";
-    $prop_result = $db->query($prop_sql);
-    if ($prop_result && $prop_row = $prop_result->fetch_assoc()) {
-        $breakdown['properties'] = $prop_row['total_value'] ?? 0;
-    }
-    
-    $breakdown['total'] = $breakdown['items'] + $breakdown['semi_expendable'] + $breakdown['properties'];
-    
+
     return $breakdown;
 }
 
@@ -93,387 +84,420 @@ $low_count = $items_low->num_rows;
 $total_items_count = $c_item['total'];
 ?>
 
-<?php include_once('layouts/header.php'); ?>  
+<?php include_once('layouts/header.php'); ?>
 
 <style>
-:root {
-    --primary-green: #1e7e34;
-    --dark-green: #155724;
-    --light-green: #28a745;
-    --accent-green: #34ce57;
-    --primary-yellow: #ffc107;
-    --dark-yellow: #e0a800;
-    --light-yellow: #ffda6a;
-    --primary-red: #dc3545;
-    --primary-blue: #007bff;
-    --primary-purple: #6f42c1;
-    --card-bg: #ffffff;
-    --text-dark: #343a40;
-    --text-light: #6c757d;
-    --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    --hover-shadow: 0 8px 25px rgba(30, 126, 52, 0.15);
-}
+    :root {
+        --primary-green: #1e7e34;
+        --dark-green: #155724;
+        --light-green: #28a745;
+        --accent-green: #34ce57;
+        --primary-yellow: #ffc107;
+        --dark-yellow: #e0a800;
+        --light-yellow: #ffda6a;
+        --primary-red: #dc3545;
+        --primary-blue: #007bff;
+        --primary-purple: #6f42c1;
+        --card-bg: #ffffff;
+        --text-dark: #343a40;
+        --text-light: #6c757d;
+        --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        --hover-shadow: 0 8px 25px rgba(30, 126, 52, 0.15);
+    }
 
-/* Dashboard Header */
-.dashboard-header {
-    background: linear-gradient(135deg, var(--primary-green) 0%, var(--dark-green) 100%);
-    color: white;
-    padding: 1.5rem;
-    border-radius: 15px;
-    margin-bottom: 2rem;
-    box-shadow: var(--card-shadow);
-    border-left: 5px solid var(--primary-yellow);
-}
-
-.dashboard-header h5 {
-    margin: 0;
-    font-weight: 700;
-    font-size: 1.5rem;
-}
-
-.dashboard-header .subtitle {
-    opacity: 0.9;
-    font-size: 0.9rem;
-}
-
-/* Info Boxes - SMALLER SIZE */
-.info-box {
-    background: var(--card-bg);
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: var(--card-shadow);
-    border: none;
-    transition: all 0.3s ease;
-    height: 100%;
-    position: relative;
-    overflow: hidden;
-    border-top: 3px solid transparent;
-}
-
-.info-box:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--hover-shadow);
-}
-
-.info-box-icon {
-    width: 60px; /* Reduced from 80px */
-    height: 60px; /* Reduced from 80px */
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.8rem; /* Reduced from 2.2rem */
-    color: white;
-    transition: all 0.3s ease;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
-    position: relative;
-}
-
-.info-box:hover .info-box-icon {
-    transform: scale(1.05); /* Reduced from 1.1 */
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
-}
-
-.info-box-content {
-    flex: 1;
-    text-align: right;
-    position: relative;
-}
-
-.info-box-number {
-    font-size: 1.8rem; /* Reduced from 2.2rem */
-    font-weight: 800;
-    margin-bottom: 0.2rem;
-    line-height: 1;
-}
-
-.info-box-text {
-    color: var(--text-dark);
-    font-weight: 600;
-    font-size: 0.85rem; /* Reduced from 0.9rem */
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 0.2rem;
-}
-
-.info-box-description {
-    font-size: 0.75rem; /* Reduced from 0.8rem */
-    color: var(--text-light);
-    margin-top: 0.2rem;
-    line-height: 1.2;
-}
-
-/* Value Breakdown - Smaller */
-.value-breakdown {
-    font-size: 0.7rem; /* Reduced from 0.75rem */
-    color: var(--text-light);
-    margin-top: 0.3rem;
-    line-height: 1.2;
-}
-
-.value-breakdown div {
-    margin-bottom: 0.1rem;
-}
-
-/* Notification Badge - Smaller */
-.notification-badge {
-    position: absolute;
-    top: -6px; /* Reduced from -8px */
-    right: -6px; /* Reduced from -8px */
-    background: linear-gradient(135deg, var(--primary-red), #c82333);
-    color: white;
-    border-radius: 50%;
-    width: 20px; /* Reduced from 24px */
-    height: 20px; /* Reduced from 24px */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem; /* Reduced from 0.75rem */
-    font-weight: 700;
-    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
-    border: 2px solid white;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); } /* Reduced from 1.1 */
-    100% { transform: scale(1); }
-}
-
-/* Cards Styling */
-.card {
-    border: none;
-    border-radius: 15px;
-    box-shadow: var(--card-shadow);
-    transition: all 0.3s ease;
-    margin-bottom: 1.5rem;
-    border-top: 3px solid var(--primary-green);
-}
-
-.card:hover {
-    box-shadow: var(--hover-shadow);
-}
-
-.card-header {
-    background: linear-gradient(135deg, #f8fff9 0%, #e8f5e9 100%);
-    border-bottom: 2px solid #e8f5e9;
-    border-radius: 15px 15px 0 0 !important;
-    padding: 1rem 1.25rem; /* Reduced padding */
-}
-
-.card-header h3 {
-    margin: 0;
-    font-weight: 700;
-    color: var(--dark-green);
-    font-size: 1.1rem; /* Reduced from 1.2rem */
-}
-
-/* Badges */
-.badge {
-    font-weight: 600;
-    padding: 0.4rem 0.6rem; /* Reduced padding */
-    border-radius: 6px;
-    font-size: 0.8rem;
-}
-
-.badge-custom {
-    background: rgba(40, 167, 69, 0.15);
-    color: var(--dark-green);
-    border: 1px solid rgba(40, 167, 69, 0.3);
-}
-
-/* Tables */
-.table {
-    margin-bottom: 0;
-}
-
-.table th {
-    background: #005013ff;
-    color: white;
-    font-weight: 600;
-    border: none;
-    padding: 0.75rem; /* Reduced padding */
-    font-size: 0.9rem;
-}
-
-.table td {
-    padding: 0.75rem; /* Reduced padding */
-    vertical-align: middle;
-    border-color: #f1f3f4;
-    font-size: 0.9rem;
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(40, 167, 69, 0.05);
-}
-
-/* Status Badges */
-.badge.bg-danger {
-    background: linear-gradient(135deg, #dc3545, #c82333) !important;
-}
-
-.badge.bg-warning {
-    background: linear-gradient(135deg, var(--primary-yellow), var(--dark-yellow)) !important;
-    color: #000 !important;
-}
-
-.badge.bg-success {
-    background: linear-gradient(135deg, var(--light-green), var(--primary-green)) !important;
-}
-
-.badge.bg-info {
-    background: linear-gradient(135deg, var(--primary-blue), #0056b3) !important;
-}
-
-/* Empty States */
-.text-center.p-4 {
-    padding: 2rem !important; /* Reduced padding */
-}
-
-.text-center.p-4 i {
-    opacity: 0.5;
-    margin-bottom: 0.75rem;
-    font-size: 3rem; /* Reduced from default */
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
+    /* Dashboard Header */
     .dashboard-header {
-        padding: 1rem;
-        text-align: center;
+        background: linear-gradient(135deg, var(--primary-green) 0%, var(--dark-green) 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+        box-shadow: var(--card-shadow);
+        border-left: 5px solid var(--primary-yellow);
     }
-    
+
+    .dashboard-header h5 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 1.5rem;
+    }
+
+    .dashboard-header .subtitle {
+        opacity: 0.9;
+        font-size: 0.9rem;
+    }
+
+    /* Info Boxes - SMALLER SIZE */
     .info-box {
-        margin-bottom: 1rem;
-        padding: 0.75rem;
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: var(--card-shadow);
+        border: none;
+        transition: all 0.3s ease;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+        border-top: 3px solid transparent;
     }
-    
+
+    .info-box:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--hover-shadow);
+    }
+
     .info-box-icon {
-        width: 50px; /* Further reduced for mobile */
-        height: 50px;
-        font-size: 1.5rem;
+        width: 60px;
+        /* Reduced from 80px */
+        height: 60px;
+        /* Reduced from 80px */
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+        /* Reduced from 2.2rem */
+        color: white;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+        position: relative;
     }
-    
+
+    .info-box:hover .info-box-icon {
+        transform: scale(1.05);
+        /* Reduced from 1.1 */
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    }
+
+    .info-box-content {
+        flex: 1;
+        text-align: right;
+        position: relative;
+    }
+
     .info-box-number {
-        font-size: 1.5rem;
+        font-size: 1.8rem;
+        /* Reduced from 2.2rem */
+        font-weight: 800;
+        margin-bottom: 0.2rem;
+        line-height: 1;
     }
-    
+
     .info-box-text {
+        color: var(--text-dark);
+        font-weight: 600;
+        font-size: 0.85rem;
+        /* Reduced from 0.9rem */
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.2rem;
+    }
+
+    .info-box-description {
+        font-size: 0.75rem;
+        /* Reduced from 0.8rem */
+        color: var(--text-light);
+        margin-top: 0.2rem;
+        line-height: 1.2;
+    }
+
+    /* Value Breakdown - Smaller */
+    .value-breakdown {
+        font-size: 0.7rem;
+        /* Reduced from 0.75rem */
+        color: var(--text-light);
+        margin-top: 0.3rem;
+        line-height: 1.2;
+    }
+
+    .value-breakdown div {
+        margin-bottom: 0.1rem;
+    }
+
+    /* Notification Badge - Smaller */
+    .notification-badge {
+        position: absolute;
+        top: -6px;
+        /* Reduced from -8px */
+        right: -6px;
+        /* Reduced from -8px */
+        background: linear-gradient(135deg, var(--primary-red), #c82333);
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        /* Reduced from 24px */
+        height: 20px;
+        /* Reduced from 24px */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        /* Reduced from 0.75rem */
+        font-weight: 700;
+        box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4);
+        border: 2px solid white;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.05);
+        }
+
+        /* Reduced from 1.1 */
+        100% {
+            transform: scale(1);
+        }
+    }
+
+    /* Cards Styling */
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: var(--card-shadow);
+        transition: all 0.3s ease;
+        margin-bottom: 1.5rem;
+        border-top: 3px solid var(--primary-green);
+    }
+
+    .card:hover {
+        box-shadow: var(--hover-shadow);
+    }
+
+    .card-header {
+        background: linear-gradient(135deg, #f8fff9 0%, #e8f5e9 100%);
+        border-bottom: 2px solid #e8f5e9;
+        border-radius: 15px 15px 0 0 !important;
+        padding: 1rem 1.25rem;
+        /* Reduced padding */
+    }
+
+    .card-header h3 {
+        margin: 0;
+        font-weight: 700;
+        color: var(--dark-green);
+        font-size: 1.1rem;
+        /* Reduced from 1.2rem */
+    }
+
+    /* Badges */
+    .badge {
+        font-weight: 600;
+        padding: 0.4rem 0.6rem;
+        /* Reduced padding */
+        border-radius: 6px;
         font-size: 0.8rem;
     }
-    
-    .notification-badge {
-        width: 18px;
-        height: 18px;
-        font-size: 0.65rem;
-        top: -5px;
-        right: -5px;
+
+    .badge-custom {
+        background: rgba(40, 167, 69, 0.15);
+        color: var(--dark-green);
+        border: 1px solid rgba(40, 167, 69, 0.3);
     }
-    
-    .card-header {
-        padding: 0.75rem 1rem;
+
+    /* Tables */
+    .table {
+        margin-bottom: 0;
     }
-    
-    .card-header h3 {
-        font-size: 1rem;
+
+    .table th {
+        background: #005013ff;
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 0.75rem;
+        /* Reduced padding */
+        font-size: 0.9rem;
     }
-}
 
-/* Animation for cards */
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
+    .table td {
+        padding: 0.75rem;
+        /* Reduced padding */
+        vertical-align: middle;
+        border-color: #f1f3f4;
+        font-size: 0.9rem;
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
+
+    .table-hover tbody tr:hover {
+        background-color: rgba(40, 167, 69, 0.05);
     }
-}
 
-.card, .info-box {
-    animation: fadeInUp 0.6s ease forwards;
-}
+    /* Status Badges */
+    .badge.bg-danger {
+        background: linear-gradient(135deg, #dc3545, #c82333) !important;
+    }
 
-/* Custom scrollbar for tables */
-.table-responsive::-webkit-scrollbar {
-    height: 5px;
-}
+    .badge.bg-warning {
+        background: linear-gradient(135deg, var(--primary-yellow), var(--dark-yellow)) !important;
+        color: #000 !important;
+    }
 
-.table-responsive::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 8px;
-}
+    .badge.bg-success {
+        background: linear-gradient(135deg, var(--light-green), var(--primary-green)) !important;
+    }
 
-.table-responsive::-webkit-scrollbar-thumb {
-    background: var(--primary-green);
-    border-radius: 8px;
-}
+    .badge.bg-info {
+        background: linear-gradient(135deg, var(--primary-blue), #0056b3) !important;
+    }
 
-/* Image styling */
-.img-avatar {
-    border: 2px solid #e9ecef;
-    transition: all 0.3s ease;
-    width: 40px !important; /* Smaller images */
-    height: 40px !important;
-}
+    /* Empty States */
+    .text-center.p-4 {
+        padding: 2rem !important;
+        /* Reduced padding */
+    }
 
-.img-avatar:hover {
-    border-color: var(--primary-green);
-}
+    .text-center.p-4 i {
+        opacity: 0.5;
+        margin-bottom: 0.75rem;
+        font-size: 3rem;
+        /* Reduced from default */
+    }
 
-/* Card tools */
-.card-tools .btn {
-    border-radius: 6px;
-    transition: all 0.3s ease;
-    color: var(--primary-green);
-    padding: 0.25rem 0.5rem;
-    font-size: 0.8rem;
-}
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .dashboard-header {
+            padding: 1rem;
+            text-align: center;
+        }
 
-.card-tools .btn:hover {
-    background-color: rgba(40, 167, 69, 0.1);
-}
+        .info-box {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+        }
 
-/* Color accents */
-.yellow-accent {
-    color: var(--primary-yellow);
-}
+        .info-box-icon {
+            width: 50px;
+            /* Further reduced for mobile */
+            height: 50px;
+            font-size: 1.5rem;
+        }
 
-.green-accent {
-    color: var(--primary-green);
-}
+        .info-box-number {
+            font-size: 1.5rem;
+        }
 
-.red-accent {
-    color: var(--primary-red);
-}
+        .info-box-text {
+            font-size: 0.8rem;
+        }
 
-.blue-accent {
-    color: var(--primary-blue);
-}
+        .notification-badge {
+            width: 18px;
+            height: 18px;
+            font-size: 0.65rem;
+            top: -5px;
+            right: -5px;
+        }
 
-.purple-accent {
-    color: var(--primary-purple);
-}
+        .card-header {
+            padding: 0.75rem 1rem;
+        }
 
-/* Trend indicators */
-.trend-up {
-    color: var(--light-green);
-}
+        .card-header h3 {
+            font-size: 1rem;
+        }
+    }
 
-.trend-down {
-    color: var(--primary-red);
-}
+    /* Animation for cards */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
 
-.trend-neutral {
-    color: var(--text-light);
-}
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 
-/* Smaller spacing for info boxes row */
-.info-boxes-row {
-    margin-bottom: 1.5rem;
-}
+    .card,
+    .info-box {
+        animation: fadeInUp 0.6s ease forwards;
+    }
+
+    /* Custom scrollbar for tables */
+    .table-responsive::-webkit-scrollbar {
+        height: 5px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: var(--primary-green);
+        border-radius: 8px;
+    }
+
+    /* Image styling */
+    .img-avatar {
+        border: 2px solid #e9ecef;
+        transition: all 0.3s ease;
+        width: 40px !important;
+        /* Smaller images */
+        height: 40px !important;
+    }
+
+    .img-avatar:hover {
+        border-color: var(--primary-green);
+    }
+
+    /* Card tools */
+    .card-tools .btn {
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        color: var(--primary-green);
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    .card-tools .btn:hover {
+        background-color: rgba(40, 167, 69, 0.1);
+    }
+
+    /* Color accents */
+    .yellow-accent {
+        color: var(--primary-yellow);
+    }
+
+    .green-accent {
+        color: var(--primary-green);
+    }
+
+    .red-accent {
+        color: var(--primary-red);
+    }
+
+    .blue-accent {
+        color: var(--primary-blue);
+    }
+
+    .purple-accent {
+        color: var(--primary-purple);
+    }
+
+    /* Trend indicators */
+    .trend-up {
+        color: var(--light-green);
+    }
+
+    .trend-down {
+        color: var(--primary-red);
+    }
+
+    .trend-neutral {
+        color: var(--text-light);
+    }
+
+    /* Smaller spacing for info boxes row */
+    .info-boxes-row {
+        margin-bottom: 1.5rem;
+    }
 </style>
 
 <!-- Dashboard Header -->
@@ -692,12 +716,12 @@ $total_items_count = $c_item['total'];
                                             <div class="d-flex align-items-center">
                                                 <?php if ($items['media_id'] === '0'): ?>
                                                     <img class="img-avatar img-circle me-3"
-                                                         src="uploads/items/no_image.png"
-                                                         alt="" style="width:45px; height:45px;">
+                                                        src="uploads/items/no_image.png"
+                                                        alt="" style="width:45px; height:45px;">
                                                 <?php else: ?>
                                                     <img class="img-avatar img-circle me-3"
-                                                         src="uploads/items/<?php echo $items['image']; ?>"
-                                                         alt="" style="width:45px; height:45px;">
+                                                        src="uploads/items/<?php echo $items['image']; ?>"
+                                                        alt="" style="width:45px; height:45px;">
                                                 <?php endif; ?>
                                                 <div>
                                                     <div class="fw-bold"><strong><?php echo remove_junk(first_character($items['name'])); ?></strong></div>
@@ -730,6 +754,8 @@ $total_items_count = $c_item['total'];
     </div>
 </div>
 
+
+
 <?php include_once('layouts/footer.php'); ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
@@ -737,13 +763,16 @@ $total_items_count = $c_item['total'];
 
 <script>
     $(document).ready(function() {
-      var table = $('#lowStockTable').DataTable({
-        pageLength: 5,
-        lengthMenu: [5, 10, 25, 50],
-        ordering: true,
-        searching: false,
-        autoWidth: false,
-        fixedColumns: true
-      });
-    }); 
+        var table = $('#lowStockTable').DataTable({
+            pageLength: 5,
+            lengthMenu: [5, 10, 25, 50],
+            ordering: true,
+            searching: false,
+            autoWidth: false,
+            fixedColumns: true,
+            deferRender: true,
+            processing: true,
+            serverSide: false
+        });
+    });
 </script>
