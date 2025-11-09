@@ -371,14 +371,18 @@ foreach ($all_items as &$item) {
         }
     }
 
-    // stock status badge
-    if ($quantity == 0) {
-        $item['stock_badge'] = '<span class="badge bg-danger">Out of Stock</span>';
-    } elseif ($quantity <= 5) {
-        $item['stock_badge'] = '<span class="badge bg-warning text-dark">Low Stock</span>';
-    } else {
-        $item['stock_badge'] = '<span class="badge bg-success">In Stock</span>';
-    }
+   // stock status badge
+if ($quantity == 0) {
+    $item['stock_badge'] = '<span class="badge bg-danger">Out of Stock</span>';
+    $item['stock_status'] = 'Out of Stock';
+} elseif ($quantity <= 5) {
+    $item['stock_badge'] = '<span class="badge bg-warning text-dark">Low Stock</span>';
+    $item['stock_status'] = 'Low Stock';
+} else {
+    $item['stock_badge'] = '<span class="badge bg-success">In Stock</span>';
+    $item['stock_status'] = 'In Stock';
+}
+
 }
 
 

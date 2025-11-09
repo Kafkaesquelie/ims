@@ -820,6 +820,61 @@ function find_all_ics_transactions() {
     return find_by_sql($sql);
 }
 
+function find_all_par_documents() {
+    global $db;
+    $sql = "
+        SELECT 
+            t.par_no,
+            CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
+            o.office_name AS department,
+            e.image,
+            MAX(t.transaction_date) AS transaction_date,
+            COUNT(t.id) AS total_items,
+            SUM(t.quantity) AS total_quantity,
+            SUM(COALESCE(ri.qty,0)) AS total_returned_qty,
+            CASE 
+                WHEN SUM(COALESCE(ri.qty,0)) = 0 THEN 'Issued'
+                WHEN SUM(COALESCE(ri.qty,0)) < SUM(t.quantity) THEN 'Partially Returned'
+                ELSE 'Returned'
+            END AS status
+        FROM transactions t
+        LEFT JOIN return_items ri ON t.id = ri.transaction_id
+        LEFT JOIN employees e ON t.employee_id = e.id
+        LEFT JOIN offices o ON e.office = o.id
+        WHERE t.par_no IS NOT NULL
+        GROUP BY t.par_no, e.first_name, e.middle_name, e.last_name, o.office_name, e.image
+        ORDER BY transaction_date DESC
+    ";
+    return find_by_sql($sql);
+}
+
+function find_all_ics_documents() {
+    global $db;
+    $sql = "
+        SELECT 
+            t.ics_no,
+            CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
+            o.office_name AS department,
+            e.image,
+            MAX(t.transaction_date) AS transaction_date,
+            COUNT(t.id) AS total_items,
+            SUM(t.quantity) AS total_quantity,
+            SUM(COALESCE(ri.qty,0)) AS total_returned_qty,
+            CASE 
+                WHEN SUM(COALESCE(ri.qty,0)) = 0 THEN 'Issued'
+                WHEN SUM(COALESCE(ri.qty,0)) < SUM(t.quantity) THEN 'Partially Returned'
+                ELSE 'Returned'
+            END AS status
+        FROM transactions t
+        LEFT JOIN return_items ri ON t.id = ri.transaction_id
+        LEFT JOIN employees e ON t.employee_id = e.id
+        LEFT JOIN offices o ON e.office = o.id
+        WHERE t.ics_no IS NOT NULL AND t.ics_no != ''
+        GROUP BY t.ics_no, e.first_name, e.middle_name, e.last_name, o.office_name, e.image
+        ORDER BY transaction_date DESC
+    ";
+    return find_by_sql($sql);
+}
 
 function count_pending_requests() {
     global $db;
