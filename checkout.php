@@ -170,12 +170,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $db->query("START TRANSACTION");
-    
+
     // Get RIS number parts
     $year_part = $_POST['ris_year'] ?? $current_year;
     $middle_part = $_POST['ris_middle'] ?? '0000';
     $employee_part = $_POST['ris_employee'] ?? '0000';
-    
+
     // Build complete RIS number
     $ris_no = $year_part . '-' . $middle_part . '-' . $employee_part;
 
@@ -221,42 +221,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $qty_to_deduct = $qty;
         }
 
-     // ✅ Check stock availability
-if ($qty_to_deduct > $item['quantity']) {
-    $all_ok = false;
+        // ✅ Check stock availability
+        if ($qty_to_deduct > $item['quantity']) {
+            $all_ok = false;
 
-    // Determine which unit to display available stock in based on what was requested
-    if ($is_requesting_base_unit && $conversion_rate > 1) {
-        // User requested base units, so show available in both units for clarity
-        $available_main = floor($item['quantity']);
-        $remaining_decimal = $item['quantity'] - $available_main;
-        $available_base = (int)($remaining_decimal * $conversion_rate); // Cast to int to remove decimals
+            // Determine which unit to display available stock in based on what was requested
+            if ($is_requesting_base_unit && $conversion_rate > 1) {
+                // User requested base units, so show available in both units for clarity
+                $available_main = floor($item['quantity']);
+                $remaining_decimal = $item['quantity'] - $available_main;
+                $available_base = (int)($remaining_decimal * $conversion_rate); // Cast to int to remove decimals
 
-        if ($available_main > 0 && $available_base > 0) {
-            $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
-        } elseif ($available_main > 0) {
-            $available_display = $available_main . " " . $unit_name;
-        } else {
-            $available_display = $available_base . " " . $base_unit_name;
+                if ($available_main > 0 && $available_base > 0) {
+                    $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
+                } elseif ($available_main > 0) {
+                    $available_display = $available_main . " " . $unit_name;
+                } else {
+                    $available_display = $available_base . " " . $base_unit_name;
+                }
+            } else {
+                // User requested main units or no conversion, show in main units
+                $available_main = floor($item['quantity']);
+                $remaining_decimal = $item['quantity'] - $available_main;
+                $available_base = (int)($remaining_decimal * $conversion_rate);
+
+                if ($available_main > 0 && $available_base > 0) {
+                    $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
+                } elseif ($available_main > 0) {
+                    $available_display = $available_main . " " . $unit_name;
+                } else {
+                    $available_display = $available_base . " " . $base_unit_name;
+                }
+            }
+
+            $session->msg("d", "❌ Not enough stock for item: {$item['name']} (Requested {$qty} {$requested_unit_type}, Available {$available_display})");
+            break;
         }
-    } else {
-        // User requested main units or no conversion, show in main units
-        $available_main = floor($item['quantity']);
-        $remaining_decimal = $item['quantity'] - $available_main;
-        $available_base = (int)($remaining_decimal * $conversion_rate);
-        
-        if ($available_main > 0 && $available_base > 0) {
-            $available_display = $available_main . " " . $unit_name . " | " . $available_base . " " . $base_unit_name;
-        } elseif ($available_main > 0) {
-            $available_display = $available_main . " " . $unit_name;
-        } else {
-            $available_display = $available_base . " " . $base_unit_name;
-        }
-    }
-
-    $session->msg("d", "❌ Not enough stock for item: {$item['name']} (Requested {$qty} {$requested_unit_type}, Available {$available_display})");
-    break;
-}
 
         // Compute price
         $unit_cost = (float)$item['unit_cost'];
@@ -309,12 +309,28 @@ function get_category_name($cat_id)
     return 'Unknown';
 }
 
-$all_items = find_by_sql("SELECT * FROM items WHERE archived = 0");
+$all_items = find_by_sql("
+    SELECT 
+        i.*, 
+        c.name AS cat_name,
+        u.name AS main_unit_name,
+        bu.name AS base_unit_name,
+        COALESCE(uc.conversion_rate, 1) AS conversion_rate,
+        uc.from_unit_id,
+        uc.to_unit_id
+    FROM items i
+    LEFT JOIN categories c ON i.categorie_id = c.id
+    LEFT JOIN units u ON i.unit_id = u.id
+    LEFT JOIN base_units bu ON i.base_unit_id = bu.id
+    LEFT JOIN unit_conversions uc ON i.id = uc.item_id
+    WHERE i.archived = 0
+");
+
 
 function calculate_display_quantity($item)
 {
     $quantity = (float)$item['quantity'];
-    
+
     // If no conversion or conversion rate is 1, return simple quantity
     if ($item['conversion_rate'] <= 1 || $item['main_unit_name'] === $item['base_unit_name']) {
         return number_format($quantity, 2) . " " . $item['main_unit_name'];
@@ -327,8 +343,8 @@ function calculate_display_quantity($item)
 
     // Format the display - ensure whole numbers for main units
     if ($full_main_units > 0 && $remaining_base_units > 0) {
-        return $full_main_units . " " . $item['main_unit_name'] . " | " . 
-               (int)$remaining_base_units . " " . $item['base_unit_name'];
+        return $full_main_units . " " . $item['main_unit_name'] . " | " .
+            (int)$remaining_base_units . " " . $item['base_unit_name'];
     } elseif ($full_main_units > 0) {
         return $full_main_units . " " . $item['main_unit_name'];
     } else {
@@ -338,49 +354,33 @@ function calculate_display_quantity($item)
 
 // Process items for display
 foreach ($all_items as &$item) {
-    $item['cat_name'] = get_category_name($item['categorie_id']);
+    $quantity = (float)$item['quantity'];
+    $conversion_rate = (float)$item['conversion_rate'];
 
-    // FIXED: Get main unit from units table and base unit from base_units table
-    $item['main_unit_name'] = get_unit_name($item['unit_id']);  // From units table
-    $item['base_unit_name'] = get_base_unit_name($item['base_unit_id']);  // From base_units table
-
-    // Get conversion data
-    $conversion = find_by_sql("SELECT conversion_rate, from_unit_id, to_unit_id 
-                              FROM unit_conversions WHERE item_id = '{$item['id']}' LIMIT 1");
-
-    if ($conversion && count($conversion) > 0) {
-        $item['conversion_rate'] = (float)$conversion[0]['conversion_rate'];
-        $item['from_unit_id'] = $conversion[0]['from_unit_id'];
-        $item['to_unit_id'] = $conversion[0]['to_unit_id'];
-
-        // FIXED: Use proper unit names from respective tables
-        $item['main_unit_name'] = get_unit_name($item['from_unit_id']);  // From units table
-        $item['base_unit_name'] = get_base_unit_name($item['to_unit_id']);  // From base_units table
+    if ($conversion_rate <= 1 || $item['main_unit_name'] === $item['base_unit_name']) {
+        $item['display_quantity'] = number_format($quantity, 2) . " " . $item['main_unit_name'];
     } else {
-        $item['conversion_rate'] = 1;
-        // Keep the original values from items table
-        $item['main_unit_name'] = get_unit_name($item['unit_id']);
-        $item['base_unit_name'] = get_base_unit_name($item['base_unit_id']);
+        $full_main = floor($quantity);
+        $remaining_base = ($quantity - $full_main) * $conversion_rate;
+        if ($full_main > 0 && $remaining_base > 0) {
+            $item['display_quantity'] = "{$full_main} {$item['main_unit_name']} | " . (int)$remaining_base . " {$item['base_unit_name']}";
+        } elseif ($full_main > 0) {
+            $item['display_quantity'] = "{$full_main} {$item['main_unit_name']}";
+        } else {
+            $item['display_quantity'] = (int)$remaining_base . " {$item['base_unit_name']}";
+        }
     }
 
-    // Calculate display quantity using the FIXED function
-    $item['display_quantity'] = calculate_display_quantity($item);
-
-    // Determine stock status
-    $item['stock_status'] = 'good';
-    $item['stock_badge'] = '';
-    
-    if ($item['quantity'] == 0) {
-        $item['stock_status'] = 'out-of-stock';
-        $item['stock_badge'] = '<span class="badge bg-danger stock-badge"><i class="fas fa-times-circle"></i> Out of Stock</span>';
-    } elseif ($item['quantity'] <= 5) {
-        $item['stock_status'] = 'low-stock';
-        $item['stock_badge'] = '<span class="badge bg-warning text-dark stock-badge"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>';
+    // stock status badge
+    if ($quantity == 0) {
+        $item['stock_badge'] = '<span class="badge bg-danger">Out of Stock</span>';
+    } elseif ($quantity <= 5) {
+        $item['stock_badge'] = '<span class="badge bg-warning text-dark">Low Stock</span>';
     } else {
-        $item['stock_status'] = 'good';
-        $item['stock_badge'] = '<span class="badge bg-success stock-badge"><i class="fas fa-check-circle"></i> In Stock</span>';
+        $item['stock_badge'] = '<span class="badge bg-success">In Stock</span>';
     }
 }
+
 
 ?>
 
@@ -617,7 +617,6 @@ foreach ($all_items as &$item) {
         background-color: white;
         border-color: #006205;
     }
-    
 </style>
 
 <!-- Header Card -->
@@ -693,10 +692,10 @@ foreach ($all_items as &$item) {
                                 <?= $current_year ?>
                             </div>
                             <span class="ris-separator">-</span>
-                            
+
                             <!-- Middle Part (Editable) -->
-                            <input type="text" 
-                                name="ris_middle_input" 
+                            <input type="text"
+                                name="ris_middle_input"
                                 id="risMiddleInput"
                                 class="form-control ris-input ris-part editable border-success"
                                 maxlength="4"
@@ -704,7 +703,7 @@ foreach ($all_items as &$item) {
                                 style="width: 80px;"
                                 required>
                             <span class="ris-separator">-</span>
-                            
+
                             <!-- Employee Part (Auto-filled) -->
                             <div class="ris-part" id="risEmployeeDisplay">
                                 0000
@@ -743,12 +742,12 @@ foreach ($all_items as &$item) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($all_items as $it): 
+                            <?php foreach ($all_items as $it):
                                 $row_class = '';
                                 $indicator_class = '';
                                 $indicator_text = '';
-                                
-                                switch($it['stock_status']) {
+
+                                switch ($it['stock_status']) {
                                     case 'out-of-stock':
                                         $row_class = 'table-out-of-stock stock-danger';
                                         $indicator_class = 'indicator-out';
@@ -898,6 +897,9 @@ foreach ($all_items as &$item) {
             searching: true,
             autoWidth: false,
             fixedColumns: true,
+            deferRender: true,
+            scrollY: 400,
+            scroller: true,
             language: {
                 search: "Search items:",
                 lengthMenu: "Show _MENU_ entries",
@@ -913,17 +915,17 @@ foreach ($all_items as &$item) {
         const sel = document.getElementById('requestorSelect');
         const selectedOption = sel.options[sel.selectedIndex];
         const employeeId = selectedOption.getAttribute('data-employee-id') || '0000';
-        
+
         // Update employee part of RIS number
         document.getElementById('risEmployeeDisplay').textContent = employeeId.padStart(4, '0');
         document.getElementById('risEmployee').value = employeeId.padStart(4, '0');
-        
+
         // Update position field
         const [source, idStr] = sel.value.split('_');
         const id = parseInt(idStr || '0', 10);
         const found = requestors.find(r => r.source === source && parseInt(r.id, 10) === id);
         document.getElementById('positionField').value = found ? (found.position || '') : '';
-        
+
         // Trigger RIS validation when requestor changes
         validateRIS();
     }
@@ -948,7 +950,7 @@ foreach ($all_items as &$item) {
                     const availableMain = parseFloat(available) || 0;
                     const fullMainUnits = Math.floor(availableMain);
                     const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                    
+
                     let availableText = '';
                     if (fullMainUnits > 0 && remainingBaseUnits > 0) {
                         availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
@@ -957,11 +959,11 @@ foreach ($all_items as &$item) {
                     } else {
                         availableText = `${remainingBaseUnits} ${baseUnit}`;
                     }
-                    
+
                     qtyInput.max = Math.floor(availableMain * conversion);
                     qtyInput.step = "1"; // Whole numbers only for base units
                     qtyInput.title = `Available: ${availableText}`;
-                    
+
                     // Auto-adjust quantity if needed
                     const currentValue = parseInt(qtyInput.value) || 0;
                     if (currentValue > qtyInput.max) {
@@ -972,7 +974,7 @@ foreach ($all_items as &$item) {
                     const availableMain = parseFloat(available) || 0;
                     const fullMainUnits = Math.floor(availableMain);
                     const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                    
+
                     let availableText = '';
                     if (fullMainUnits > 0 && remainingBaseUnits > 0) {
                         availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
@@ -981,11 +983,11 @@ foreach ($all_items as &$item) {
                     } else {
                         availableText = `${remainingBaseUnits} ${baseUnit}`;
                     }
-                    
+
                     qtyInput.max = availableMain;
                     qtyInput.step = "1"; // Whole numbers only for main units
                     qtyInput.title = `Available: ${availableText}`;
-                    
+
                     // Auto-adjust quantity if needed
                     const currentValue = parseInt(qtyInput.value) || 0;
                     if (currentValue > qtyInput.max) {
@@ -1008,19 +1010,19 @@ foreach ($all_items as &$item) {
                 if (!Number.isInteger(value)) {
                     this.value = Math.floor(value);
                 }
-                
+
                 // Ensure value doesn't exceed max
                 const max = parseFloat(this.max) || 0;
                 if (value > max) {
                     this.value = max;
                 }
-                
+
                 // Ensure value is not negative
                 if (value < 0) {
                     this.value = 0;
                 }
             });
-            
+
             // Also handle blur event to clean up any invalid input
             input.addEventListener('blur', function() {
                 const value = parseFloat(this.value) || 0;
@@ -1034,15 +1036,15 @@ foreach ($all_items as &$item) {
         document.getElementById('risMiddleInput').addEventListener('input', function() {
             // Remove any non-digit characters
             this.value = this.value.replace(/\D/g, '');
-            
+
             // Limit to 4 digits
             if (this.value.length > 4) {
                 this.value = this.value.slice(0, 4);
             }
-            
+
             // Update hidden field
             document.getElementById('risMiddle').value = this.value.padStart(4, '0');
-            
+
             // Real-time validation
             validateRIS();
         });
@@ -1089,9 +1091,10 @@ foreach ($all_items as &$item) {
 
     // Real-time RIS validation function
     let risValidationTimeout;
+
     function validateRIS() {
         clearTimeout(risValidationTimeout);
-        
+
         risValidationTimeout = setTimeout(() => {
             const risMiddle = document.getElementById('risMiddleInput').value.trim();
             const reviewBtn = document.getElementById('reviewBtn');
@@ -1226,7 +1229,7 @@ foreach ($all_items as &$item) {
             const available = row.cells[2].innerText.trim();
             const unitSelect = row.querySelector('select[name^="unit_type"]');
             const selectedUnit = unitSelect.selectedOptions[0].text;
-            
+
             // Get stock status from the row class
             let stockStatus = 'In Stock';
             let statusClass = 'text-success';
@@ -1374,24 +1377,24 @@ foreach ($all_items as &$item) {
     // RIS duplicate checking function
     function checkRISDuplicate(fullRIS, callback) {
         fetch('check_ris_duplicate.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'ris_no=' + encodeURIComponent(fullRIS)
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            callback(data.exists || false);
-        })
-        .catch(error => {
-            console.error('Error checking RIS number:', error);
-            callback(false); // Continue on error
-        });
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'ris_no=' + encodeURIComponent(fullRIS)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                callback(data.exists || false);
+            })
+            .catch(error => {
+                console.error('Error checking RIS number:', error);
+                callback(false); // Continue on error
+            });
     }
 </script>
