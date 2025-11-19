@@ -308,8 +308,8 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         font-weight: 600;
         transition: all 0.3s ease;
         border: none;
-        padding: 1.5rem 0.5rem;
-        height: 100%;
+        padding: 0.5rem 0.5rem;
+        height: 80%;
     }
 
     .quick-actions .btn:hover {
@@ -344,8 +344,8 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         }
 
         .quick-actions .btn {
-            padding: 1rem 0.5rem;
-            margin-bottom: 1rem;
+            padding: 0.5rem 0.5rem;
+            margin-bottom: 0.5rem;
         }
     }
 
@@ -795,7 +795,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
 </div>
 
 <!-- Quick Actions - Super Admin Style -->
-<div class="row mb-4">
+<!-- <div class="row mb-4">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
@@ -806,26 +806,26 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
             </div>
             <div class="card-body">
                 <div class="row quick-actions">
-                    <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="requests_form.php" class="btn btn-success w-100 py-3">
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="requests_form.php" class="btn btn-success w-100 py-2">
                             <i class="fa-solid fa-pen-to-square fa-2x mb-2"></i><br>
                             Submit New Request
                         </a>
                     </div>
-                    <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="user_logs.php" class="btn btn-warning w-100 py-3 text-dark">
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="user_logs.php" class="btn btn-warning w-100 py-2 text-dark">
                             <i class="fa-solid fa-list fa-2x mb-2"></i><br>
                             View Transactions
                         </a>
                     </div>
-                    <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="ICS.PHP" class="btn btn-info w-100 py-3">
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="ICS.PHP" class="btn btn-info w-100 py-2">
                             <i class="fa-solid fa-file-lines fa-2x mb-2"></i><br>
                             ICS Documents
                         </a>
                     </div>
-                    <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="par.php" class="btn btn-secondary w-100 py-3">
+                    <div class="col-md-3 col-sm-6 mb-2">
+                        <a href="par.php" class="btn btn-secondary w-100 py-2">
                             <i class="fa-solid fa-handshake fa-2x mb-2"></i><br>
                             PAR Documents
                         </a>
@@ -834,7 +834,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
             </div>
         </div>
     </div>
-</div>
+</div> -->
 
 <!-- Pending Requests DataTable -->
 <div class="row">

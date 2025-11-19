@@ -898,7 +898,7 @@ if ($quantity == 0) {
             pageLength: 5,
             lengthMenu: [5, 10, 25, 50],
             ordering: true,
-            searching: true,
+            searching: false,
             autoWidth: false,
             fixedColumns: true,
             deferRender: true,

@@ -87,6 +87,9 @@ $serial_no_prefix = $year . '-' . $month . '-';
     width: 100%;
     box-sizing: border-box;
     text-align: center;
+} 
+:root{
+    --border-radius: 12px;
 }
 
 .form-group {
@@ -197,14 +200,20 @@ $serial_no_prefix = $year . '-' . $month . '-';
     gap: 10px;
     margin-top: 10px;
 }
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 2rem;
+}
 .card-header-custom {
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    background-color: var(--success);
     color: white;
     border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
     padding: 1.5rem;
     border: none;
 }
-
 .card-header-custom h5 {
     margin: 0;
     font-weight: 700;
@@ -213,10 +222,13 @@ $serial_no_prefix = $year . '-' . $month . '-';
 }
 </style>
 
+<div class="container-fluid">
+
      <div class="card">
         <div class="card-header-custom">
             <h5>REPORTS OF SUPPLIES AND MATERIALS ISSUED (RSMI)</h5>
         </div>
+    </div>
 
     <!-- Tabs Navigation -->
     <div class="tabs-container">
@@ -233,7 +245,6 @@ $serial_no_prefix = $year . '-' . $month . '-';
             </li>
         </ul>
     </div>
-</div>
 
 <div class="row">
     <div class="col-md-8" id="printable-area">
@@ -477,6 +488,7 @@ $serial_no_prefix = $year . '-' . $month . '-';
           
         </div>
     </div>
+</div>
 </div>
 
 

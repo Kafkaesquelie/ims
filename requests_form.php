@@ -45,7 +45,7 @@ function calculate_display_quantity($item)
     
     // If no conversion or conversion rate is 1, return simple quantity
     if ($item['conversion_rate'] <= 1 || $item['main_unit_name'] === $item['base_unit_name']) {
-        return number_format($quantity, 2) . " " . $item['main_unit_name'];
+        return ($quantity) . " " . $item['main_unit_name'];
     }
 
     // Calculate full main units and remaining base units

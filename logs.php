@@ -11,7 +11,7 @@ page_require_level(1);
 $requests = find_all_req_logs();
 
 // Fetch and group ICS transactions by ICS number with proper status calculation
-$ics_grouped = find_all_ics_documents();
+// $ics_grouped = find_all_ics_documents();
 $ics_transactions = find_all_ics_transactions();
 foreach ($ics_transactions as $ics) {
     $ics_no = $ics['ics_no'];
@@ -40,7 +40,7 @@ foreach ($ics_grouped as &$ics_doc) {
 }
 
 // Fetch and group PAR transactions by PAR number with proper status calculation
-$par_grouped = find_all_par_documents();
+// $par_grouped = find_all_par_documents();
 $par_transactions = find_all_par_transactions();
 foreach ($par_transactions as $par) {
     $par_no = $par['par_no'];
@@ -58,7 +58,8 @@ foreach ($par_transactions as $par) {
     }
     $par_grouped[$par_no]['items'][] = [
         'item_name' => $par['item_name'],
-        'quantity' => $par['quantity']
+        'quantity' => $par['quantity'],
+        
     ];
     $par_grouped[$par_no]['total_quantity'] += $par['quantity'];
 }
