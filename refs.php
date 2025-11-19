@@ -243,12 +243,15 @@ if (isset($_POST['division_ids']) && isset($_POST['office_names']) &&
 // Fetch Data
 $clusters = find_all('fund_clusters');
 $divisions = find_all('divisions');
+
+// ✅ CORRECTED: Get all offices with their divisions
 $offices = find_by_sql("
     SELECT o.*, d.id AS division_id, d.division_name 
     FROM offices o 
-    JOIN divisions d ON o.division_id = d.id 
+    LEFT JOIN divisions d ON o.division_id = d.id 
     ORDER BY d.division_name, o.office_name
 ");
+
 $school_years = find_all('school_years');
 
 ?>
@@ -598,6 +601,14 @@ if (!empty($msg) && is_array($msg)):
     line-height: 1.4;
 }
 
+/* ✅ NEW: Force add buttons to the right */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
 /* Fix for button alignment in groups */
 .btn-group {
     display: inline-flex;
@@ -619,6 +630,63 @@ button, .btn {
 .current-school-year {
     background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05)) !important;
     border-left: 4px solid var(--primary);
+}
+
+/* ✅ NEW: Division row styling */
+.division-row {
+    background: linear-gradient(135deg, rgba(23, 162, 184, 0.1), rgba(23, 162, 184, 0.05)) !important;
+    border-left: 4px solid var(--info);
+    font-weight: bold;
+}
+
+.division-row td {
+    padding: 1rem !important;
+    font-size: 1rem !important;
+}
+
+.no-offices-row {
+    background: #f8f9fa !important;
+    font-style: italic;
+    color: #6c757d;
+}
+
+.no-offices-row td {
+    text-align: center;
+    padding: 1rem !important;
+}
+
+/* ✅ NEW: DataTables customization */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+    margin: 1rem 0;
+    padding: 0.5rem;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 0.375rem 0.75rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    margin: 0 2px;
+    padding: 0.375rem 0.75rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: var(--primary);
+    color: white !important;
+    border-color: var(--primary);
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: var(--primary-light);
+    color: white !important;
+    border-color: var(--primary-light);
 }
 
 @media (max-width: 768px) {
@@ -646,6 +714,23 @@ button, .btn {
     .btn-group {
         flex-direction: column;
         gap: 0.25rem;
+    }
+    
+    .division-row td {
+        font-size: 0.9rem !important;
+        padding: 0.8rem !important;
+    }
+    
+    .header-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+        margin-top: 1rem;
+    }
+    
+    .header-actions .btn {
+        width: 100%;
+        justify-content: center;
     }
 }
 </style>
@@ -687,9 +772,11 @@ button, .btn {
                     <h5 class="card-title">
                         <i class="fas fa-database"></i> Fund Clusters
                     </h5>
-                    <button class="btn btn-custom-primary float-right" data-bs-toggle="modal" data-bs-target="#addClusterModal">
-                        <i class="fas fa-plus"></i> Add Cluster
-                    </button>
+                    <div class="header-actions">
+                        <button class="btn btn-custom-primary" data-bs-toggle="modal" data-bs-target="#addClusterModal">
+                            <i class="fas fa-plus"></i> Add Cluster
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <?php if(count($clusters) > 0): ?>
@@ -719,8 +806,9 @@ button, .btn {
                                                 <div class="btn-group" role="group">
                                                     <button class="btn btn-action btn-edit" 
                                                             data-bs-toggle="modal" 
+                                                            title="Edit"
                                                             data-bs-target="#editClusterModal<?= $c['id'] ?>">
-                                                        <i class="fas fa-edit"></i> Edit
+                                                        <i class="fas fa-edit"></i> 
                                                     </button>
                                                     <a href="a_script.php?id=<?= $c['id'] ?>&type=fund_clusters" 
                                                        class="btn-archive"
@@ -755,7 +843,7 @@ button, .btn {
                     <h5 class="card-title">
                         <i class="fas fa-building"></i> Divisions & Offices
                     </h5>
-                    <div>
+                    <div class="header-actions">
                         <button class="btn btn-custom-primary me-2" data-bs-toggle="modal" data-bs-target="#addDivisionModal">
                             <i class="fas fa-plus"></i> Add Division
                         </button>
@@ -777,50 +865,67 @@ button, .btn {
                                 </thead>
                                 <tbody>
                                     <?php 
-                                    $current_division = '';
-                                    foreach($offices as $o): 
-                                        if ($current_division != $o['division_name']):
-                                            $current_division = $o['division_name'];
+                                    // ✅ CORRECTED: Display ALL divisions, even those without offices
+                                    foreach($divisions as $division): 
+                                        // Get offices for this division
+                                        $division_offices = array_filter($offices, function($office) use ($division) {
+                                            return $office['division_id'] == $division['id'];
+                                        });
                                     ?>
-                                        <tr class="table-active">
-                                        <td colspan="3" class="fw-bold text-dark"><strong>
-                                            <i class="fas fa-sitemap me-2"></i> <?= remove_junk($o['division_name']) ?></strong>
-                                            <div class="btn-group float-right ms-3" role="group">
-                                                <button class="btn btn-sm btn-action btn-edit" 
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#editDivisionModal<?= $o['division_id'] ?>">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                               <a href="a_script.php?id=<?= $o['division_id'] ?>&type=divisions" 
-                                                class="btn-archive btn-sm"
-                                                 title="Archive">
-                                                 <i class="fa-solid fa-file-zipper"></i> 
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <?php 
-                                        endif; 
-                                    ?>
-                                        <tr>
-                                            <td></td>
-                                            <td><?= remove_junk($o['office_name']) ?></td>
-                                            <td>
-                                                <div class="btn-group" role="group">
+                                        <!-- Division Header Row -->
+                                        <tr class="division-row">
+                                            <td colspan="3">
+                                                <strong>
+                                                    <i class="fas fa-sitemap me-2"></i> 
+                                                    <?= remove_junk($division['division_name']) ?>
+                                                </strong>
+                                                <div class="btn-group float-end ms-3" role="group">
                                                     <button class="btn btn-sm btn-action btn-edit" 
                                                             data-bs-toggle="modal" 
-                                                            data-bs-target="#editOfficeModal<?= $o['id'] ?>"
-                                                            title="Edit">
-                                                        <i class="fas fa-edit"></i>  Edit
+                                                            title="Edit"
+                                                            data-bs-target="#editDivisionModal<?= $division['id'] ?>">
+                                                        <i class="fas fa-edit"></i> 
                                                     </button>
-                                                   <a href="a_script.php?id=<?= $o['id'] ?>&type=offices" 
+                                                    <a href="a_script.php?id=<?= $division['id'] ?>&type=divisions" 
                                                        class="btn-archive btn-sm"
                                                        title="Archive">
-                                                        <i class="fa-solid fa-file-zipper"></i> Archive
+                                                        <i class="fa-solid fa-file-zipper"></i> 
                                                     </a>
                                                 </div>
                                             </td>
                                         </tr>
+                                        
+                                        <?php if(count($division_offices) > 0): ?>
+                                            <?php foreach($division_offices as $office): ?>
+                                                <tr>
+                                                    <td></td>
+                                                    <td><?= remove_junk($office['office_name']) ?></td>
+                                                    <td>
+                                                        <div class="btn-group" role="group">
+                                                            <button class="btn btn-sm btn-action btn-edit" 
+                                                                    data-bs-toggle="modal" 
+                                                                    data-bs-target="#editOfficeModal<?= $office['id'] ?>"
+                                                                    title="Edit">
+                                                                <i class="fas fa-edit"></i> 
+                                                            </button>
+                                                            <a href="a_script.php?id=<?= $office['id'] ?>&type=offices" 
+                                                               class="btn-archive btn-sm"
+                                                               title="Archive">
+                                                                <i class="fa-solid fa-file-zipper"></i> 
+                                                            </a>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <tr class="no-offices-row">
+                                                <td colspan="3">
+                                                    <i class="fas fa-info-circle me-2"></i>
+                                                    No offices assigned to this division
+                                                </td>
+                                            </tr>
+                                        <?php endif; ?>
+                                        
                                     <?php endforeach; ?>
                                 </tbody>
                             </table>
@@ -853,14 +958,16 @@ button, .btn {
                     <h5 class="card-title">
                         <i class="fas fa-calendar-alt"></i> School Years & Semesters
                     </h5>
-                    <button class="btn btn-custom-warning float-right" data-bs-toggle="modal" data-bs-target="#addSchoolYearModal">
-                        <i class="fas fa-plus"></i> Add School Year
-                    </button>
+                    <div class="header-actions">
+                        <button class="btn btn-custom-warning" data-bs-toggle="modal" data-bs-target="#addSchoolYearModal">
+                            <i class="fas fa-plus"></i> Add School Year
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <?php if(count($school_years) > 0): ?>
                         <div class="table-responsive">
-                            <table class="table table-custom table-hover">
+                            <table id="schoolYearsTable" class="table table-custom table-hover" style="width:100%">
                                 <thead>
                                     <tr>
                                         <th width="5%">#</th>
@@ -904,8 +1011,9 @@ button, .btn {
                                                     <?php endif; ?>
                                                     <button class="btn btn-action btn-edit" 
                                                             data-bs-toggle="modal" 
+                                                            title="Edit"
                                                             data-bs-target="#editSchoolYearModal<?= $sy['id'] ?>">
-                                                        <i class="fas fa-edit"></i> Edit
+                                                        <i class="fas fa-edit"></i> 
                                                     </button>
                                                     <a href="a_script.php?id=<?= $sy['id'] ?>&type=school_years" 
                                                        class="btn-archive"
@@ -1239,8 +1347,36 @@ button, .btn {
 
 <?php include_once('layouts/footer.php'); ?>
 
+<!-- ✅ ADDED: DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // ✅ ADDED: Initialize DataTable for School Years
+    if ($('#schoolYearsTable').length) {
+        $('#schoolYearsTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50, 100],
+            ordering: true,
+            searching: true,
+            autoWidth: false,
+            responsive: true,
+            language: {
+                search: "Search school years:",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ school years",
+                infoEmpty: "Showing 0 to 0 of 0 school years",
+                infoFiltered: "(filtered from _MAX_ total school years)"
+            },
+            columnDefs: [
+                { orderable: false, targets: [0, 5, 6] }, // Disable sorting for #, Status, and Actions columns
+                { searchable: false, targets: [0, 3, 4, 5, 6] } // Disable search for #, Dates, Status, and Actions columns
+            ],
+            order: [[1, 'desc']] // Default sort by School Year descending
+        });
+    }
+
     // Select all archive buttons
     const archiveButtons = document.querySelectorAll('.btn-archive');
     

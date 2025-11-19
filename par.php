@@ -447,8 +447,12 @@ $par_files = find_by_sql("
 
 <?php include_once('layouts/footer.php'); ?>  
 
+<!-- <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script> -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
 <script>
 $(document).ready(function () {
     <?php if (!empty($par_files)): ?>
@@ -459,6 +463,7 @@ $(document).ready(function () {
         searching: true,
         autoWidth: false,
         responsive: true,
+        scrollX: false,
         order: [[4, 'desc']], // Sort by date descending
         columnDefs: [
             { orderable: false, targets: [5] }, // Make actions column non-orderable
@@ -486,9 +491,21 @@ $(document).ready(function () {
         // Custom search for mobile
         language: {
             search: "Search PAR files:",
-            searchPlaceholder: "Enter PAR number or name..."
-        }
+            searchPlaceholder: "Enter PAR number or name...",
+             paginate: {
+                first: "First",
+                last: "Last",
+                next: "Next",
+                previous: "Previous"
+            }
+        },
+         dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
     });
+
+     // Force no horizontal scroll
+    $('.dataTables_scrollBody').css('overflow-x', 'hidden');
+    $('.dataTables_wrapper').css('overflow-x', 'hidden');
+    
     
     // Mobile-specific adjustments
     function handleMobileLayout() {

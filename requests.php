@@ -24,6 +24,39 @@ if (!function_exists('get_base_unit_name')) {
     }
 }
 
+// Handle decline request
+if (isset($_POST['decline_request'])) {
+    $request_id = (int)$_POST['request_id'];
+    $decline_reason = $db->escape($_POST['decline_reason']);
+    
+    if (empty($decline_reason)) {
+        $session->msg("d", "Please provide a reason for declining the request.");
+        redirect('requests.php');
+    }
+    
+    // Start transaction
+    $db->query("START TRANSACTION");
+    
+    try {
+        // Update request status to Declined and add reason to remarks
+        $update_sql = "UPDATE requests SET status = 'Declined', remarks = '{$decline_reason}', date_completed = NOW() WHERE id = '{$request_id}'";
+        
+        if (!$db->query($update_sql)) {
+            throw new Exception("Failed to update request status");
+        }
+        
+        // Commit transaction
+        $db->query("COMMIT");
+        $session->msg("s", "Request has been declined successfully.");
+    } catch (Exception $e) {
+        // Rollback transaction if any query failed
+        $db->query("ROLLBACK");
+        $session->msg("d", "Failed to decline request: " . $e->getMessage());
+    }
+    
+    redirect('all_requests.php');
+}
+
 if (isset($_GET['issued'])) {
     $request_id = (int)$_GET['issued'];
 
@@ -209,6 +242,7 @@ $sql = "
     WHERE r.status != 'archived' 
     AND r.status != 'completed'  -- ✅ ADDED: Exclude completed requests
     AND LOWER(r.status) != 'completed'  -- ✅ ADDED: Case-insensitive check
+    AND r.status != 'Declined'  -- ✅ ADDED: Exclude declined requests
     ORDER BY 
         CASE 
             WHEN r.status = 'Canceled' OR r.status = 'Cancelled' THEN 2  -- Show canceled requests at the bottom
@@ -258,6 +292,8 @@ if (!empty($msg) && is_array($msg)):
     --canceled-color: #6c757d;
     --canceled-bg: #f8f9fa;
     --expiring-color: #dc3545;
+    --declined-color: #dc3545;
+    --declined-bg: #f8d7da;
 }
 
 body {
@@ -475,6 +511,16 @@ body {
     background: linear-gradient(135deg, #5a6268, #495057);
 }
 
+.btn-decline {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+}
+
+.btn-decline:hover {
+    background: linear-gradient(135deg, #c82333, #a71e2a);
+    color: white;
+}
+
 .profile-img {
     width: 50px;
     height: 50px;
@@ -520,6 +566,12 @@ body {
     background: linear-gradient(135deg, #d1ecf1, #bee5eb);
     color: #0c5460;
     border-color: #bee5eb;
+}
+
+.badge-declined {
+    background: linear-gradient(135deg, var(--declined-bg), #f5c6cb);
+    color: var(--declined-color);
+    border-color: #f5c6cb;
 }
 
 .empty-state {
@@ -660,6 +712,82 @@ body {
         padding: 1rem;
         text-align: center;
     }
+
+/* Modal Styles */
+.modal-content {
+    border-radius: 15px;
+    border: none;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+    border-radius: 15px 15px 0 0;
+    border: none;
+    padding: 1.5rem;
+}
+
+.modal-header .modal-title {
+    font-weight: 700;
+    font-size: 1.3rem;
+}
+
+.modal-body {
+    padding: 2rem;
+}
+
+.modal-footer {
+    border: none;
+    padding: 1.5rem 2rem;
+    border-radius: 0 0 15px 15px;
+}
+
+.reason-textarea {
+    width: 100%;
+    min-height: 120px;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1rem;
+    font-size: 0.95rem;
+    resize: vertical;
+    transition: all 0.3s ease;
+}
+
+.reason-textarea:focus {
+    outline: none;
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.reason-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.btn-cancel {
+    background: #6c757d;
+    color: white;
+    border: none;
+}
+
+.btn-cancel:hover {
+    background: #5a6268;
+    color: white;
+}
+
+.btn-confirm-decline {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+    border: none;
+}
+
+.btn-confirm-decline:hover {
+    background: linear-gradient(135deg, #c82333, #a71e2a);
+    color: white;
+}
 </style>
 
 <div class="card-container">
@@ -751,6 +879,9 @@ body {
                                                 case 'cancelled':
                                                     $badgeClass = 'badge-canceled';
                                                     break;
+                                                case 'declined':
+                                                    $badgeClass = 'badge-declined';
+                                                    break;
                                                 default:
                                                     $badgeClass = 'badge-secondary';
                                             }
@@ -764,6 +895,7 @@ body {
                                                     case 'issued': echo 'fa-box'; break;
                                                     case 'canceled':
                                                     case 'cancelled': echo 'fa-ban'; break;
+                                                    case 'declined': echo 'fa-times-circle'; break;
                                                     default: echo 'fa-info-circle';
                                                 }
                                                 ?> me-1">
@@ -790,7 +922,7 @@ body {
                                                 <a href="?issued=<?php echo (int)$req['id']; ?>" 
                                                     class="btn-action btn-warning issue-btn" 
                                                     title="Mark as Issued">
-                                                    <i class="fa-solid fa-box-open"></i> Issue
+                                                    <i class="fa-solid fa-box-open"></i>
                                                 </a>
                                                 <a href="r_view.php?id=<?php echo (int)$req['id']; ?>" 
                                                     class="btn-action btn-view" 
@@ -803,17 +935,19 @@ body {
                                                     <i class="fa-solid fa-spinner fa-spin"></i> For Confirmation
                                                 </span>
                                             <?php else: ?>
-                                                <!-- Default View + Archive -->
+                                                <!-- Default View + Decline -->
                                                 <a href="r_view.php?id=<?php echo (int)$req['id']; ?>" 
                                                     class="btn-action btn-view" 
                                                     title="View Request Details">
                                                     <i class="fas fa-eye"></i> 
                                                 </a>
-                                                <a href="a_script.php?id=<?php echo (int)$req['id']; ?>" 
-                                                    class="btn-action btn-danger archive-btn" 
-                                                    title="Archive Request">
-                                                    <i class="fa-solid fa-file-zipper"></i> 
-                                                </a>
+                                                <button type="button" 
+                                                    class="btn-action btn-decline decline-btn" 
+                                                    title="Decline Request"
+                                                    data-request-id="<?php echo (int)$req['id']; ?>"
+                                                    data-request-no="<?php echo remove_junk($req['ris_no']); ?>">
+                                                    <i class="fa-solid fa-thumbs-down"></i>
+                                                </button>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -841,6 +975,39 @@ body {
     <a href="checkout.php" class="floating-btn" title="Create New Request">
         <i class="fas fa-plus"></i>
     </a>
+</div>
+
+<!-- Decline Request Modal -->
+<div class="modal fade" id="declineModal" tabindex="-1" aria-labelledby="declineModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="declineModalLabel">
+                    <i class="fas fa-thumbs-down me-2"></i>Decline Request
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="">
+                <div class="modal-body">
+                    <p class="mb-3">You are about to decline request: <strong id="declineRequestNo"></strong></p>
+                    <p class="text-muted small mb-3">Please provide a reason for declining this request. This will be visible to the requester.</p>
+                    
+                    <div class="mb-3">
+                        <label for="decline_reason" class="reason-label">Reason for Declining</label>
+                        <textarea class="reason-textarea" id="decline_reason" name="decline_reason" 
+                                  placeholder="Enter the reason for declining this request..." required></textarea>
+                    </div>
+                    
+                    <input type="hidden" name="request_id" id="declineRequestId">
+                    <input type="hidden" name="decline_request" value="1">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-confirm-decline">Confirm Decline</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -878,6 +1045,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update every minute
     setInterval(updateExpiredRequests, 60000); // 1 minute
 
+    // Decline button functionality
+    document.querySelectorAll('.decline-btn').forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const requestId = this.getAttribute('data-request-id');
+            const requestNo = this.getAttribute('data-request-no');
+            
+            // Set the request details in the modal
+            document.getElementById('declineRequestId').value = requestId;
+            document.getElementById('declineRequestNo').textContent = requestNo;
+            
+            // Show the modal
+            const declineModal = new bootstrap.Modal(document.getElementById('declineModal'));
+            declineModal.show();
+        });
+    });
+
+    // Issue button functionality
     document.querySelectorAll('.issue-btn').forEach(function(button) {
         button.addEventListener('click', function(e) {
             e.preventDefault();
@@ -963,35 +1148,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Archive confirmation
-    document.querySelectorAll('.archive-btn').forEach(function(button) {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            const url = this.getAttribute('href');
-
-            Swal.fire({
-                title: 'Archive Request?',
-                text: "This request will be moved to archives and cannot be undone.",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Yes, archive it!',
-                cancelButtonText: 'Cancel',
-                background: '#ffffff',
-                backdrop: 'rgba(0,0,0,0.4)'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = url;
-                }
-            });
-        });
-    });
-
     // Initialize DataTables
     if (typeof $.fn.DataTable !== 'undefined') {
         $('#reqTable').DataTable({

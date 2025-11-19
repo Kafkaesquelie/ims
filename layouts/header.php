@@ -215,13 +215,10 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                 padding: 0.5rem 0.25rem;
                 font-size: 0.9rem;
             }
-
             .date-time {
                 font-size: 0.7rem;
                 padding: 0.4rem 0.8rem;
-
             }
-
             .user-menu {
                 margin-left: 0.5rem;
                 padding: 0.2rem 0.5rem;
@@ -493,7 +490,7 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                 <li class="nav-item">
                                     <a href="home.php" class="nav-link">
                                         <i class="nav-icon fa-solid fa-gauge-high"></i>
-                                        <p>Dashboard</p>
+                                        <p> Dashboard</p>
                                     </a>
                                 </li>
 
@@ -501,7 +498,7 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                 <li class="nav-item">
                                     <a href="requests_form.php" class="nav-link">
                                         <i class="nav-icon fa-solid fa-pen-to-square"></i>
-                                        <p>Submit Requests</p>
+                                        <p> Submit Requests</p>
                                     </a>
                                 </li>
 
@@ -509,41 +506,47 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                 <li class="nav-item">
                                     <a href="user_logs.php" class="nav-link">
                                         <i class="nav-icon fas fa-exchange-alt"></i>
-                                        <p>Transactions</p>
+                                        <p> Transactions</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a href="ics.php" class="nav-link">
                                        <i class="fa-solid fa-file-contract"></i>
-                                        <p>Inventory Custodian Slip</p>
+                                        <p> Inventory Custodian Slip</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a href="par.php" class="nav-link">
                                         <i class="nav-icon fas fa-handshake"></i>
-                                        <p>Property Acknowledgement Receipt</p>
+                                        <p> Property Acknowledgement Receipt</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a href="rrsp.php" class="nav-link">
                                         <i class="fa-solid fa-rotate-left"></i>
-                                        <p>Return Receipt</p>
+                                        <p> Return Receipt</p>
                                     </a>
                                 </li>
-                                <!-- <li class="nav-header">OTHERS</li>
-                        <li class="nav-item">
-                            <a href="user_archive.php" class="nav-link">
-                                <i class="nav-icon fa-solid fa-box-archive"></i>
-                                <p>Archive</p>
-                            </a>
-                        </li> -->
+                               
                             <?php endif; ?>
 
                             <li class="nav-header">ACCOUNT</li>
+                        <li class="nav-item">
+                            <a href="user_manual.php" class="nav-link">
+                                <i class="fa-solid fa-book-bookmark"></i>
+                                <p>User Manual</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <i class="fa-solid fa-gear"></i>
+                                <p>Settings</p>
+                            </a>
+                        </li>
                             <li class="nav-item">
                                 <a href="logout.php" class="nav-link" id="logout">
                                     <i class="nav-icon fas fa-sign-out-alt"></i>
-                                    <p>Logout</p>
+                                    <p> Logout</p>
                                 </a>
                             </li>
                         </ul>

@@ -267,48 +267,121 @@ include_once('layouts/header.php');
     display: inline-block;
 }
 
-/* Timeline */
-.timeline {
-    position: relative;
-    padding-left: 2rem;
+/* HORIZONTAL PROGRESS STYLING */
+.horizontal-progress {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+    border: 2px solid #e8f5e9;
 }
 
-.timeline::before {
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.progress-steps::before {
     content: '';
     position: absolute;
-    left: 10px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #e9ecef;
+    z-index: 1;
+}
+
+.progress-bar-horizontal {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    height: 4px;
     background: var(--primary-green);
+    z-index: 2;
+    transition: all 0.5s ease;
 }
 
-.timeline-item {
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     position: relative;
-    margin-bottom: 1.5rem;
+    z-index: 3;
+    flex: 1;
 }
 
-.timeline-item::before {
-    content: '';
-    position: absolute;
-    left: -2rem;
-    top: 5px;
-    width: 12px;
-    height: 12px;
+.step-icon {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e9ecef;
+    color: #6c757d;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.step.active .step-icon {
     background: var(--primary-green);
-    border: 2px solid white;
-    box-shadow: 0 0 0 3px var(--primary-green);
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(30, 126, 52, 0.3);
 }
 
-.timeline-item.active::before {
-    background: var(--primary-yellow);
-    box-shadow: 0 0 0 3px var(--primary-yellow);
-}
-
-.timeline-item.completed::before {
+.step.completed .step-icon {
     background: var(--light-green);
-    box-shadow: 0 0 0 3px var(--light-green);
+    color: white;
+}
+
+.step-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-align: center;
+    margin-bottom: 0.25rem;
+}
+
+.step.active .step-label {
+    color: var(--dark-green);
+    font-weight: 700;
+}
+
+.step.completed .step-label {
+    color: var(--primary-green);
+}
+
+.step-date {
+    font-size: 0.7rem;
+    color: #adb5bd;
+    text-align: center;
+}
+
+.progress-percentage {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.percentage-text {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--dark-green);
+    margin-bottom: 0.25rem;
+}
+
+.percentage-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* Empty State */
@@ -350,12 +423,29 @@ include_once('layouts/header.php');
         margin-top: 0.5rem;
     }
     
-    .timeline {
-        padding-left: 1.5rem;
+    /* Horizontal Progress Mobile */
+    .horizontal-progress {
+        padding: 1rem;
+        margin: 1rem 0;
     }
     
-    .timeline-item::before {
-        left: -1.5rem;
+    .step-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 0.8rem;
+    }
+    
+    .step-label {
+        font-size: 0.7rem;
+    }
+    
+    .step-date {
+        font-size: 0.65rem;
+    }
+    
+    .progress-steps::before,
+    .progress-bar-horizontal {
+        top: 16px;
     }
 }
 
@@ -570,52 +660,60 @@ include_once('layouts/header.php');
                         </div>
                     </div>
 
-                    <!-- Progress Tracking -->
-                    <div class="mb-4">
-                        <label class="form-label-custom d-block mb-3">Request Progress</label>
-                        <div class="progress-custom mb-2">
-                            <?php 
-                            $progress = 0;
-                            $color = 'bg-warning';
+                    <!-- HORIZONTAL PROGRESS TRACKING -->
+                    <div class="horizontal-progress">
+                        <div class="progress-steps">
+                            <div class="progress-bar-horizontal" id="progressBar" 
+                                 style="width: <?php 
+                                 $progress_width = 0;
+                                 if ($status == 'pending') $progress_width = 25;
+                                 elseif ($status == 'approved') $progress_width = 50;
+                                 elseif ($status == 'issued') $progress_width = 75;
+                                 elseif ($status == 'completed') $progress_width = 100;
+                                 echo $progress_width; ?>%;"></div>
                             
-                            if ($status == 'pending') {
-                                $progress = 25;
-                                $color = 'bg-warning';
-                            } elseif ($status == 'approved') {
-                                $progress = 50;
-                                $color = 'bg-info';
-                            } elseif ($status == 'issued') {
-                                $progress = 75;
-                                $color = 'bg-primary';
-                            } elseif ($status == 'completed') {
-                                $progress = 100;
-                                $color = 'bg-success';
-                            }
-                            ?>
-                            <div class="progress-bar progress-bar-custom <?php echo $color; ?>" 
-                                 style="width: <?php echo $progress; ?>%">
-                                <?php echo $progress; ?>% Complete
+                            <div class="step <?php echo in_array($status, ['pending', 'approved', 'issued', 'completed']) ? 'completed' : ''; ?> <?php echo $status == 'pending' ? 'active' : ''; ?>">
+                                <div class="step-icon">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </div>
+                                <div class="step-label">Submitted</div>
+                                <div class="step-date"><?php echo date("M j", strtotime($request['date'])); ?></div>
+                            </div>
+                            
+                            <div class="step <?php echo in_array($status, ['approved', 'issued', 'completed']) ? 'completed' : ''; ?> <?php echo $status == 'approved' ? 'active' : ''; ?>">
+                                <div class="step-icon">
+                                    <i class="fa-solid fa-thumbs-up"></i>
+                                </div>
+                                <div class="step-label">Approved</div>
+                                <div class="step-date">
+                                    <?php echo !empty($request['date_approved']) ? date("M j", strtotime($request['date_approved'])) : 'Pending'; ?>
+                                </div>
+                            </div>
+                            
+                            <div class="step <?php echo in_array($status, ['issued', 'completed']) ? 'completed' : ''; ?> <?php echo $status == 'issued' ? 'active' : ''; ?>">
+                                <div class="step-icon">
+                                    <i class="fa-solid fa-box-open"></i>
+                                </div>
+                                <div class="step-label">Issued</div>
+                                <div class="step-date">
+                                    <?php echo !empty($request['date_issued']) ? date("M j", strtotime($request['date_issued'])) : 'Pending'; ?>
+                                </div>
+                            </div>
+                            
+                            <div class="step <?php echo $status == 'completed' ? 'completed active' : ''; ?>">
+                                <div class="step-icon">
+                                    <i class="fa-solid fa-check-circle"></i>
+                                </div>
+                                <div class="step-label">Completed</div>
+                                <div class="step-date">
+                                    <?php echo !empty($request['date_completed']) ? date("M j", strtotime($request['date_completed'])) : 'Pending'; ?>
+                                </div>
                             </div>
                         </div>
                         
-                        <!-- Timeline -->
-                        <div class="timeline mt-4">
-                            <div class="timeline-item <?php echo in_array($status, ['pending', 'approved', 'issued', 'completed']) ? 'completed' : ''; ?>">
-                                <strong>Request Submitted</strong>
-                                <div class="text-muted small">Your request has been received and is under review</div>
-                            </div>
-                            <div class="timeline-item <?php echo in_array($status, ['approved', 'issued', 'completed']) ? 'completed' : ''; ?>">
-                                <strong>Approved</strong>
-                                <div class="text-muted small">Request has been approved by administration</div>
-                            </div>
-                            <div class="timeline-item <?php echo in_array($status, ['issued', 'completed']) ? 'completed' : ''; ?>">
-                                <strong>Issued</strong>
-                                <div class="text-muted small">Items have been prepared and issued</div>
-                            </div>
-                            <div class="timeline-item <?php echo $status == 'completed' ? 'completed' : ''; ?>">
-                                <strong>Completed</strong>
-                                <div class="text-muted small">Request process completed</div>
-                            </div>
+                        <div class="progress-percentage">
+                            <div class="percentage-text"><?php echo $progress_width; ?>% Complete</div>
+                            <div class="percentage-label">Request Progress</div>
                         </div>
                     </div>
 

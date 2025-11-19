@@ -599,7 +599,7 @@ function find_all_req_logs() {
         LEFT JOIN employees e ON r.requested_by = e.id
         LEFT JOIN offices ou ON u.office = ou.id   -- user's office
         LEFT JOIN offices eo ON e.office = eo.id   -- employee's office
-        WHERE r.status IN ('Completed','Archived','Issued','Canceled')
+        WHERE r.status IN ('Completed','Archived','Issued','Canceled','Declined')
         ORDER BY r.date_completed DESC
     ";
     return $db->query($sql)->fetch_all(MYSQLI_ASSOC);
@@ -776,7 +776,7 @@ function find_all_par_transactions() {
             t.status,
             t.remarks,
             CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
-            e.position AS position,
+            e.position,
             o.office_name AS department,
             e.image
         FROM transactions t
@@ -806,7 +806,7 @@ function find_all_ics_transactions() {
             t.status,
             t.remarks,
             CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
-            e.position AS position,
+            e.position,
             o.office_name AS department,
             e.image
         FROM transactions t

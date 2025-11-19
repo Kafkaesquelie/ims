@@ -136,61 +136,66 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         font-size: 0.9rem;
     }
 
-    /* Info Boxes - Green & Yellow Theme */
+    /* COMPACT Info Boxes - Reduced Height */
     .info-box {
         background: var(--card-bg);
-        border-radius: 15px;
-        padding: 1.5rem;
+        border-radius: 12px;
+        padding: 1rem;
         box-shadow: var(--card-shadow);
         border: none;
         transition: all 0.3s ease;
         height: 100%;
         position: relative;
         overflow: hidden;
-        border-top: 4px solid transparent;
+        border-top: 3px solid transparent;
+        min-height: 90px; /* Reduced from auto to fixed height */
     }
 
     .info-box:hover {
-        transform: translateY(-5px);
+        transform: translateY(-3px);
         box-shadow: var(--hover-shadow);
     }
 
     .info-box-icon {
-        width: 80px;
-        height: 80px;
-        border-radius: 15px;
+        width: 60px; /* Reduced from 80px */
+        height: 60px; /* Reduced from 80px */
+        border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 2.2rem;
+        font-size: 1.5rem; /* Reduced from 2.2rem */
         color: white;
         transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        flex-shrink: 0;
     }
 
     .info-box:hover .info-box-icon {
-        transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        transform: scale(1.05);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
 
     .info-box-content {
         flex: 1;
         text-align: right;
+        padding-left: 0.75rem;
     }
 
     .info-box-number {
-        font-size: 2.2rem;
+        font-size: 1.5rem; /* Reduced from 2.2rem */
         font-weight: 800;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.1rem;
         color: var(--dark-green);
+        line-height: 1.2;
     }
 
     .info-box-text {
         color: var(--text-dark);
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.8rem; /* Reduced from 0.9rem */
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.3px;
+        line-height: 1.2;
     }
 
     /* Cards Styling */
@@ -331,16 +336,22 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
 
         .info-box {
             margin-bottom: 1rem;
+            padding: 0.75rem;
+            min-height: 80px;
         }
 
         .info-box-icon {
-            width: 60px;
-            height: 60px;
-            font-size: 1.8rem;
+            width: 50px;
+            height: 50px;
+            font-size: 1.3rem;
         }
 
         .info-box-number {
-            font-size: 1.8rem;
+            font-size: 1.3rem;
+        }
+
+        .info-box-text {
+            font-size: 0.75rem;
         }
 
         .quick-actions .btn {
@@ -743,7 +754,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
     </div>
 </div>
 
-<!-- Quick Stats -->
+<!-- Quick Stats - COMPACT VERSION -->
 <div class="row mb-4">
     <div class="col-12 col-sm-6 col-md-3 mb-3">
         <div class="info-box d-flex align-items-center">

@@ -19,6 +19,7 @@ foreach ($ics_transactions as $ics) {
         $ics_grouped[$ics_no] = [
             'ics_no' => $ics_no,
             'employee_name' => $ics['employee_name'],
+            'position' => $ics['position'],
             'department' => $ics['department'],
             'image' => $ics['image'],
             'transaction_date' => $ics['transaction_date'],
@@ -48,6 +49,7 @@ foreach ($par_transactions as $par) {
         $par_grouped[$par_no] = [
             'par_no' => $par_no,
             'employee_name' => $par['employee_name'],
+            'position' => $par['position'],
             'department' => $par['department'],
             'image' => $par['image'],
             'transaction_date' => $par['transaction_date'],
@@ -210,7 +212,7 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
           <tbody>
             <?php foreach ($requests as $req): ?>
               <tr>
-                <td> <strong>
+                <td class="text-success"> <strong>
                     <?php echo remove_junk($req['ris_no']); ?> </strong>
                 </td>
                 <td class="text-center">
@@ -234,10 +236,10 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
                 <td class="text-center">
                   <?php if ($req['status'] == 'Completed'): ?>
                     <span class="badge bg-success"><?php echo ucfirst($req['status']); ?></span>
-                  <?php elseif ($req['status'] == 'Archived'): ?>
-                    <span class="badge bg-danger"><?php echo ucfirst($req['status']); ?></span>
-                  <?php else: ?>
+                  <?php elseif ($req['status'] == 'Canceled'): ?>
                     <span class="badge bg-primary"><?php echo ucfirst($req['status']); ?></span>
+                  <?php else: ?>
+                    <span class="badge bg-danger"><?php echo ucfirst($req['status']); ?></span>
                   <?php endif; ?>
                 </td>
                 <td class="text-center">
@@ -284,14 +286,15 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
         <tbody>
           <?php foreach ($ics_grouped as $ics): ?>
             <tr>
-              <td style="color:success"><strong><?php echo remove_junk($ics['ics_no']); ?></strong></td>
+              <td class="text-success"><strong><?php echo remove_junk($ics['ics_no']); ?></strong></td>
               <td class="text-center">
                 <img src="uploads/users/<?php echo remove_junk($ics['image']); ?>"
                   alt="Profile"
                   class="img-circle"
                   style="width:50px; height:50px; object-fit:cover;">
               </td>
-              <td><strong><?php echo remove_junk($ics['employee_name']); ?></strong></td>
+              <td><strong><?php echo remove_junk($ics['employee_name']); ?></strong><br>
+             <small><?php echo remove_junk($ics['position']); ?></small></td>
               <td><?php echo remove_junk($ics['department']); ?></td>
               <td>
                 <div class="items-list">
@@ -364,14 +367,15 @@ function calculate_document_status_by_quantity($doc_no, $doc_type) {
         <tbody>
           <?php foreach ($par_grouped as $par): ?>
             <tr>
-              <td><strong><?php echo remove_junk($par['par_no']); ?></strong></td>
+              <td class="text-success"><strong><?php echo remove_junk($par['par_no']); ?></strong></td>
               <td class="text-center">
                 <img src="uploads/users/<?php echo remove_junk($par['image']); ?>"
                   alt="Profile"
                   class="img-circle"
                   style="width:50px; height:50px; object-fit:cover;">
               </td>
-              <td><strong><?php echo remove_junk($par['employee_name']); ?></strong></td>
+              <td><strong><?php echo remove_junk($par['employee_name']); ?></strong><br>
+             <small><?php echo remove_junk($par['position']); ?></small></td>
               <td><?php echo remove_junk($par['department']); ?></td>
               <td>
                 <div class="items-list">

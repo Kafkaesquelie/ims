@@ -138,6 +138,10 @@ function getCategoryColor($category_name) {
     
     return $colors[$category_key] ?? $default_colors[array_rand($default_colors)];
 }
+
+// ✅ NEW: Check if request is declined and get decline reason
+$is_declined = (strtolower($request['status']) === 'declined');
+$decline_reason = $is_declined && !empty($request['remarks']) ? $request['remarks'] : '';
 ?>
 
 <?php include_once('layouts/header.php'); ?>
@@ -184,6 +188,31 @@ function getCategoryColor($category_name) {
         box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
         color: white;
     }
+    
+    /* ✅ NEW: Decline reason styling */
+    .decline-reason-box {
+        background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+        border: 1px solid #f5c6cb;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+    
+    .decline-reason-header {
+        color: #721c24;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .decline-reason-text {
+        color: #721c24;
+        margin: 0;
+        font-style: italic;
+        line-height: 1.5;
+    }
 </style>
 
     <!-- Status Banner -->
@@ -193,6 +222,7 @@ function getCategoryColor($category_name) {
                 <?php 
                 if ($request['status'] == 'Completed'): echo 'alert-success';
                 elseif ($request['status'] == 'Archived'): echo 'alert-danger';
+                elseif ($is_declined): echo 'alert-danger'; // ✅ NEW: Red for declined
                 else: echo 'alert-warning';
                 endif; 
                 ?> 
@@ -207,6 +237,7 @@ function getCategoryColor($category_name) {
                             <?php 
                             if ($request['status'] == 'Completed'): echo 'bg-success';
                             elseif ($request['status'] == 'Archived'): echo 'bg-danger';
+                            elseif ($is_declined): echo 'bg-danger'; // ✅ NEW: Red for declined
                             else: echo 'bg-warning text-dark';
                             endif; 
                             ?>">
@@ -222,6 +253,21 @@ function getCategoryColor($category_name) {
             </div>
         </div>
     </div>
+
+    <!-- ✅ NEW: Decline Reason Box -->
+    <?php if ($is_declined && !empty($decline_reason)): ?>
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="decline-reason-box">
+                <div class="decline-reason-header">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Request Declined - Reason:
+                </div>
+                <p class="decline-reason-text">"<?php echo htmlspecialchars($decline_reason); ?>"</p>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <div class="row">
         <!-- Left Column - Requestor & Details -->
@@ -332,10 +378,18 @@ function getCategoryColor($category_name) {
                                         </td>
                                        
                                         <td class="text-center">
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-check me-1"></i>
-                                                Available
-                                            </span>
+                                            <?php if ($is_declined): ?>
+                                                <!-- ✅ NEW: Show declined status for items when request is declined -->
+                                                <span class="badge bg-danger">
+                                                    <i class="fas fa-times me-1"></i>
+                                                    Declined
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check me-1"></i>
+                                                    Available
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="pe-4">
                                             <?php if (!empty($item['remarks'])): ?>
