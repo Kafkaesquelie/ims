@@ -547,23 +547,6 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-// Alternative simpler archive function (if you prefer)
-function confirmDelete(id, name) {
-  Swal.fire({
-    title: 'Archive Signatory?',
-    html: `Are you sure you want to archive <strong>"${name}"</strong>?`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#6c757d',
-    confirmButtonText: 'Yes, archive!',
-    cancelButtonText: 'Cancel'
-  }).then((result) => {
-    if (result.isConfirmed) {
-      window.location.href = `a_script.php?id=${id}`;
-    }
-  });
-}
 </script>
 
 <?php include_once('layouts/footer.php'); ?>

@@ -580,30 +580,30 @@ function find_req_items($req_id) {
       return implode(", ", $items_arr);
   }
 
-function find_all_req_logs() {
-    global $db;
-    $sql = "
-        SELECT 
-            r.id, 
-            r.date, 
-            r.status,
-            r.ris_no,
-            r.date_completed,
-            COALESCE(ou.office_name, eo.office_name) AS office_name,
-            COALESCE(u.id, e.id) AS requestor_id,
-            COALESCE(u.name, CONCAT(e.first_name, ' ', e.last_name)) AS req_name,
-            COALESCE(u.image, e.image, 'default.png') AS prof_pic,
-            COALESCE(u.position, e.position) AS req_position
-        FROM requests r
-        LEFT JOIN users u ON r.requested_by = u.id
-        LEFT JOIN employees e ON r.requested_by = e.id
-        LEFT JOIN offices ou ON u.office = ou.id   -- user's office
-        LEFT JOIN offices eo ON e.office = eo.id   -- employee's office
-        WHERE r.status IN ('Completed','Archived','Issued','Canceled','Declined')
-        ORDER BY r.date_completed DESC
-    ";
-    return $db->query($sql)->fetch_all(MYSQLI_ASSOC);
-}
+// function find_all_req_logs() {
+//     global $db;
+//     $sql = "
+//         SELECT 
+//             r.id, 
+//             r.date, 
+//             r.status,
+//             r.ris_no,
+//             r.date_completed,
+//             COALESCE(ou.office_name, eo.office_name) AS office_name,
+//             COALESCE(u.id, e.id) AS requestor_id,
+//             COALESCE(u.name, CONCAT(e.first_name, ' ', e.last_name)) AS req_name,
+//             COALESCE(u.image, e.image, 'default.png') AS prof_pic,
+//             COALESCE(u.position, e.position) AS req_position
+//         FROM requests r
+//         LEFT JOIN users u ON r.requested_by = u.id
+//         LEFT JOIN employees e ON r.requested_by = e.id
+//         LEFT JOIN offices ou ON u.office = ou.id   -- user's office
+//         LEFT JOIN offices eo ON e.office = eo.id   -- employee's office
+//         WHERE r.status IN ('Completed','Archived','Issued','Canceled','Declined')
+//         ORDER BY r.date_completed DESC
+//     ";
+//     return $db->query($sql)->fetch_all(MYSQLI_ASSOC);
+// }
 
 
 
