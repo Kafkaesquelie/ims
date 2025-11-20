@@ -85,6 +85,7 @@ $total_requests = count_user_requests($user_id);
 $pending_count   = count_user_requests_by_status($user_id, 'pending');
 $approved_count  = count_user_requests_by_status($user_id, 'approved');
 $completed_count = count_user_requests_by_status($user_id, 'completed');
+$declined_count  = count_user_requests_by_status($user_id, 'declined'); // Added declined count
 
 // Fetch pending requests for this user with item details from items table only
 $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count 
@@ -107,6 +108,8 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         --primary-yellow: #ffc107;
         --dark-yellow: #e0a800;
         --light-yellow: #ffda6a;
+        --primary-red: #dc3545;
+        --dark-red: #c82333;
         --card-bg: #ffffff;
         --text-dark: #343a40;
         --text-light: #6c757d;
@@ -136,11 +139,11 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         font-size: 0.9rem;
     }
 
-    /* COMPACT Info Boxes - Reduced Height */
+    /* COMPACT Info Boxes - Fitting 5 in one row */
     .info-box {
         background: var(--card-bg);
         border-radius: 12px;
-        padding: 1rem;
+        padding: 0.75rem;
         box-shadow: var(--card-shadow);
         border: none;
         transition: all 0.3s ease;
@@ -148,7 +151,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         position: relative;
         overflow: hidden;
         border-top: 3px solid transparent;
-        min-height: 90px; /* Reduced from auto to fixed height */
+        min-height: 85px;
     }
 
     .info-box:hover {
@@ -157,32 +160,32 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
     }
 
     .info-box-icon {
-        width: 60px; /* Reduced from 80px */
-        height: 60px; /* Reduced from 80px */
-        border-radius: 12px;
+        width: 50px;
+        height: 50px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.5rem; /* Reduced from 2.2rem */
+        font-size: 1.3rem;
         color: white;
         transition: all 0.3s ease;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
         flex-shrink: 0;
     }
 
     .info-box:hover .info-box-icon {
         transform: scale(1.05);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
 
     .info-box-content {
         flex: 1;
         text-align: right;
-        padding-left: 0.75rem;
+        padding-left: 0.5rem;
     }
 
     .info-box-number {
-        font-size: 1.5rem; /* Reduced from 2.2rem */
+        font-size: 1.3rem;
         font-weight: 800;
         margin-bottom: 0.1rem;
         color: var(--dark-green);
@@ -192,7 +195,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
     .info-box-text {
         color: var(--text-dark);
         font-weight: 600;
-        font-size: 0.8rem; /* Reduced from 0.9rem */
+        font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.3px;
         line-height: 1.2;
@@ -273,6 +276,10 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         background: linear-gradient(135deg, #007bff, #0056b3) !important;
     }
 
+    .badge.bg-danger {
+        background: linear-gradient(135deg, var(--primary-red), var(--dark-red)) !important;
+    }
+
     /* Progress Bar */
     .progress {
         height: 20px;
@@ -328,6 +335,47 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
     }
 
     /* Responsive Design */
+    @media (max-width: 1200px) {
+        .info-box {
+            padding: 0.7rem;
+        }
+        
+        .info-box-icon {
+            width: 45px;
+            height: 45px;
+            font-size: 1.2rem;
+        }
+        
+        .info-box-number {
+            font-size: 1.2rem;
+        }
+        
+        .info-box-text {
+            font-size: 0.65rem;
+        }
+    }
+
+    @media (max-width: 992px) {
+        .info-box {
+            padding: 0.6rem;
+            min-height: 80px;
+        }
+        
+        .info-box-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 1.1rem;
+        }
+        
+        .info-box-number {
+            font-size: 1.1rem;
+        }
+        
+        .info-box-text {
+            font-size: 0.6rem;
+        }
+    }
+
     @media (max-width: 768px) {
         .dashboard-header {
             padding: 1rem;
@@ -337,26 +385,47 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         .info-box {
             margin-bottom: 1rem;
             padding: 0.75rem;
-            min-height: 80px;
+            min-height: 85px;
         }
 
         .info-box-icon {
-            width: 50px;
-            height: 50px;
-            font-size: 1.3rem;
+            width: 45px;
+            height: 45px;
+            font-size: 1.2rem;
         }
 
         .info-box-number {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
         }
 
         .info-box-text {
-            font-size: 0.75rem;
+            font-size: 0.65rem;
         }
 
         .quick-actions .btn {
             padding: 0.5rem 0.5rem;
             margin-bottom: 0.5rem;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .info-box {
+            padding: 0.6rem;
+            min-height: 80px;
+        }
+        
+        .info-box-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 1.1rem;
+        }
+        
+        .info-box-number {
+            font-size: 1.1rem;
+        }
+        
+        .info-box-text {
+            font-size: 0.6rem;
         }
     }
 
@@ -754,9 +823,9 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
     </div>
 </div>
 
-<!-- Quick Stats - COMPACT VERSION -->
+<!-- Quick Stats - ALL 5 BOXES IN ONE ROW -->
 <div class="row mb-4">
-    <div class="col-12 col-sm-6 col-md-3 mb-3">
+    <div class="col-6 col-sm-4 col-md-2_4 col-lg-2_4 col-xl-2_4 mb-3">
         <div class="info-box d-flex align-items-center">
             <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-green), var(--dark-green));">
                 <i class="fa-solid fa-pen-to-square"></i>
@@ -768,7 +837,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         </div>
     </div>
 
-    <div class="col-12 col-sm-6 col-md-3 mb-3">
+    <div class="col-6 col-sm-4 col-md-2_4 col-lg-2_4 col-xl-2_4 mb-3">
         <div class="info-box d-flex align-items-center">
             <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-yellow), var(--dark-yellow));">
                 <i class="fa-solid fa-clock"></i>
@@ -780,7 +849,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         </div>
     </div>
 
-    <div class="col-12 col-sm-6 col-md-3 mb-3">
+    <div class="col-6 col-sm-4 col-md-2_4 col-lg-2_4 col-xl-2_4 mb-3">
         <div class="info-box d-flex align-items-center">
             <span class="info-box-icon" style="background: linear-gradient(135deg, #17a2b8, #138496);">
                 <i class="fa-solid fa-thumbs-up"></i>
@@ -792,7 +861,7 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
         </div>
     </div>
 
-    <div class="col-12 col-sm-6 col-md-3 mb-3">
+    <div class="col-6 col-sm-4 col-md-2_4 col-lg-2_4 col-xl-2_4 mb-3">
         <div class="info-box d-flex align-items-center">
             <span class="info-box-icon" style="background: linear-gradient(135deg, var(--light-green), var(--primary-green));">
                 <i class="fa-solid fa-check-circle"></i>
@@ -800,6 +869,19 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
             <div class="info-box-content">
                 <div class="info-box-number"><?php echo $completed_count; ?></div>
                 <span class="info-box-text">Completed</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Declined Requests Info Box -->
+    <div class="col-6 col-sm-4 col-md-2_4 col-lg-2_4 col-xl-2_4 mb-3">
+        <div class="info-box d-flex align-items-center">
+            <span class="info-box-icon" style="background: linear-gradient(135deg, var(--primary-red), var(--dark-red));">
+                <i class="fa-solid fa-times-circle"></i>
+            </span>
+            <div class="info-box-content">
+                <div class="info-box-number"><?php echo $declined_count; ?></div>
+                <span class="info-box-text">Declined</span>
             </div>
         </div>
     </div>
@@ -906,13 +988,13 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
                                                     $badgeClass = 'primary';
                                                 } elseif ($status == 'issued') {
                                                     $badgeClass = 'success';
-                                                } elseif ($status == 'rejected') {
+                                                } elseif ($status == 'rejected' || $status == 'declined') {
                                                     $badgeClass = 'danger';
                                                 }
                                                 ?>
                                                 <span class="badge bg-<?php echo $badgeClass; ?>">
                                                     <i class="fa-solid 
-                                                        <?php echo ($status == 'pending') ? 'fa-clock' : (($status == 'approved') ? 'fa-thumbs-up' : (($status == 'issued') ? 'fa-circle-check' : (($status == 'rejected') ? 'fa-xmark' : 'fa-info-circle'))); ?> me-1"></i>
+                                                        <?php echo ($status == 'pending') ? 'fa-clock' : (($status == 'approved') ? 'fa-thumbs-up' : (($status == 'issued') ? 'fa-circle-check' : (($status == 'rejected' || $status == 'declined') ? 'fa-xmark' : 'fa-info-circle'))); ?> me-1"></i>
                                                     <?php echo ucfirst($req['status']); ?>
                                                 </span>
                                             </td>
@@ -935,10 +1017,10 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
                                                     $progress_class = 'bg-success progress-bar-striped';
                                                     $progress_width = 100;
                                                     $progress_text = 'Completed';
-                                                } elseif ($status === 'rejected') {
+                                                } elseif ($status === 'rejected' || $status === 'declined') {
                                                     $progress_class = 'bg-danger';
                                                     $progress_width = 100;
-                                                    $progress_text = 'Rejected';
+                                                    $progress_text = 'Declined';
                                                 }
                                                 ?>
                                                 <div class="progress" style="height: 20px; border-radius: 10px;">
@@ -1039,11 +1121,11 @@ $pending_requests = find_by_sql("SELECT r.*, COUNT(ri.id) as item_count
                                 $progress_class = 'bg-warning progress-bar-striped progress-bar-animated';
                                 $progress_width = 75;
                                 $progress_text = 'Issued - Waiting Confirmation';
-                            } elseif ($status == 'rejected') {
+                            } elseif ($status == 'rejected' || $status == 'declined') {
                                 $badgeClass = 'danger';
                                 $progress_class = 'bg-danger';
                                 $progress_width = 100;
-                                $progress_text = 'Rejected';
+                                $progress_text = 'Declined';
                             }
                         ?>
                             <div class="mobile-request-card">

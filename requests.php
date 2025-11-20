@@ -54,7 +54,7 @@ if (isset($_POST['decline_request'])) {
         $session->msg("d", "Failed to decline request: " . $e->getMessage());
     }
     
-    redirect('all_requests.php');
+    redirect('requests.php');
 }
 
 if (isset($_GET['issued'])) {
