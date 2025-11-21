@@ -1148,8 +1148,8 @@ button, .btn {
                         <div class="form-text">Format: YYYY-YYYY (e.g., 2024-2025)</div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Semester *</label>
-                        <select name="semester" class="form-select" required>
+                        <label class="form-label fw-semibold">Semester *</label><br>
+                        <select name="semester" class="form-select w-100 p-2" required>
                             <option value="">Select Semester</option>
                             <option value="1st">1st Semester</option>
                             <option value="2nd">2nd Semester</option>
