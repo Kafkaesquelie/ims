@@ -74,6 +74,12 @@ switch ($referer) {
         } elseif ($type === 'fund_clusters') {
             $table = 'fund_clusters';
             $classification = 'fund_clusters';
+        }elseif ($type === 'units') {
+            $table = 'units';
+            $classification = 'units';
+        }elseif ($type === 'base_units') {
+            $table = 'base_units';
+            $classification = 'base_units';
         } else {
             $session->msg("d", "Unknown reference type.");
             redirect($_SERVER['HTTP_REFERER'], false);
@@ -84,6 +90,7 @@ switch ($referer) {
         $table = 'signatories';
         $classification = 'signatories';
         break;
+ 
 
     default:
         $session->msg("d", "Unknown archive source.");

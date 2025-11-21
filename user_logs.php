@@ -13,7 +13,7 @@ $user_requests = find_by_sql("
         r.ris_no,
         r.date,
         r.status as original_status,
-        r.remarks,  -- ✅ ADDED: Fetch remarks from requests table
+        r.remarks,
         LOWER(r.status) as status_lower,
         COUNT(ri.id) as item_count,
         SUM(ri.qty) as total_quantity,
@@ -24,7 +24,7 @@ $user_requests = find_by_sql("
     LEFT JOIN items i ON ri.item_id = i.id
     WHERE r.requested_by = '{$user_id}'
     AND r.status IN ('Completed', 'Cancelled', 'Canceled', 'Approved', 'Declined')
-    GROUP BY r.id, r.ris_no, r.date, r.status, r.remarks  -- ✅ ADDED: Include remarks in GROUP BY
+    GROUP BY r.id, r.ris_no, r.date, r.status, r.remarks
     ORDER BY r.date DESC
 ");
 ?>
@@ -115,6 +115,7 @@ $user_requests = find_by_sql("
         border: none;
         padding: 1rem;
         text-align: center;
+        white-space: nowrap;
     }
     
     .table td {
@@ -126,6 +127,95 @@ $user_requests = find_by_sql("
     
     .table-hover tbody tr:hover {
         background-color: rgba(40, 167, 69, 0.05);
+    }
+    
+    /* ✅ FIXED COLUMN WIDTHS */
+    #userReqTable {
+        table-layout: fixed;
+        width: 100%;
+    }
+    
+    #userReqTable th:nth-child(1), /* No. */
+    #userReqTable td:nth-child(1) {
+        width: 60px !important;
+        min-width: 60px;
+        max-width: 60px;
+    }
+    
+    #userReqTable th:nth-child(2), /* RIS No */
+    #userReqTable td:nth-child(2) {
+        width: 120px !important;
+        min-width: 120px;
+        max-width: 120px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    #userReqTable th:nth-child(3), /* Items Requested */
+    #userReqTable td:nth-child(3) {
+        width: 250px !important;
+        min-width: 250px;
+        max-width: 250px;
+    }
+    
+    #userReqTable th:nth-child(4), /* Date */
+    #userReqTable td:nth-child(4) {
+        width: 120px !important;
+        min-width: 120px;
+        max-width: 120px;
+        white-space: nowrap;
+    }
+    
+    #userReqTable th:nth-child(5), /* Remarks */
+    #userReqTable td:nth-child(5) {
+        width: 200px !important;
+        min-width: 200px;
+        max-width: 200px;
+    }
+    
+    #userReqTable th:nth-child(6), /* Status */
+    #userReqTable td:nth-child(6) {
+        width: 130px !important;
+        min-width: 130px;
+        max-width: 130px;
+    }
+    
+    #userReqTable th:nth-child(7), /* View Button */
+    #userReqTable td:nth-child(7) {
+        width: 100px !important;
+        min-width: 100px;
+        max-width: 100px;
+    }
+    
+    /* ✅ NEW: View Button Styling */
+    .btn-view {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        border: none;
+        border-radius: 25px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        font-size: 0.8rem;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    
+    .btn-view:hover {
+        background: linear-gradient(135deg, var(--primary-dark), #155724);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        text-decoration: none;
+    }
+    
+    .btn-view-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
     }
     
     /* ✅ NEW: Declined row styling */
@@ -204,6 +294,8 @@ $user_requests = find_by_sql("
         background: #f8f9fa;
         border-radius: 8px;
         border: 1px solid #e9ecef;
+        word-wrap: break-word;
+        word-break: break-word;
     }
     
     /* ✅ NEW: Remarks styling */
@@ -218,6 +310,8 @@ $user_requests = find_by_sql("
         border: 1px solid #e9ecef;
         font-style: italic;
         color: #6c757d;
+        word-wrap: break-word;
+        word-break: break-word;
     }
     
     .remarks-text.empty {
@@ -310,6 +404,11 @@ $user_requests = find_by_sql("
             max-height: 80px;
             font-size: 0.8rem;
         }
+        
+        .btn-view {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.75rem;
+        }
     }
     
     @media (max-width: 576px) {
@@ -400,6 +499,29 @@ $user_requests = find_by_sql("
             color: #adb5bd;
             font-style: normal;
         }
+        
+        .mobile-view-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            font-size: 0.8rem;
+            width: 100%;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            text-decoration: none;
+        }
+        
+        .mobile-view-btn:hover {
+            background: linear-gradient(135deg, var(--primary-dark), #155724);
+            color: white;
+            text-decoration: none;
+        }
     }
     
     /* Hide table on mobile, show cards */
@@ -428,7 +550,7 @@ $user_requests = find_by_sql("
 </div>
 
 <?php 
-// ✅ NEW: Calculate counts for each status
+// Calculate counts for each status
 $all_count = count($user_requests);
 $completed_count = count(array_filter($user_requests, fn($req) => strtolower($req['original_status']) === 'completed'));
 $canceled_count = count(array_filter($user_requests, fn($req) => in_array(strtolower($req['original_status']), ['canceled', 'cancelled'])));
@@ -450,7 +572,6 @@ if(count($user_requests) > 0): ?>
         <button class="filter-btn" data-filter="approved">
             Approved <span class="counter-badge"><?php echo $approved_count; ?></span>
         </button>
-        <!-- ✅ NEW: Declined Tab -->
         <button class="filter-btn" data-filter="declined">
             Declined <span class="counter-badge"><?php echo $declined_count; ?></span>
         </button>
@@ -465,11 +586,9 @@ if(count($user_requests) > 0): ?>
                     <th class="text-center">RIS No</th>
                     <th class="text-center">Items Requested</th>
                     <th class="text-center">Date</th>            
-                    <th class="text-center">Total Items</th>
-                    <th class="text-center">Total Quantity</th>
-                    <!-- ✅ CHANGED: Total Cost to Remarks -->
                     <th class="text-center">Remarks</th>
                     <th class="text-center">Status</th>
+                    <th class="text-center">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -482,10 +601,10 @@ if(count($user_requests) > 0): ?>
                         $status = 'canceled';
                     }
                     
-                    // ✅ NEW: Add row class for declined requests
+                    // Add row class for declined requests
                     $row_class = $status === 'declined' ? 'declined-row' : '';
                     
-                    // ✅ NEW: Process remarks
+                    // Process remarks
                     $remarks = isset($row['remarks']) ? htmlspecialchars($row['remarks']) : '';
                     $remarks_class = empty($remarks) ? 'empty' : '';
                     $remarks_display = empty($remarks) ? 'No remarks' : $remarks;
@@ -505,13 +624,6 @@ if(count($user_requests) > 0): ?>
                         <td class="text-center">
                             <?php echo isset($row['date']) ? date('M j, Y', strtotime($row['date'])) : 'N/A'; ?>
                         </td>
-                        <td class="text-center">
-                            <span class="badge bg-info"><?php echo isset($row['item_count']) ? htmlspecialchars($row['item_count']) : '0'; ?></span>
-                        </td>
-                        <td class="text-center">
-                            <span class="badge bg-warning text-dark"><?php echo isset($row['total_quantity']) ? htmlspecialchars($row['total_quantity']) : '0'; ?></span>
-                        </td>
-                        <!-- ✅ CHANGED: Total Cost to Remarks -->
                         <td>
                             <div class="remarks-text <?php echo $remarks_class; ?>">
                                 <?php echo $remarks_display; ?>
@@ -558,6 +670,11 @@ if(count($user_requests) > 0): ?>
                                 <?php echo ucfirst($status); ?>
                             </span>
                         </td>
+                        <td class="text-center">
+                            <a href="view_request.php?id=<?php echo $row['id']; ?>" class="btn-view btn-view-sm">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -584,10 +701,10 @@ if(count($user_requests) > 0): ?>
                 default: $badgeClass = 'badge-secondary';
             }
             
-            // ✅ NEW: Add card class for declined requests
+            // Add card class for declined requests
             $card_class = $status === 'declined' ? 'declined-card' : '';
             
-            // ✅ NEW: Process remarks for mobile
+            // Process remarks for mobile
             $remarks = isset($row['remarks']) ? htmlspecialchars($row['remarks']) : '';
             $remarks_class = empty($remarks) ? 'empty' : '';
             $remarks_display = empty($remarks) ? 'No remarks' : $remarks;
@@ -603,25 +720,6 @@ if(count($user_requests) > 0): ?>
                     <div class="mobile-row">
                         <span class="mobile-label">Date:</span>
                         <span class="mobile-value"><?php echo isset($row['date']) ? date('M j, Y', strtotime($row['date'])) : 'N/A'; ?></span>
-                    </div>
-                    <div class="mobile-row">
-                        <span class="mobile-label">Total Items:</span>
-                        <span class="mobile-value">
-                            <span class="badge bg-info"><?php echo isset($row['item_count']) ? htmlspecialchars($row['item_count']) : '0'; ?></span>
-                        </span>
-                    </div>
-                    <div class="mobile-row">
-                        <span class="mobile-label">Total Quantity:</span>
-                        <span class="mobile-value">
-                            <span class="badge bg-warning text-dark"><?php echo isset($row['total_quantity']) ? htmlspecialchars($row['total_quantity']) : '0'; ?></span>
-                        </span>
-                    </div>
-                    <!-- ✅ CHANGED: Total Cost to Remarks in mobile view -->
-                    <div class="mobile-row">
-                        <span class="mobile-label">Remarks:</span>
-                        <div class="mobile-remarks <?php echo $remarks_class; ?>">
-                            <?php echo $remarks_display; ?>
-                        </div>
                     </div>
                     <div class="mobile-row">
                         <span class="mobile-label">Status:</span>
@@ -644,6 +742,12 @@ if(count($user_requests) > 0): ?>
                             </span>
                         </span>
                     </div>
+                    <div class="mobile-row">
+                        <span class="mobile-label">Remarks:</span>
+                        <div class="mobile-remarks <?php echo $remarks_class; ?>">
+                            <?php echo $remarks_display; ?>
+                        </div>
+                    </div>
                     <?php if(isset($row['items_list']) && !empty($row['items_list'])): ?>
                     <div class="mobile-row">
                         <span class="mobile-label">Items:</span>
@@ -652,6 +756,9 @@ if(count($user_requests) > 0): ?>
                         </div>
                     </div>
                     <?php endif; ?>
+                    <a href="view_request.php?id=<?php echo $row['id']; ?>" class="mobile-view-btn">
+                        <i class="fas fa-eye"></i> View Full Details
+                    </a>
                 </div>
             </div>
         <?php endforeach; ?>
@@ -674,14 +781,15 @@ if(count($user_requests) > 0): ?>
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 <script>
 $(document).ready(function () {
-    // Initialize DataTable for desktop
+    // Initialize DataTable for desktop with fixed columns
     var table = $('#userReqTable').DataTable({
         pageLength: 10,
         lengthMenu: [5, 10, 25, 50, 100],
         ordering: true,
         searching: true,
         autoWidth: false,
-        responsive: true,
+        responsive: false, // Disable DataTables responsive to use our fixed widths
+        scrollX: false,
         deferRender: true,        
         processing: true,
         serverSide: false,
@@ -694,13 +802,18 @@ $(document).ready(function () {
         },
         columnDefs: [
             {
-                targets: 7, // Status column
+                targets: 5, // Status column
                 render: function(data, type, row) {
                     if (type === 'filter') {
                         return $(data).text().toLowerCase();
                     }
                     return data;
                 }
+            },
+            {
+                targets: 6, // Action column
+                orderable: false,
+                searchable: false
             }
         ]
     });

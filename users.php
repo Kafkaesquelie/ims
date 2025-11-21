@@ -248,6 +248,17 @@ if (!empty($msg) && is_array($msg)):
     text-align: center;
   }
 
+  /* User ID Badge */
+  .user-id-badge {
+    background: linear-gradient(135deg, #6c757d, #495057);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+  }
+
   /* Action buttons */
   .action-buttons {
     display: flex;
@@ -302,6 +313,7 @@ if (!empty($msg) && is_array($msg)):
       <table class="table table-hover text-nowrap" id="usersTable">
         <thead>
           <tr>
+            <th>ID</th>
             <th>Profile</th>
             <th>Name</th>
             <th>Username</th>
@@ -316,6 +328,9 @@ if (!empty($msg) && is_array($msg)):
         <tbody>
           <?php foreach ($all_users as $a_user): ?>
             <tr>
+              <td class="text-center">
+                <span class="user-id-badge">#<?php echo str_pad($a_user['id'], 4, '0', STR_PAD_LEFT); ?></span>
+              </td>
               <td class="text-center">
                 <img src="uploads/users/<?php echo !empty($a_user['image']) ? $a_user['image'] : 'default.jpg'; ?>"
                   class="img-thumbnail" style="width:60px;height:60px;border-radius:50%">
@@ -668,7 +683,8 @@ if (!empty($msg) && is_array($msg)):
       ordering: true,
       searching: false,
       autoWidth: false,
-      fixedColumns: true
+      fixedColumns: true,
+      order: [[0, 'asc']] // Sort by User ID ascending by default
     });
     $('#searchInput').on('keyup', function() {
       table.search(this.value).draw();

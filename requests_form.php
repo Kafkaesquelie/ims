@@ -255,14 +255,12 @@ foreach ($all_items as &$item) {
         $item['stock_status'] = 0; // Out of stock - show last
     } elseif ($quantity <= 5) {
         $item['stock_status'] = 1; // Low stock
-    } elseif ($quantity <= 15) {
-        $item['stock_status'] = 2; // Medium stock
     } else {
-        $item['stock_status'] = 3; // High stock - show first
+        $item['stock_status'] = 2; // Good stock - show first
     }
 }
 
-// Sort items: available items first (high stock -> medium -> low -> out of stock)
+// Sort items: available items first (good stock -> low -> out of stock)
 usort($all_items, function($a, $b) {
     // First sort by stock status (descending - available first)
     if ($a['stock_status'] != $b['stock_status']) {
@@ -295,27 +293,33 @@ if (!empty($msg) && is_array($msg)):
 <?php endif; ?>
 
 <style>
+    :root {
+        --good-stock: #28a745;
+        --low-stock: #fd7e14;
+        --out-stock: #6c757d;
+        --primary-green: #006205;
+    }
    
     .form-control:focus {
-        border-color: #006205;
+        border-color: var(--primary-green);
         box-shadow: 0 0 0 0.2rem rgba(0, 98, 5, 0.25);
     }
 
     .border-success {
-        border-color: #006205 !important;
+        border-color: var(--primary-green) !important;
     }
 
     .text-success {
-        color: #006205 !important;
+        color: var(--primary-green) !important;
     }
 
     .modal-header.bg-success {
-        background-color: #006205 !important;
+        background-color: var(--primary-green) !important;
     }
 
     .btn-success {
-        background-color: #006205;
-        border-color: #006205;
+        background-color: var(--primary-green);
+        border-color: var(--primary-green);
     }
 
     .btn-success:hover {
@@ -350,25 +354,20 @@ if (!empty($msg) && is_array($msg)):
         color: var(--secondary);
     }
 
-    /* Subtle color indicators for stock status */
-    .stock-high {
+    /* Stock status color indicators */
+    .stock-good {
         background-color: rgba(40, 167, 69, 0.05) !important;
-        border-left: 4px solid #28a745;
-    }
-
-    .stock-medium {
-        background-color: rgba(255, 193, 7, 0.05) !important;
-        border-left: 4px solid #ffc107;
+        border-left: 4px solid var(--good-stock);
     }
 
     .stock-low {
         background-color: rgba(253, 126, 20, 0.05) !important;
-        border-left: 4px solid #fd7e14;
+        border-left: 4px solid var(--low-stock);
     }
 
     .stock-out {
         background-color: rgba(108, 117, 125, 0.15) !important;
-        border-left: 4px solid #6c757d;
+        border-left: 4px solid var(--out-stock);
         color: #6c757d !important;
     }
 
@@ -402,10 +401,36 @@ if (!empty($msg) && is_array($msg)):
         vertical-align: middle;
     }
 
-    .indicator-high { background-color: #28a745; }
-    .indicator-medium { background-color: #ffc107; }
-    .indicator-low { background-color: #fd7e14; }
-    .indicator-out { background-color: #6c757d; }
+    .indicator-good { background-color: var(--good-stock); }
+    .indicator-low { background-color: var(--low-stock); }
+    .indicator-out { background-color: var(--out-stock); }
+
+    /* Stock status legend */
+    .stock-legend {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: #495057;
+    }
+
+    .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .legend-good { background-color: var(--good-stock); }
+    .legend-low { background-color: var(--low-stock); }
+    .legend-out { background-color: var(--out-stock); }
 
     /* Rounded dropdowns */
     .unit-select {
@@ -416,7 +441,7 @@ if (!empty($msg) && is_array($msg)):
     }
 
     .unit-select:focus {
-        border-color: #006205;
+        border-color: var(--primary-green);
         box-shadow: 0 0 0 0.2rem rgba(0, 98, 5, 0.25);
     }
 
@@ -429,7 +454,7 @@ if (!empty($msg) && is_array($msg)):
     }
 
     .qty-input:focus {
-        border-color: #006205;
+        border-color: var(--primary-green);
         box-shadow: 0 0 0 0.2rem rgba(0, 98, 5, 0.25);
     }
 
@@ -457,28 +482,22 @@ if (!empty($msg) && is_array($msg)):
         border: 1px solid;
     }
 
-    .badge-high {
+    .badge-good {
         background-color: rgba(40, 167, 69, 0.1);
         color: #155724;
-        border-color: #28a745;
-    }
-
-    .badge-medium {
-        background-color: rgba(255, 193, 7, 0.1);
-        color: #856404;
-        border-color: #ffc107;
+        border-color: var(--good-stock);
     }
 
     .badge-low {
         background-color: rgba(253, 126, 20, 0.1);
         color: #cc5500;
-        border-color: #fd7e14;
+        border-color: var(--low-stock);
     }
 
     .badge-out {
         background-color: rgba(108, 117, 125, 0.1);
         color: #495057;
-        border-color: #6c757d;
+        border-color: var(--out-stock);
     }
 
     /* Style disabled inputs for out-of-stock items */
@@ -488,6 +507,34 @@ if (!empty($msg) && is_array($msg)):
         border-color: #ced4da;
         opacity: 0.6;
         cursor: not-allowed;
+    }
+    
+    /* DataTable customizations */
+    .dataTables_wrapper {
+        margin-top: 1rem;
+    }
+    
+    .dataTables_length,
+    .dataTables_filter,
+    .dataTables_info,
+    .dataTables_paginate {
+        margin: 0.5rem 0;
+    }
+    
+    .dataTables_filter input {
+        border-radius: 20px;
+        padding: 0.375rem 0.75rem;
+        border: 1px solid #dee2e6;
+    }
+    
+    .dataTables_paginate .paginate_button {
+        border-radius: 5px !important;
+        margin: 0 2px;
+    }
+    
+    .dataTables_paginate .paginate_button.current {
+        background: var(--primary-green) !important;
+        border-color: var(--primary-green) !important;
     }
     
     /* Mobile Responsive Styles */
@@ -591,6 +638,16 @@ if (!empty($msg) && is_array($msg)):
         .modal-content {
             border-radius: 0.5rem;
         }
+        
+        /* Stock legend adjustments */
+        .stock-legend {
+            justify-content: flex-start;
+            gap: 0.5rem;
+        }
+        
+        .legend-item {
+            font-size: 0.8rem;
+        }
     }
     
     /* Small mobile devices */
@@ -660,6 +717,22 @@ if (!empty($msg) && is_array($msg)):
         </div>
       </div>
 
+      <!-- Stock Status Legend -->
+      <div class="stock-legend">
+        <div class="legend-item">
+            <div class="legend-color legend-good"></div>
+            <span>Good Stock</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color legend-low"></div>
+            <span>Low Stock</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color legend-out"></div>
+            <span>Out of Stock</span>
+        </div>
+      </div>
+
       <label class="fw-bold text-success">Available Items <small class="text-muted">(Sorted by availability)</small></label>
       <div class="table-responsive mb-3">
         <?php if(!empty($all_items)): ?>
@@ -691,16 +764,11 @@ if (!empty($msg) && is_array($msg)):
                     $indicator_class = 'indicator-low';
                     $stock_badge = '<span class="stock-badge badge-low">Low</span>';
                     $stock_status_text = 'Low Stock';
-                } elseif ($quantity <= 15) {
-                    $stock_class = 'stock-medium';
-                    $indicator_class = 'indicator-medium';
-                    $stock_badge = '<span class="stock-badge badge-medium">Medium</span>';
-                    $stock_status_text = 'Medium Stock';
                 } else {
-                    $stock_class = 'stock-high';
-                    $indicator_class = 'indicator-high';
-                    $stock_badge = '<span class="stock-badge badge-high">High</span>';
-                    $stock_status_text = 'High Stock';
+                    $stock_class = 'stock-good';
+                    $indicator_class = 'indicator-good';
+                    $stock_badge = '<span class="stock-badge badge-good">Good</span>';
+                    $stock_status_text = 'Good Stock';
                 }
             ?>
             <tr class="<?= $stock_class ?>" data-quantity="<?= $quantity ?>">
@@ -712,6 +780,10 @@ if (!empty($msg) && is_array($msg)):
               <td class="text-center" data-label="Available Qty">
                 <div class="d-flex align-items-center justify-content-center">
                   <strong><?= $it['display_quantity']; ?></strong>
+                </div>
+                <div class="mt-1">
+                  <span class="stock-indicator <?= $indicator_class ?>"></span>
+                  <?= $stock_badge ?>
                 </div>
               </td>
               <td class="text-center" data-label="Request Unit">
@@ -798,101 +870,137 @@ if (!empty($msg) && is_array($msg)):
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 
 <script>
-// Set initial values and event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    // Add event listeners for unit selection changes
-    document.querySelectorAll('.unit-select').forEach(select => {
-        select.addEventListener('change', function() {
-            const itemId = this.dataset.itemid;
-            const conversion = parseFloat(this.dataset.conversion) || 1;
-            const mainUnit = this.dataset.mainunit;
-            const baseUnit = this.dataset.baseunit;
-            const qtyInput = document.querySelector(`input[name="qty[${itemId}]"]`);
-            const available = parseFloat(qtyInput.dataset.available) || 0;
+// Initialize DataTable
+$(document).ready(function() {
+    var table = $('#itemsTable').DataTable({
+        pageLength: 10,
+        lengthMenu: [5, 10, 25, 50],
+        ordering: true,
+        searching: true,
+        autoWidth: false,
+        responsive: true,
+        language: {
+            search: "Search items:",
+            lengthMenu: "Show _MENU_ items per page",
+            info: "Showing _START_ to _END_ of _TOTAL_ items",
+            paginate: {
+                first: "First",
+                last: "Last",
+                next: "Next",
+                previous: "Previous"
+            }
+        },
+        columnDefs: [
+            { orderable: false, targets: [3, 4] }, // Make action columns non-orderable
+            { width: "15%", targets: [0] }, // Stock Card column
+            { width: "25%", targets: [1] }, // Item Name column
+            { width: "20%", targets: [2] }, // Available Qty column
+            { width: "20%", targets: [3] }, // Request Unit column
+            { width: "20%", targets: [4] }  // Request Qty column
+        ],
+        // Initial sort by stock status (using the data-quantity attribute)
+        order: [[2, 'desc']],
+        drawCallback: function(settings) {
+            // Update any dynamic content after table redraw
+            updateUnitSelects();
+        }
+    });
 
-            // Update max value based on selected unit
-            if (this.value === baseUnit && conversion > 1) {
-                // Requesting in base units (pieces) - max is available * conversion rate
-                const availableMain = parseFloat(available) || 0;
-                const fullMainUnits = Math.floor(availableMain);
-                const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                
-                let availableText = '';
-                if (fullMainUnits > 0 && remainingBaseUnits > 0) {
-                    availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
-                } else if (fullMainUnits > 0) {
-                    availableText = `${fullMainUnits} ${mainUnit}`;
+    // Custom search functionality
+    $('#searchInput').on('keyup', function() {
+        table.search(this.value).draw();
+    });
+
+    // Initialize unit selects after table is drawn
+    function updateUnitSelects() {
+        document.querySelectorAll('.unit-select').forEach(select => {
+            select.addEventListener('change', function() {
+                const itemId = this.dataset.itemid;
+                const conversion = parseFloat(this.dataset.conversion) || 1;
+                const mainUnit = this.dataset.mainunit;
+                const baseUnit = this.dataset.baseunit;
+                const qtyInput = document.querySelector(`input[name="qty[${itemId}]"]`);
+                const available = parseFloat(qtyInput.dataset.available) || 0;
+
+                // Update max value based on selected unit
+                if (this.value === baseUnit && conversion > 1) {
+                    // Requesting in base units (pieces) - max is available * conversion rate
+                    const availableMain = parseFloat(available) || 0;
+                    const fullMainUnits = Math.floor(availableMain);
+                    const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
+                    
+                    let availableText = '';
+                    if (fullMainUnits > 0 && remainingBaseUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
+                    } else if (fullMainUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit}`;
+                    } else {
+                        availableText = `${remainingBaseUnits} ${baseUnit}`;
+                    }
+                    
+                    qtyInput.max = Math.floor(availableMain * conversion);
+                    qtyInput.title = `Available: ${availableText}`;
                 } else {
-                    availableText = `${remainingBaseUnits} ${baseUnit}`;
+                    // Requesting in main units (boxes) - max is available
+                    const availableMain = parseFloat(available) || 0;
+                    const fullMainUnits = Math.floor(availableMain);
+                    const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
+                    
+                    let availableText = '';
+                    if (fullMainUnits > 0 && remainingBaseUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
+                    } else if (fullMainUnits > 0) {
+                        availableText = `${fullMainUnits} ${mainUnit}`;
+                    } else {
+                        availableText = `${remainingBaseUnits} ${baseUnit}`;
+                    }
+                    
+                    qtyInput.max = availableMain;
+                    qtyInput.title = `Available: ${availableText}`;
+                }
+            });
+
+            // Trigger initial setup
+            select.dispatchEvent(new Event('change'));
+        });
+
+        // Ensure whole numbers in quantity inputs
+        document.querySelectorAll('.qty-input').forEach(input => {
+            input.addEventListener('input', function() {
+                // Remove any decimal values and ensure whole numbers
+                const value = parseFloat(this.value) || 0;
+                if (!Number.isInteger(value)) {
+                    this.value = Math.floor(value);
                 }
                 
-                qtyInput.max = Math.floor(availableMain * conversion);
-                qtyInput.title = `Available: ${availableText}`;
-            } else {
-                // Requesting in main units (boxes) - max is available
-                const availableMain = parseFloat(available) || 0;
-                const fullMainUnits = Math.floor(availableMain);
-                const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                
-                let availableText = '';
-                if (fullMainUnits > 0 && remainingBaseUnits > 0) {
-                    availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
-                } else if (fullMainUnits > 0) {
-                    availableText = `${fullMainUnits} ${mainUnit}`;
-                } else {
-                    availableText = `${remainingBaseUnits} ${baseUnit}`;
+                // Ensure value doesn't exceed max
+                const max = parseFloat(this.max) || 0;
+                if (value > max) {
+                    this.value = max;
                 }
                 
-                qtyInput.max = availableMain;
-                qtyInput.title = `Available: ${availableText}`;
-            }
-        });
-    });
-
-    // Trigger change event on page load to set initial max values
-    document.querySelectorAll('.unit-select').forEach(select => {
-        select.dispatchEvent(new Event('change'));
-    });
-
-    // Ensure whole numbers in quantity inputs
-    document.querySelectorAll('.qty-input').forEach(input => {
-        input.addEventListener('input', function() {
-            // Remove any decimal values and ensure whole numbers
-            const value = parseFloat(this.value) || 0;
-            if (!Number.isInteger(value)) {
-                this.value = Math.floor(value);
-            }
+                // Ensure value is not negative
+                if (value < 0) {
+                    this.value = 0;
+                }
+            });
             
-            // Ensure value doesn't exceed max
-            const max = parseFloat(this.max) || 0;
-            if (value > max) {
-                this.value = max;
-            }
-            
-            // Ensure value is not negative
-            if (value < 0) {
-                this.value = 0;
-            }
+            // Also handle blur event to clean up any invalid input
+            input.addEventListener('blur', function() {
+                const value = parseFloat(this.value) || 0;
+                if (!Number.isInteger(value) || value < 0) {
+                    this.value = Math.max(0, Math.floor(value));
+                }
+            });
         });
-        
-        // Also handle blur event to clean up any invalid input
-        input.addEventListener('blur', function() {
-            const value = parseFloat(this.value) || 0;
-            if (!Number.isInteger(value) || value < 0) {
-                this.value = Math.max(0, Math.floor(value));
-            }
-        });
-    });
-});
+    }
 
-// Search filter
-document.getElementById('searchInput').addEventListener('input', function() {
-    const filter = this.value.toLowerCase();
-    document.querySelectorAll('#itemsTable tbody tr').forEach(row => {
-        row.style.display = row.innerText.toLowerCase().includes(filter) ? '' : 'none';
-    });
+    // Initialize unit selects
+    updateUnitSelects();
 });
 
 // Review before submit
@@ -949,68 +1057,6 @@ document.getElementById('finalSubmitBtn').addEventListener('click', function() {
     document.getElementById('requestForm').submit();
 });
 
-// Quantity validation
-document.addEventListener("DOMContentLoaded", function() {
-    document.querySelectorAll('.qty-input').forEach(input => {
-        input.addEventListener('input', function() {
-            const max = parseFloat(this.max);
-            let val = parseFloat(this.value) || 0;
-            
-            // Ensure whole numbers only
-            if (!Number.isInteger(val)) {
-                val = Math.floor(val);
-                this.value = val;
-            }
-            
-            const unitSelect = document.querySelector(`select[name="unit_type[${this.dataset.itemid}]"]`);
-            const selectedUnit = unitSelect ? unitSelect.selectedOptions[0].text : '';
-            const conversion = parseFloat(this.dataset.conversion) || 1;
-            const mainUnit = this.dataset.mainunit;
-            const baseUnit = this.dataset.baseunit;
-
-            if (val > max) {
-                let availableText = '';
-                if (selectedUnit === baseUnit && conversion > 1) {
-                    const availableMain = parseFloat(this.dataset.available) || 0;
-                    const fullMainUnits = Math.floor(availableMain);
-                    const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                    
-                    if (fullMainUnits > 0 && remainingBaseUnits > 0) {
-                        availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
-                    } else if (fullMainUnits > 0) {
-                        availableText = `${fullMainUnits} ${mainUnit}`;
-                    } else {
-                        availableText = `${remainingBaseUnits} ${baseUnit}`;
-                    }
-                } else {
-                    const availableMain = parseFloat(this.dataset.available) || 0;
-                    const fullMainUnits = Math.floor(availableMain);
-                    const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
-                    
-                    if (fullMainUnits > 0 && remainingBaseUnits > 0) {
-                        availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
-                    } else if (fullMainUnits > 0) {
-                        availableText = `${fullMainUnits} ${mainUnit}`;
-                    } else {
-                        availableText = `${remainingBaseUnits} ${baseUnit}`;
-                    }
-                }
-
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Quantity Exceeded',
-                    text: `Only ${availableText} available in stock.`,
-                    confirmButtonColor: '#28a745',
-                });
-
-                this.value = Math.floor(max);
-            } else if (val < 0) {
-                this.value = 0;
-            }
-        });
-    });
-});
-
 // Mobile-specific adjustments
 function handleMobileLayout() {
     const isMobile = window.innerWidth <= 768;
@@ -1040,41 +1086,4 @@ function handleMobileLayout() {
 // Initialize mobile layout on load and resize
 window.addEventListener('load', handleMobileLayout);
 window.addEventListener('resize', handleMobileLayout);
-</script>
-
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
-<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
-<script>
-$(document).ready(function () {
-    var table = $('#itemsTable').DataTable({
-        pageLength: 10,
-        lengthMenu: [5, 10, 25, 50],
-        ordering: true,
-        searching: false,
-        autoWidth: true,
-        responsive: true,
-        deferRender: true,        
-        processing: true,
-        serverSide: false,        
-        columnDefs: [
-            { orderable: false, targets: [3, 4] } // Make action columns non-orderable
-        ],
-        // Initial sort by available quantity (descending)
-        order: [[2, 'desc']],
-        // Mobile responsive settings
-        responsive: {
-            details: {
-                display: $.fn.dataTable.Responsive.display.modal({
-                    header: function (row) {
-                        var data = row.data();
-                        return 'Details for ' + data[1];
-                    }
-                }),
-                renderer: $.fn.dataTable.Responsive.renderer.tableAll({
-                    tableClass: 'table'
-                })
-            }
-        }
-    });
-});
 </script>

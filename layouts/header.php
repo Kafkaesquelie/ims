@@ -466,6 +466,8 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                         <p>Dashboard</p>
                                     </a>
                                 </li>
+                                <li class="nav-header">USER MANAGEMENT</li>
+
                                 <li class="nav-item">
                                     <a href="users.php" class="nav-link">
                                         <i class="nav-icon fa-solid fa-users-gear"></i>
@@ -504,11 +506,11 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
 
                                 <li class="nav-header">DOCUMENTS</li>
                                 <li class="nav-item">
-                                    <a href="user_logs.php" class="nav-link">
+                                   <a href="user_logs.php" class="nav-link">
                                         <i class="nav-icon fas fa-exchange-alt"></i>
                                         <p> Transactions</p>
                                     </a>
-                                </li>
+                                </li> 
                                 <li class="nav-item">
                                     <a href="ics.php" class="nav-link">
                                        <i class="fa-solid fa-file-contract"></i>

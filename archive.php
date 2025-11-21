@@ -310,6 +310,10 @@ if (!empty($msg) && is_array($msg)):
                 $field1 = $data['property_no'] ?? ($data['article'] ?? 'N/A');
               } elseif ($archive['classification'] === 'signatories') {
                 $field1 = $data['name'] ?? ($data['name'] ?? 'N/A');
+              }elseif ($archive['classification'] === 'units') {
+                $field1 = $data['name'] ?? ($data['name'] ?? 'N/A');
+              }elseif ($archive['classification'] === 'base_units') {
+                $field1 = $data['name'] ?? ($data['name'] ?? 'N/A');
               }
               ?>
 
@@ -344,6 +348,10 @@ if (!empty($msg) && is_array($msg)):
                       <i class="fas fa-warehouse me-2 text-muted p-1"></i>
                     <?php elseif ($archive['classification'] === 'signatories'): ?>
                       <i class="fas fa-signature me-2 text-muted p-1"></i>
+                    <?php elseif ($archive['classification'] === 'units'): ?>
+                      <i class="fas fa-balance-scale text-muted p-1"></i>
+                    <?php elseif ($archive['classification'] === 'base_units'): ?>
+                      <i class="fas fa-layer-group text-muted p-1"></i> 
 
                     <?php endif; ?>
 

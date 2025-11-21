@@ -173,6 +173,77 @@ if (isset($_GET['set_current'])) {
     redirect('refs.php');
 }
 
+// Handle Add Base Unit
+if (isset($_POST['add_base_unit'])) {
+    $name = remove_junk($db->escape($_POST['base_unit_name']));
+    $symbol = remove_junk($db->escape($_POST['symbol']));
+
+    // Check duplicate ONLY in base_units
+    $existing = find_by_sql("SELECT id FROM base_units WHERE name = '{$name}' OR symbol = '{$symbol}'");
+    if (count($existing) > 0) {
+        $session->msg("d", "Base Unit '{$name}' or symbol '{$symbol}' already exists.");
+        redirect('refs.php');
+    }
+
+    $db->query("INSERT INTO base_units (name, symbol) VALUES ('{$name}', '{$symbol}')");
+    $session->msg("s", "Base Unit added successfully.");
+    redirect('refs.php');
+}
+
+// Handle Edit Base Unit
+if (isset($_POST['edit_base_unit'])) {
+    $id = (int)$_POST['id'];
+    $name = remove_junk($db->escape($_POST['base_unit_name']));
+    $symbol = remove_junk($db->escape($_POST['symbol']));
+
+    // Check duplicate ONLY in base_units excluding current
+    $existing = find_by_sql("SELECT id FROM base_units WHERE (name = '{$name}' OR symbol = '{$symbol}') AND id != '{$id}'");
+    if (count($existing) > 0) {
+        $session->msg("d", "Base Unit '{$name}' or symbol '{$symbol}' already exists.");
+        redirect('refs.php');
+    }
+
+    $db->query("UPDATE base_units SET name='{$name}', symbol='{$symbol}'WHERE id='{$id}'");
+    $session->msg("s", "Base Unit updated successfully.");
+    redirect('refs.php');
+}
+
+
+// Handle Add Unit
+if (isset($_POST['add_unit'])) {
+    $name = remove_junk($db->escape($_POST['unit_name']));
+    $symbol = remove_junk($db->escape($_POST['symbol']));
+
+    // Check duplicate ONLY in units table
+    $existing = find_by_sql("SELECT id FROM units WHERE name = '{$name}' OR symbol = '{$symbol}'");
+    if (count($existing) > 0) {
+        $session->msg("d", "Unit '{$name}' or symbol '{$symbol}' already exists.");
+        redirect('refs.php');
+    }
+
+    $db->query("INSERT INTO units (name, symbol) VALUES ('{$name}', '{$symbol}')");
+    $session->msg("s", "Unit added successfully.");
+    redirect('refs.php');
+}
+
+// Handle Edit Unit
+if (isset($_POST['edit_unit'])) {
+    $id = (int)$_POST['id'];
+    $name = remove_junk($db->escape($_POST['unit_name']));
+    $symbol = remove_junk($db->escape($_POST['symbol']));
+
+    // Check duplicate ONLY in units table excluding current
+    $existing = find_by_sql("SELECT id FROM units WHERE (name = '{$name}' OR symbol = '{$symbol}') AND id != '{$id}'");
+    if (count($existing) > 0) {
+        $session->msg("d", "Unit '{$name}' or symbol '{$symbol}' already exists.");
+        redirect('refs.php');
+    }
+
+    $db->query("UPDATE units SET name='{$name}', symbol='{$symbol}'WHERE id='{$id}'");
+    $session->msg("s", "Unit updated successfully.");
+    redirect('refs.php');
+}
+
 // Handle Multiple Division Additions
 if (isset($_POST['division_names']) && is_array($_POST['division_names'])) {
     $successCount = 0;
@@ -240,11 +311,11 @@ if (isset($_POST['division_ids']) && isset($_POST['office_names']) &&
     }
 }
 
-// Fetch Data
+// ✅ OPTIMIZED: Fetch all data in single queries with JOINs for better performance
 $clusters = find_all('fund_clusters');
 $divisions = find_all('divisions');
 
-// ✅ CORRECTED: Get all offices with their divisions
+// Get all offices with their divisions
 $offices = find_by_sql("
     SELECT o.*, d.id AS division_id, d.division_name 
     FROM offices o 
@@ -253,6 +324,11 @@ $offices = find_by_sql("
 ");
 
 $school_years = find_all('school_years');
+
+// Get base units and units with JOIN for better performance
+$base_units = find_all('base_units');
+$units = find_all("units")
+   
 
 ?>
 <?php include_once('layouts/header.php'); 
@@ -274,7 +350,6 @@ if (!empty($msg) && is_array($msg)):
     });
 </script>
 <?php endif; ?>
-
 
 <style>
 :root {
@@ -317,6 +392,10 @@ if (!empty($msg) && is_array($msg)):
 
 .card-header-custom.warning {
     background: linear-gradient(135deg, var(--warning), #e0a800);
+}
+
+.card-header-custom.success {
+    background: linear-gradient(135deg, #20c997, #198754);
 }
 
 .card-title {
@@ -390,6 +469,26 @@ if (!empty($msg) && is_array($msg)):
 .btn-custom-warning:hover {
     background: #e0a800;
     color: var(--dark);
+    transform: translateY(-1px);
+}
+
+.btn-custom-success {
+    background: linear-gradient(135deg, #20c997, #198754);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 0.6rem 1.25rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.btn-custom-success:hover {
+    background: #198754;
+    color: white;
     transform: translateY(-1px);
 }
 
@@ -508,6 +607,11 @@ if (!empty($msg) && is_array($msg)):
     color: var(--primary-dark);
 }
 
+.badge-secondary {
+    background: rgba(108, 117, 125, 0.15);
+    color: #495057;
+}
+
 .current-badge {
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white;
@@ -531,6 +635,10 @@ if (!empty($msg) && is_array($msg)):
     background: linear-gradient(135deg, var(--warning), #e0a800);
 }
 
+.modal-header.success {
+    background: linear-gradient(135deg, #20c997, #198754);
+}
+
 .modal-title {
     font-weight: 600;
 }
@@ -552,6 +660,10 @@ if (!empty($msg) && is_array($msg)):
     border-top: 4px solid var(--warning);
 }
 
+.stats-card.success {
+    border-top: 4px solid #20c997;
+}
+
 .stats-value {
     font-size: 2.5rem;
     font-weight: 700;
@@ -565,6 +677,10 @@ if (!empty($msg) && is_array($msg)):
 
 .stats-card.warning .stats-value {
     color: var(--warning);
+}
+
+.stats-card.success .stats-value {
+    color: #20c997;
 }
 
 .stats-label {
@@ -599,6 +715,12 @@ if (!empty($msg) && is_array($msg)):
     color: #6c757d;
     margin-top: 0.25rem;
     line-height: 1.4;
+}
+
+.conversion-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-style: italic;
 }
 
 /* ✅ NEW: Force add buttons to the right */
@@ -655,6 +777,29 @@ button, .btn {
     padding: 1rem !important;
 }
 
+/* ✅ NEW: Base Unit row styling */
+.base-unit-row {
+    background: linear-gradient(135deg, rgba(32, 201, 151, 0.1), rgba(32, 201, 151, 0.05)) !important;
+    border-left: 4px solid #20c997;
+    font-weight: bold;
+}
+
+.base-unit-row td {
+    padding: 1rem !important;
+    font-size: 1rem !important;
+}
+
+.no-units-row {
+    background: #f8f9fa !important;
+    font-style: italic;
+    color: #6c757d;
+}
+
+.no-units-row td {
+    text-align: center;
+    padding: 1rem !important;
+}
+
 /* ✅ NEW: DataTables customization */
 .dataTables_wrapper .dataTables_length,
 .dataTables_wrapper .dataTables_filter,
@@ -694,7 +839,7 @@ button, .btn {
         font-size: 1.1rem;
     }
     
-    .btn-custom-primary, .btn-custom-secondary, .btn-custom-warning {
+    .btn-custom-primary, .btn-custom-secondary, .btn-custom-warning, .btn-custom-success {
         padding: 0.5rem 1rem;
         font-size: 0.9rem;
     }
@@ -716,7 +861,7 @@ button, .btn {
         gap: 0.25rem;
     }
     
-    .division-row td {
+    .division-row td, .base-unit-row td {
         font-size: 0.9rem !important;
         padding: 0.8rem !important;
     }
@@ -738,31 +883,132 @@ button, .btn {
 <div class="card-container mt-4">
     <!-- Statistics Row -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="stats-card">
                 <div class="stats-value"><?php echo count($clusters); ?></div>
                 <div class="stats-label">Fund Clusters</div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="stats-card">
                 <div class="stats-value"><?php echo count($divisions); ?></div>
                 <div class="stats-label">Divisions</div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="stats-card info">
                 <div class="stats-value"><?php echo count($offices); ?></div>
                 <div class="stats-label">Offices</div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="stats-card warning">
                 <div class="stats-value"><?php echo count($school_years); ?></div>
                 <div class="stats-label">School Years</div>
             </div>
         </div>
+        <div class="col-md-2">
+            <div class="stats-card success">
+                <div class="stats-value"><?php echo count($base_units); ?></div>
+                <div class="stats-label">Base Units</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="stats-card">
+                <div class="stats-value"><?php echo count($units); ?></div>
+                <div class="stats-label">Units</div>
+            </div>
+        </div>
     </div>
+  <!-- School Years Card -->
+        <div class="col-md-12">
+            <div class="card-custom">
+                <div class="card-header card-header-custom warning d-flex justify-content-between align-items-center">
+                    <h5 class="card-title">
+                        <i class="fas fa-calendar-alt"></i> School Years & Semesters
+                    </h5>
+                    <div class="header-actions">
+                        <button class="btn btn-custom-warning" data-bs-toggle="modal" data-bs-target="#addSchoolYearModal">
+                            <i class="fas fa-plus"></i> Add School Year
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <?php if(count($school_years) > 0): ?>
+                        <div class="table-responsive">
+                            <table id="schoolYearsTable" class="table table-custom table-hover" style="width:100%">
+                                <thead>
+                                    <tr>
+                                        <th width="5%">#</th>
+                                        <th>School Year</th>
+                                        <th>Semester</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Status</th>
+                                        <th width="25%">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach($school_years as $i=>$sy): ?>
+                                        <tr class="<?= $sy['is_current'] ? 'current-school-year' : '' ?>">
+                                            <td><span class="badge badge-custom badge-warning"><?= $i+1 ?></span></td>
+                                            <td class="fw-semibold"><?= remove_junk($sy['school_year']) ?></td>
+                                            <td>
+                                                <span class="badge badge-custom badge-info">
+                                                    <?= strtoupper($sy['semester']) ?> Semester
+                                                </span>
+                                            </td>
+                                            <td><?= date('M d, Y', strtotime($sy['start_date'])) ?></td>
+                                            <td><?= date('M d, Y', strtotime($sy['end_date'])) ?></td>
+                                            <td>
+                                                <?php if($sy['is_current']): ?>
+                                                    <span class="current-badge">
+                                                        <i class="fas fa-star me-1"></i> Current
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="text-muted">Inactive</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <?php if(!$sy['is_current']): ?>
+                                                        <a href="refs.php?set_current=<?= $sy['id'] ?>" 
+                                                           class="btn-current"
+                                                           title="Set as Current">
+                                                            <i class="fas fa-check"></i> Set Current
+                                                        </a>
+                                                    <?php endif; ?>
+                                                    <button class="btn btn-action btn-edit" 
+                                                            data-bs-toggle="modal" 
+                                                            title="Edit"
+                                                            data-bs-target="#editSchoolYearModal<?= $sy['id'] ?>">
+                                                        <i class="fas fa-edit"></i> 
+                                                    </button>
+                                                    <a href="a_script.php?id=<?= $sy['id'] ?>&type=school_years" 
+                                                       class="btn-archive"
+                                                       title="Archive">
+                                                        <i class="fa-solid fa-file-zipper"></i> 
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-calendar-alt"></i>
+                            <h5>No School Years</h5>
+                            <p>Get started by adding your first school year</p>
+                            <button class="btn btn-custom-warning" data-bs-toggle="modal" data-bs-target="#addSchoolYearModal">
+                                <i class="fas fa-plus"></i> Add First School Year
+                            </button>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
 
     <div class="row">
         <!-- Fund Cluster Card -->
@@ -950,98 +1196,152 @@ button, .btn {
         </div>
     </div>
 
-    <!-- School Years Card -->
     <div class="row">
-        <div class="col-12">
-            <div class="card-custom">
-                <div class="card-header card-header-custom warning d-flex justify-content-between align-items-center">
-                    <h5 class="card-title">
-                        <i class="fas fa-calendar-alt"></i> School Years & Semesters
-                    </h5>
-                    <div class="header-actions">
-                        <button class="btn btn-custom-warning" data-bs-toggle="modal" data-bs-target="#addSchoolYearModal">
-                            <i class="fas fa-plus"></i> Add School Year
-                        </button>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <?php if(count($school_years) > 0): ?>
-                        <div class="table-responsive">
-                            <table id="schoolYearsTable" class="table table-custom table-hover" style="width:100%">
-                                <thead>
-                                    <tr>
-                                        <th width="5%">#</th>
-                                        <th>School Year</th>
-                                        <th>Semester</th>
-                                        <th>Start Date</th>
-                                        <th>End Date</th>
-                                        <th>Status</th>
-                                        <th width="25%">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach($school_years as $i=>$sy): ?>
-                                        <tr class="<?= $sy['is_current'] ? 'current-school-year' : '' ?>">
-                                            <td><span class="badge badge-custom badge-warning"><?= $i+1 ?></span></td>
-                                            <td class="fw-semibold"><?= remove_junk($sy['school_year']) ?></td>
-                                            <td>
-                                                <span class="badge badge-custom badge-info">
-                                                    <?= strtoupper($sy['semester']) ?> Semester
-                                                </span>
-                                            </td>
-                                            <td><?= date('M d, Y', strtotime($sy['start_date'])) ?></td>
-                                            <td><?= date('M d, Y', strtotime($sy['end_date'])) ?></td>
-                                            <td>
-                                                <?php if($sy['is_current']): ?>
-                                                    <span class="current-badge">
-                                                        <i class="fas fa-star me-1"></i> Current
-                                                    </span>
-                                                <?php else: ?>
-                                                    <span class="text-muted">Inactive</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <div class="btn-group" role="group">
-                                                    <?php if(!$sy['is_current']): ?>
-                                                        <a href="refs.php?set_current=<?= $sy['id'] ?>" 
-                                                           class="btn-current"
-                                                           title="Set as Current">
-                                                            <i class="fas fa-check"></i> Set Current
-                                                        </a>
-                                                    <?php endif; ?>
-                                                    <button class="btn btn-action btn-edit" 
-                                                            data-bs-toggle="modal" 
-                                                            title="Edit"
-                                                            data-bs-target="#editSchoolYearModal<?= $sy['id'] ?>">
-                                                        <i class="fas fa-edit"></i> 
-                                                    </button>
-                                                    <a href="a_script.php?id=<?= $sy['id'] ?>&type=school_years" 
-                                                       class="btn-archive"
-                                                       title="Archive">
-                                                        <i class="fa-solid fa-file-zipper"></i> 
-                                                    </a>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php else: ?>
-                        <div class="empty-state">
-                            <i class="fas fa-calendar-alt"></i>
-                            <h5>No School Years</h5>
-                            <p>Get started by adding your first school year</p>
-                            <button class="btn btn-custom-warning" data-bs-toggle="modal" data-bs-target="#addSchoolYearModal">
-                                <i class="fas fa-plus"></i> Add First School Year
-                            </button>
-                        </div>
-                    <?php endif; ?>
-                </div>
+        <!-- Units Card -->
+<div class="col-md-6">
+    <div class="card-custom">
+        <div class="card-header card-header-custom info d-flex justify-content-between align-items-center">
+            <h5 class="card-title">
+                <i class="fas fa-balance-scale"></i> Units
+            </h5>
+            <div class="header-actions">
+                <button class="btn btn-custom-primary" data-bs-toggle="modal" data-bs-target="#addUnitModal">
+                    <i class="fas fa-plus"></i> Add Unit
+                </button>
             </div>
+        </div>
+        <div class="card-body">
+            <?php if(count($units) > 0): ?>
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover" id="unitsTable" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th width="5%">#</th>
+                                <th>Unit Name</th>
+                                <th>Symbol</th>
+                                <th width="20%">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach($units as $i=>$unit): ?>
+                            
+                                <tr>
+                                    <td><span class="badge badge-custom badge-info"><?= $i+1 ?></span></td>
+                                    <td class="fw-semibold"><?= remove_junk($unit['name']) ?></td>
+                                    <td>
+                                        <span class="badge badge-custom badge-secondary">
+                                            <?= remove_junk($unit['symbol']) ?>
+                                        </span>
+                                    </td>
+                                   
+                               
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-action btn-edit" 
+                                                    data-bs-toggle="modal" 
+                                                    title="Edit"
+                                                    data-bs-target="#editUnitModal<?= $unit['id'] ?>">
+                                                <i class="fas fa-edit"></i> 
+                                            </button>
+                                            <a href="a_script.php?id=<?= $unit['id'] ?>&type=units" 
+                                               class="btn-archive"
+                                               title="Archive">
+                                                <i class="fa-solid fa-file-zipper"></i> 
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-balance-scale"></i>
+                    <h5>No Units</h5>
+                    <p>Get started by adding your first unit</p>
+                    <button class="btn btn-custom-primary" data-bs-toggle="modal" data-bs-target="#addUnitModal">
+                        <i class="fas fa-plus"></i> Add First Unit
+                    </button>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
+  <!-- Base Units Card -->
+<div class="col-md-6">
+    <div class="card-custom">
+        <div class="card-header card-header-custom success d-flex justify-content-between align-items-center">
+            <h5 class="card-title">
+                <i class="fas fa-layer-group"></i> Base Units
+            </h5>
+            <div class="header-actions">
+                <button class="btn btn-custom-success" data-bs-toggle="modal" data-bs-target="#addBaseUnitModal">
+                    <i class="fas fa-plus"></i> Add Base Unit
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <?php if(count($base_units) > 0): ?>
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover" id="baseUnitsTable" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th width="5%">#</th>
+                                <th>Base Unit Name</th>
+                                <th>Symbol</th>
+                                <th width="20%">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach($base_units as $i=>$bu): ?>
+                                <tr>
+                                    <td><span class="badge badge-custom badge-success"><?= $i+1 ?></span></td>
+                                    <td class="fw-semibold"><?= remove_junk($bu['name']) ?></td>
+                                    <td>
+                                        <span class="badge badge-custom badge-primary">
+                                            <?= remove_junk($bu['symbol']) ?>
+                                        </span>
+                                    </td>
+                                    
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-action btn-edit" 
+                                                    data-bs-toggle="modal" 
+                                                    title="Edit"
+                                                    data-bs-target="#editBaseUnitModal<?= $bu['id'] ?>">
+                                                <i class="fas fa-edit"></i> 
+                                            </button>
+                                            <a href="a_script.php?id=<?= $bu['id'] ?>&type=base_units" 
+                                               class="btn-archive"
+                                               title="Archive">
+                                                <i class="fa-solid fa-file-zipper"></i> 
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-layer-group"></i>
+                    <h5>No Base Units</h5>
+                    <p>Get started by adding your first base unit</p>
+                    <button class="btn btn-custom-success" data-bs-toggle="modal" data-bs-target="#addBaseUnitModal">
+                        <i class="fas fa-plus"></i> Add First Base Unit
+                    </button>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+
+</div>
+
+        
 
 <!-- Add Cluster Modal -->
 <div class="modal fade" id="addClusterModal" tabindex="-1">
@@ -1183,6 +1483,66 @@ button, .btn {
                 <div class="modal-footer">
                     <button type="button" class="btn btn-custom-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-custom-warning">Save School Year</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add Base Unit Modal -->
+<div class="modal fade" id="addBaseUnitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST">
+            <input type="hidden" name="add_base_unit" value="1">
+            <div class="modal-content">
+                <div class="modal-header success">
+                    <h5 class="modal-title">Add Base Unit</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Base Unit Name *</label>
+                        <input type="text" name="base_unit_name" class="form-control" placeholder="e.g., Piece, Roll" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Symbol *</label>
+                        <input type="text" name="symbol" class="form-control" placeholder="e.g., pc " required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-custom-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-custom-success">Save Base Unit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add Unit Modal -->
+<div class="modal fade" id="addUnitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST">
+            <input type="hidden" name="add_unit" value="1">
+            <div class="modal-content">
+                <div class="modal-header success">
+                    <h5 class="modal-title">Add Unit</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Unit Name *</label>
+                        <input type="text" name="unit_name" class="form-control" placeholder="e.g., Centimeter, Gram, Milliliter" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Symbol *</label>
+                        <input type="text" name="symbol" class="form-control" placeholder="e.g., pc, g, mL" required>
+                    </div>
+                  
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-custom-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-custom-primary">Save Unit</button>
                 </div>
             </div>
         </form>
@@ -1345,6 +1705,70 @@ button, .btn {
 </div>
 <?php endforeach; ?>
 
+<?php foreach($base_units as $bu): ?>
+<div class="modal fade" id="editBaseUnitModal<?= $bu['id'] ?>" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST">
+            <input type="hidden" name="id" value="<?= $bu['id'] ?>">
+            <input type="hidden" name="edit_base_unit" value="1">
+            <div class="modal-content">
+                <div class="modal-header success">
+                    <h5 class="modal-title">Edit Base Unit</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Base Unit Name *</label>
+                        <input type="text" name="base_unit_name" class="form-control" value="<?= remove_junk($bu['name']) ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Symbol *</label>
+                        <input type="text" name="symbol" class="form-control" value="<?= remove_junk($bu['symbol']) ?>" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-custom-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-custom-success">Update Base Unit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endforeach; ?>
+
+<?php foreach($units as $u): ?>
+<div class="modal fade" id="editUnitModal<?= $u['id'] ?>" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="POST">
+            <input type="hidden" name="id" value="<?= $u['id'] ?>">
+            <input type="hidden" name="edit_unit" value="1">
+            <div class="modal-content">
+                <div class="modal-header success">
+                    <h5 class="modal-title">Edit Unit</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Unit Name *</label>
+                        <input type="text" name="unit_name" class="form-control" value="<?= remove_junk($u['name']) ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Symbol *</label>
+                        <input type="text" name="symbol" class="form-control" value="<?= remove_junk($u['symbol']) ?>" required>
+                    </div>
+                   
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-custom-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-custom-primary">Update Unit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endforeach; ?>
+
 <?php include_once('layouts/footer.php'); ?>
 
 <!-- ✅ ADDED: DataTables CSS -->
@@ -1430,3 +1854,32 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+     if ($('#unitsTable').length) {
+        $('#unitsTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50, 100],
+            ordering: true,
+            searching: true,
+            autoWidth: false,
+            responsive: true,
+            
+           
+            order: [[1, 'desc']] // Default sort by School Year descending
+        });
+    }
+     if ($('#baseUnitsTable').length) {
+        $('#baseUnitsTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50, 100],
+            ordering: true,
+            searching: true,
+            autoWidth: false,
+            responsive: true,
+            
+           
+            order: [[1, 'desc']] // Default sort by School Year descending
+        });
+    }
+</script>

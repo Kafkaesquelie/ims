@@ -329,7 +329,7 @@ function find_all_user() {
    function page_require_level($require_level){
      global $session;
      $current_user = current_user();
-     $login_level = find_by_groupLevel($current_user['user_level']);
+    //  $login_level = find_by_groupLevel($current_user['user_level']);
      //if user not login
     if (!$session->isUserLoggedIn(true)) {
         $session->msg('d', 'Please login to continue.');
