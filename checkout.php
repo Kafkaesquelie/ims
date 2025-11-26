@@ -42,38 +42,11 @@ $current_user = current_user();
 $current_user_id = $current_user['id'] ?? null;
 $current_user_name = $current_user['name'] ?? $current_user['username'] ?? '';
 
-function get_users_table()
+// Get all active employees (including those with user accounts)
+function get_all_employees()
 {
     global $db;
-    // fetch common user fields and build a display name
-    $sql = "SELECT * FROM users ORDER BY name ASC";
-    $result = $db->query($sql);
-    $users = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            // build a reasonable display name from whatever columns exist
-            if (!empty($row['name'])) {
-                $display = $row['name'];
-            } elseif (!empty($row['first_name'])) {
-                $display = trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            } else {
-                $display = $row['username'] ?? ('User ' . $row['id']);
-            }
-            $users[] = [
-                'id' => $row['id'],
-                'full_name' => $display,
-                'position' => $row['position'] ?? '',
-            ];
-        }
-    }
-    return $users;
-}
-
-// Get employees WITHOUT user accounts
-function get_employees_without_users()
-{
-    global $db;
-    $sql = "SELECT * FROM employees WHERE (user_id IS NULL OR user_id = 0) AND status = 1 ORDER BY last_name ASC, first_name ASC";
+    $sql = "SELECT * FROM employees WHERE status = 1 ORDER BY last_name ASC, first_name ASC";
     $result = $db->query($sql);
     $employees = [];
     if ($result) {
@@ -83,38 +56,35 @@ function get_employees_without_users()
                 'id' => $row['id'],
                 'full_name' => $full_name,
                 'position' => $row['position'] ?? '',
-                'employee_id' => $row['employee_id'] ?? '' // Add employee_id
+                'employees_id' => $row['employees_id'] ?? '', // Use employees_id from employees table
+                'user_id' => $row['user_id'] ?? null
             ];
         }
     }
     return $employees;
 }
 
+// Get requestors - only from employees table
 function get_requestors()
 {
-    // Only include users and employees without user accounts
+    global $current_user_id;
     $requestors = [];
-    $users = get_users_table();
-    foreach ($users as $u) {
-        $requestors[] = [
-            'source' => 'users',
-            'id' => $u['id'],
-            'full_name' => $u['full_name'],
-            'position' => $u['position'] ?? '',
-            'employee_id' => '' // Users don't have employee_id
-        ];
-    }
-
-    // Only include employees without user accounts
-    $employees = get_employees_without_users();
-    foreach ($employees as $e) {
-        $requestors[] = [
-            'source' => 'employees',
-            'id' => $e['id'],
-            'full_name' => $e['full_name'],
-            'position' => $e['position'] ?? '',
-            'employee_id' => $e['employee_id'] ?? '' // Include employee_id
-        ];
+    $employees = get_all_employees();
+    
+    foreach ($employees as $employee) {
+        // Skip admin users (you might need to adjust this condition based on your admin identification)
+        $is_admin = false; // Add your admin check logic here if needed
+        
+        if (!$is_admin) {
+            $requestors[] = [
+                'source' => 'employees',
+                'id' => $employee['id'],
+                'full_name' => $employee['full_name'],
+                'position' => $employee['position'] ?? '',
+                'employees_id' => $employee['employees_id'] ?? '',
+                'user_id' => $employee['user_id']
+            ];
+        }
     }
     return $requestors;
 }
@@ -122,8 +92,19 @@ function get_requestors()
 // Build list used in the select
 $requestors = get_requestors();
 
-// default selected requestor value (current logged user if present in users)
-$default_selected = 'users_' . ($current_user_id ?? '0');
+// Find current user's employee record to set as default
+$default_selected = 'employees_0'; // Default to first employee if current user not found
+foreach ($requestors as $req) {
+    if ($req['user_id'] == $current_user_id) {
+        $default_selected = 'employees_' . $req['id'];
+        break;
+    }
+}
+
+// If no match found and there are requestors, use the first one
+if ($default_selected === 'employees_0' && !empty($requestors)) {
+    $default_selected = 'employees_' . $requestors[0]['id'];
+}
 
 // Get current year
 $current_year = date("Y");
@@ -135,11 +116,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     global $db;
     $selected = $_POST['requestor'] ?? '';
     $parts = explode('_', $selected, 2);
-    $source = $parts[0] ?? 'users';
+    $source = $parts[0] ?? 'employees'; // Now only employees
     $rid = isset($parts[1]) ? (int)$parts[1] : 0;
 
-    $requestor_row = ($source === 'users') ? find_by_id('users', $rid) : find_by_id('employees', $rid);
-    $requestor_name = $requestor_row['name'] ?? ($requestor_row['username'] ?? 'Unknown');
+    $requestor_row = find_by_id('employees', $rid);
+    $requestor_name = $requestor_row['first_name'] . ' ' . $requestor_row['last_name'] ?? 'Unknown';
     $remarks = remove_junk($db->escape($_POST['remarks'] ?? ''));
     $qtys = array_filter($_POST['qty'] ?? [], fn($q) => (int)$q > 0);
 
@@ -148,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('checkout.php', false);
     }
 
-    // Check duplicate pending requests (only for same user and same item)
+    // Check duplicate pending requests (only for same employee and same item)
     foreach ($qtys as $item_id => $qty) {
         $check = $db->query("SELECT r.id 
                              FROM requests r 
@@ -165,15 +146,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $db->query("START TRANSACTION");
 
-    // Build RIS number with fixed format: year-0112-employee_id
+    // Build RIS number with fixed format: year-0112-employees_id
     $year_part = $current_year;
     $middle_part = $fixed_middle; // Fixed as 0112
     
-    // Get employee ID from requestor
+    // Get employees_id from requestor
     $employee_part = '0000'; // Default
-    if ($source === 'employees') {
-        $employee = find_by_id('employees', $rid);
-        $employee_part = $employee['employee_id'] ?? '0000';
+    $employee = find_by_id('employees', $rid);
+    if ($employee && !empty($employee['employees_id'])) {
+        $employee_part = $employee['employees_id'];
     }
 
     // Build complete RIS number
@@ -673,7 +654,7 @@ if ($quantity == 0) {
                             $sel = ($val === $default_selected) ? 'selected' : '';
                         ?>
                             <option value="<?= $val; ?>" <?= $sel; ?> 
-                                data-employee-id="<?= $req['employee_id'] ?>" 
+                                data-employees-id="<?= $req['employees_id'] ?>" 
                                 data-source="<?= $req['source'] ?>">
                                 <?= htmlspecialchars($req['full_name']); ?>
                             </option>
@@ -915,12 +896,12 @@ if ($quantity == 0) {
     function updatePositionFieldFromSelect() {
         const sel = document.getElementById('requestorSelect');
         const selectedOption = sel.options[sel.selectedIndex];
-        const employeeId = selectedOption.getAttribute('data-employee-id') || '0000';
-        const source = selectedOption.getAttribute('data-source') || 'users';
+        const employeesId = selectedOption.getAttribute('data-employees-id') || '0000';
+        const source = selectedOption.getAttribute('data-source') || 'employees';
 
         // Update employee part of RIS number
-        document.getElementById('risEmployeeDisplay').textContent = employeeId.padStart(4, '0');
-        document.getElementById('risEmployee').value = employeeId.padStart(4, '0');
+        document.getElementById('risEmployeeDisplay').textContent = employeesId.padStart(4, '0');
+        document.getElementById('risEmployee').value = employeesId.padStart(4, '0');
 
         // Update position field
         const [sourceVal, idStr] = sel.value.split('_');
