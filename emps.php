@@ -31,13 +31,14 @@ $employees = find_by_sql("
 // Handle Add Employee form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     $user_id     = $db->escape($_POST['user_id']);
+    $employee_id = $db->escape($_POST['employee_id']); 
     $first_name  = $db->escape($_POST['first_name']);
     $last_name   = $db->escape($_POST['last_name']);
     $middle_name = $db->escape($_POST['middle_name']);
     $position    = $db->escape($_POST['position']);
     $division    = $db->escape($_POST['division']);
     $office      = $db->escape($_POST['office']);
-    $status      = isset($_POST['status']) ? 'Active' : 'Inactive'; // Checkbox value
+    $status      = isset($_POST['status']) ? 'Active' : 'Inactive'; 
 
     // Handle file upload
     $image_name = '';
@@ -52,9 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     }
 
     $query  = "INSERT INTO employees 
-    (user_id, first_name, last_name, middle_name, position, division, office, status, image, created_at, updated_at) 
+    (user_id, employee_id, first_name, last_name, middle_name, position, division, office, status, image, created_at, updated_at) 
     VALUES 
-    ('{$user_id}', '{$first_name}', '{$last_name}', '{$middle_name}', '{$position}', '{$division}', '{$office}', '{$status}', '{$image_name}', NOW(), NOW())";
+    ('{$user_id}', '{$employee_id}', '{$first_name}', '{$last_name}', '{$middle_name}', '{$position}', '{$division}', '{$office}', '{$status}', '{$image_name}', NOW(), NOW())";
 
     if ($db->query($query)) {
         $session->msg("s","Employee added successfully.");
@@ -237,6 +238,20 @@ if (!empty($msg) && is_array($msg)):
     color: #721c24;
     border: 1px solid #f5c6cb;
   }
+
+  .employee-id-badge {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    border: 2px solid transparent;
+    display: inline-block;
+    min-width: 120px;
+  }
 </style>
 
 <div class="container-fluid mt-3">
@@ -262,6 +277,7 @@ if (!empty($msg) && is_array($msg)):
         <thead>
           <tr>
             <th>User_ID</th>
+            <th>Employee ID</th>
             <th>Profile</th>
             <th>First Name</th>
             <th>Last Name</th>
@@ -277,6 +293,13 @@ if (!empty($msg) && is_array($msg)):
           <?php foreach ($employees as $emp): ?>
             <tr>
               <td><?php echo $emp['user_id']; ?></td>
+              <td>
+                <?php if (!empty($emp['employee_id'])): ?>
+                  <span class="employee-id-badge"><?php echo $emp['employee_id']; ?></span>
+                <?php else: ?>
+                  <span class="text-muted">-</span>
+                <?php endif; ?>
+              </td>
               <td class="text-center">
                 <?php if (!empty($emp['image']) && file_exists('uploads/users/' . $emp['image'])): ?>
                   <img src="uploads/users/<?php echo $emp['image']; ?>" 
@@ -380,11 +403,16 @@ if (!empty($msg) && is_array($msg)):
                 <input type="number" name="user_id" class="form-control" placeholder="Enter user ID">
               </div>
               <div class="col-md-6 mb-3">
-                <label class="form-label">Designation <span class="text-danger">*</span></label>
-                <input type="text" name="position" class="form-control" required placeholder="Enter designation">
+                <label class="form-label">Employee ID <span class="text-danger">*</span></label>
+                <input type="text" name="employee_id" class="form-control" required placeholder="Enter employee ID">
+                <small class="text-muted">This will be used in RIS numbers (format: YYYY-0112-EmployeeID)</small>
               </div>
             </div>
             <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Designation <span class="text-danger">*</span></label>
+                <input type="text" name="position" class="form-control" required placeholder="Enter designation">
+              </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label">Division <span class="text-danger">*</span></label>
                 <select name="division" class="form-control" id="divisionSelect" required>
@@ -397,6 +425,8 @@ if (!empty($msg) && is_array($msg)):
                   <?php endforeach; ?>
                 </select>
               </div>
+            </div>
+            <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="form-label">Office <span class="text-danger">*</span></label>
                 <select name="office" class="form-control" id="officeSelect" required>

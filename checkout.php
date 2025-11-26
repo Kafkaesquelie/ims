@@ -4,7 +4,6 @@ require_once('includes/load.php');
 page_require_level(1);
 
 // Fetch all available items
-// $all_items = find_all('items');
 $all_items = find_by_sql("
     SELECT 
         i.*, 
@@ -83,7 +82,8 @@ function get_employees_without_users()
             $employees[] = [
                 'id' => $row['id'],
                 'full_name' => $full_name,
-                'position' => $row['position'] ?? ''
+                'position' => $row['position'] ?? '',
+                'employee_id' => $row['employee_id'] ?? '' // Add employee_id
             ];
         }
     }
@@ -100,7 +100,8 @@ function get_requestors()
             'source' => 'users',
             'id' => $u['id'],
             'full_name' => $u['full_name'],
-            'position' => $u['position'] ?? ''
+            'position' => $u['position'] ?? '',
+            'employee_id' => '' // Users don't have employee_id
         ];
     }
 
@@ -111,7 +112,8 @@ function get_requestors()
             'source' => 'employees',
             'id' => $e['id'],
             'full_name' => $e['full_name'],
-            'position' => $e['position'] ?? ''
+            'position' => $e['position'] ?? '',
+            'employee_id' => $e['employee_id'] ?? '' // Include employee_id
         ];
     }
     return $requestors;
@@ -123,18 +125,10 @@ $requestors = get_requestors();
 // default selected requestor value (current logged user if present in users)
 $default_selected = 'users_' . ($current_user_id ?? '0');
 
-function is_ris_no_duplicate($ris_no)
-{
-    global $db;
-    $ris_no = $db->escape($ris_no);
-    $result = $db->query("SELECT id FROM requests WHERE ris_no = '{$ris_no}' LIMIT 1");
-    return $db->num_rows($result) > 0;
-}
-
-// Get current year and admin-set middle part
+// Get current year
 $current_year = date("Y");
-// Get admin-set middle part from settings or use default
-$admin_middle = '0000'; // Default, will be updated via AJAX
+// Fixed middle part as requested
+$fixed_middle = '0112';
 
 // ---------- Form submission handling ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -154,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('checkout.php', false);
     }
 
-    // Check duplicate pending requests
+    // Check duplicate pending requests (only for same user and same item)
     foreach ($qtys as $item_id => $qty) {
         $check = $db->query("SELECT r.id 
                              FROM requests r 
@@ -171,10 +165,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $db->query("START TRANSACTION");
 
-    // Get RIS number parts
-    $year_part = $_POST['ris_year'] ?? $current_year;
-    $middle_part = $_POST['ris_middle'] ?? '0000';
-    $employee_part = $_POST['ris_employee'] ?? '0000';
+    // Build RIS number with fixed format: year-0112-employee_id
+    $year_part = $current_year;
+    $middle_part = $fixed_middle; // Fixed as 0112
+    
+    // Get employee ID from requestor
+    $employee_part = '0000'; // Default
+    if ($source === 'employees') {
+        $employee = find_by_id('employees', $rid);
+        $employee_part = $employee['employee_id'] ?? '0000';
+    }
 
     // Build complete RIS number
     $ris_no = $year_part . '-' . $middle_part . '-' . $employee_part;
@@ -617,9 +617,10 @@ if ($quantity == 0) {
         text-align: center;
     }
 
-    .ris-part.editable {
-        background-color: white;
-        border-color: #006205;
+    .ris-part.fixed {
+        background-color: #e9ecef;
+        color: #6c757d;
+        font-weight: bold;
     }
 </style>
 
@@ -643,7 +644,6 @@ if ($quantity == 0) {
 <form id="requestForm" method="post" action="">
     <!-- Hidden fields for RIS number parts -->
     <input type="hidden" name="ris_year" id="risYear" value="<?= $current_year ?>">
-    <input type="hidden" name="ris_middle" id="risMiddle" value="">
     <input type="hidden" name="ris_employee" id="risEmployee" value="">
 
     <!-- Requestor Information Card -->
@@ -672,7 +672,9 @@ if ($quantity == 0) {
                             $val = $req['source'] . '_' . $req['id'];
                             $sel = ($val === $default_selected) ? 'selected' : '';
                         ?>
-                            <option value="<?= $val; ?>" <?= $sel; ?> data-employee-id="<?= $req['id']; ?>">
+                            <option value="<?= $val; ?>" <?= $sel; ?> 
+                                data-employee-id="<?= $req['employee_id'] ?>" 
+                                data-source="<?= $req['source'] ?>">
                                 <?= htmlspecialchars($req['full_name']); ?>
                             </option>
                         <?php endforeach; ?>
@@ -692,20 +694,15 @@ if ($quantity == 0) {
                     <div class="ris-container position-relative">
                         <div class="ris-display">
                             <!-- Year Part (Fixed) -->
-                            <div class="ris-part">
+                            <div class="ris-part fixed">
                                 <?= $current_year ?>
                             </div>
                             <span class="ris-separator">-</span>
 
-                            <!-- Middle Part (Editable) -->
-                            <input type="text"
-                                name="ris_middle_input"
-                                id="risMiddleInput"
-                                class="form-control ris-input ris-part editable border-success"
-                                maxlength="4"
-                                placeholder="0000"
-                                style="width: 80px;"
-                                required>
+                            <!-- Middle Part (Fixed as 0112) -->
+                            <div class="ris-part fixed">
+                                0112
+                            </div>
                             <span class="ris-separator">-</span>
 
                             <!-- Employee Part (Auto-filled) -->
@@ -713,7 +710,6 @@ if ($quantity == 0) {
                                 0000
                             </div>
                         </div>
-                        <!-- Error message will be inserted here by JavaScript -->
                     </div>
                 </div>
             </div>
@@ -891,6 +887,7 @@ if ($quantity == 0) {
     const requestors = <?= json_encode($requestors); ?>;
     const defaultSelected = "<?= $default_selected; ?>";
     const currentYear = "<?= $current_year; ?>";
+    const fixedMiddle = "0112";
 
     // Initialize DataTable
     $(document).ready(function() {
@@ -919,19 +916,17 @@ if ($quantity == 0) {
         const sel = document.getElementById('requestorSelect');
         const selectedOption = sel.options[sel.selectedIndex];
         const employeeId = selectedOption.getAttribute('data-employee-id') || '0000';
+        const source = selectedOption.getAttribute('data-source') || 'users';
 
         // Update employee part of RIS number
         document.getElementById('risEmployeeDisplay').textContent = employeeId.padStart(4, '0');
         document.getElementById('risEmployee').value = employeeId.padStart(4, '0');
 
         // Update position field
-        const [source, idStr] = sel.value.split('_');
+        const [sourceVal, idStr] = sel.value.split('_');
         const id = parseInt(idStr || '0', 10);
-        const found = requestors.find(r => r.source === source && parseInt(r.id, 10) === id);
+        const found = requestors.find(r => r.source === sourceVal && parseInt(r.id, 10) === id);
         document.getElementById('positionField').value = found ? (found.position || '') : '';
-
-        // Trigger RIS validation when requestor changes
-        validateRIS();
     }
 
     // Set initial position after page load / default
@@ -1035,53 +1030,7 @@ if ($quantity == 0) {
                 }
             });
         });
-
-        // RIS Middle Input validation - only numbers and max 4 digits
-        document.getElementById('risMiddleInput').addEventListener('input', function() {
-            // Remove any non-digit characters
-            this.value = this.value.replace(/\D/g, '');
-
-            // Limit to 4 digits
-            if (this.value.length > 4) {
-                this.value = this.value.slice(0, 4);
-            }
-
-            // Update hidden field
-            document.getElementById('risMiddle').value = this.value.padStart(4, '0');
-
-            // Real-time validation
-            validateRIS();
-        });
-
-        // Get admin-set middle part on page load
-        fetchAdminMiddlePart();
     });
-
-    // Fetch admin-set middle part from server
-    function fetchAdminMiddlePart() {
-        fetch('get_ris_mid.php')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success && data.middlePart) {
-                    document.getElementById('risMiddleInput').value = data.middlePart;
-                    document.getElementById('risMiddle').value = data.middlePart.padStart(4, '0');
-                    // Validate after setting the middle part
-                    setTimeout(validateRIS, 100);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching RIS middle part:', error);
-                // Set default value if fetch fails
-                document.getElementById('risMiddleInput').value = '0001';
-                document.getElementById('risMiddle').value = '0001';
-                setTimeout(validateRIS, 100);
-            });
-    }
 
     // On change for requestor select
     document.getElementById('requestorSelect').addEventListener('change', updatePositionFieldFromSelect);
@@ -1093,122 +1042,16 @@ if ($quantity == 0) {
         receiptModal = new bootstrap.Modal(receiptModalEl);
     }
 
-    // Real-time RIS validation function
-    let risValidationTimeout;
-
-    function validateRIS() {
-        clearTimeout(risValidationTimeout);
-
-        risValidationTimeout = setTimeout(() => {
-            const risMiddle = document.getElementById('risMiddleInput').value.trim();
-            const reviewBtn = document.getElementById('reviewBtn');
-            const risMiddleInput = document.getElementById('risMiddleInput');
-
-            // Remove previous validation states
-            risMiddleInput.classList.remove('is-invalid');
-            removeRISErrorMessage();
-
-            if (!risMiddle || risMiddle.length !== 4) {
-                // RIS middle part not complete
-                reviewBtn.disabled = true;
-                reviewBtn.title = 'Please enter a complete 4-digit RIS middle part';
-                reviewBtn.classList.add('disabled');
-                return;
-            }
-
-            // Build complete RIS number for validation
-            const yearPart = document.getElementById('risYear').value;
-            const middlePart = risMiddle.padStart(4, '0');
-            const employeePart = document.getElementById('risEmployee').value;
-            const fullRIS = yearPart + '-' + middlePart + '-' + employeePart;
-
-            // Check for duplicate RIS number
-            checkRISDuplicate(fullRIS, function(isDuplicate) {
-                if (isDuplicate) {
-                    risMiddleInput.classList.add('is-invalid');
-                    reviewBtn.disabled = true;
-                    reviewBtn.title = 'RIS number is already used. Please choose a different middle part.';
-                    reviewBtn.classList.add('disabled');
-                    showRISErrorMessage('RIS Number already used. Please choose a different number.');
-                } else {
-                    // REMOVED: No checkmark validation, just enable the button
-                    reviewBtn.disabled = false;
-                    reviewBtn.title = 'Review request';
-                    reviewBtn.classList.remove('disabled');
-                    removeRISErrorMessage(); // Remove any existing error messages
-                }
-            });
-        }, 500);
-    }
-
-    // RIS message handling functions
-    function removeRISErrorMessage() {
-        const risContainer = document.querySelector('.ris-container');
-        const existingError = risContainer.querySelector('.ris-error-message');
-        if (existingError) {
-            existingError.remove();
-        }
-    }
-
-    function showRISErrorMessage(message) {
-        removeRISErrorMessage();
-        const risContainer = document.querySelector('.ris-container');
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'ris-error-message invalid-feedback';
-        errorDiv.textContent = message;
-        errorDiv.style.display = 'block';
-        risContainer.appendChild(errorDiv);
-    }
-
     // Review button: build receipt HTML and show modal via the instance
     document.getElementById('reviewBtn').addEventListener('click', function() {
-        const risMiddle = document.getElementById('risMiddleInput').value.trim();
-        if (!risMiddle || risMiddle.length !== 4) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'RIS Number Required',
-                text: 'Please enter a complete 4-digit RIS middle part.',
-                confirmButtonColor: '#dc3545'
-            });
-            document.getElementById('risMiddleInput').focus();
-            return;
-        }
-
-        // Build complete RIS number for validation
+        // Build complete RIS number
         const yearPart = document.getElementById('risYear').value;
-        const middlePart = risMiddle.padStart(4, '0');
+        const middlePart = fixedMiddle;
         const employeePart = document.getElementById('risEmployee').value;
         const fullRIS = yearPart + '-' + middlePart + '-' + employeePart;
 
-        // Final validation before review
-        if (document.getElementById('risMiddleInput').classList.contains('is-invalid')) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Duplicate RIS Number',
-                text: 'This RIS Number is already used. Please choose a different middle part.',
-                confirmButtonColor: '#dc3545'
-            });
-            document.getElementById('risMiddleInput').focus();
-            return;
-        }
-
-        // Check for duplicate RIS number one more time
-        checkRISDuplicate(fullRIS, function(isDuplicate) {
-            if (isDuplicate) {
-                document.getElementById('risMiddleInput').classList.add('is-invalid');
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Duplicate RIS Number',
-                    text: 'This RIS Number is already used. Please choose a different middle part.',
-                    confirmButtonColor: '#dc3545'
-                });
-                document.getElementById('risMiddleInput').focus();
-                return;
-            }
-
-            // Proceed with review if not duplicate
-            proceedWithReview(fullRIS);
-        });
+        // Proceed with review
+        proceedWithReview(fullRIS);
     });
 
     function proceedWithReview(fullRIS) {
@@ -1279,40 +1122,25 @@ if ($quantity == 0) {
 
     // Final submit -> submit the form
     document.getElementById('finalSubmitBtn').addEventListener('click', function() {
-        const yearPart = document.getElementById('risYear').value;
-        const middlePart = document.getElementById('risMiddleInput').value.padStart(4, '0');
-        const employeePart = document.getElementById('risEmployee').value;
-        const fullRIS = yearPart + '-' + middlePart + '-' + employeePart;
-
-        // Final duplicate check before submission
-        checkRISDuplicate(fullRIS, function(isDuplicate) {
-            if (isDuplicate) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Duplicate RIS Number',
-                    text: 'This RIS Number is already used. Please choose a different middle part.',
-                    confirmButtonColor: '#dc3545'
-                });
-                if (receiptModal) receiptModal.hide();
-                document.getElementById('risMiddleInput').focus();
-                return;
-            }
-
-            // Show confirmation dialog
-            Swal.fire({
-                title: "Submit Request?",
-                text: "Do you want to finalize and send this request?",
-                icon: "question",
-                showCancelButton: true,
-                confirmButtonColor: "#28a745",
-                cancelButtonColor: "#6c757d",
-                confirmButtonText: "Yes, submit it",
-                cancelButtonText: "Cancel"
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    document.getElementById('requestForm').submit();
+        // Show confirmation dialog
+        Swal.fire({
+            title: "Submit Request?",
+            text: "Do you want to finalize and send this request?",
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonColor: "#28a745",
+            cancelButtonColor: "#6c757d",
+            confirmButtonText: "Yes, submit it",
+            cancelButtonText: "Cancel"
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Close modal first
+                if (receiptModal) {
+                    receiptModal.hide();
                 }
-            });
+                // Submit the form
+                document.getElementById('requestForm').submit();
+            }
         });
     });
 
@@ -1334,7 +1162,7 @@ if ($quantity == 0) {
     document.getElementById('clearBtn').addEventListener('click', function() {
         Swal.fire({
             title: "Clear Form?",
-            text: "This will reset all quantities and RIS middle part.",
+            text: "This will reset all quantities.",
             icon: "warning",
             showCancelButton: true,
             confirmButtonColor: "#dc3545",
@@ -1343,12 +1171,6 @@ if ($quantity == 0) {
             cancelButtonText: "Cancel"
         }).then((result) => {
             if (result.isConfirmed) {
-                // Clear RIS middle part
-                document.getElementById('risMiddleInput').value = '';
-                document.getElementById('risMiddle').value = '';
-                document.getElementById('risMiddleInput').classList.remove('is-invalid');
-                removeRISErrorMessage();
-
                 // Reset all quantities
                 document.querySelectorAll('.qty-input').forEach(input => {
                     input.value = 0;
@@ -1365,9 +1187,6 @@ if ($quantity == 0) {
                 // Close modal if open
                 if (receiptModal) receiptModal.hide();
 
-                // Re-fetch admin middle part
-                fetchAdminMiddlePart();
-
                 Swal.fire({
                     icon: 'success',
                     title: 'Form Cleared',
@@ -1377,28 +1196,4 @@ if ($quantity == 0) {
             }
         });
     });
-
-    // RIS duplicate checking function
-    function checkRISDuplicate(fullRIS, callback) {
-        fetch('check_ris_duplicate.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'ris_no=' + encodeURIComponent(fullRIS)
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(data => {
-                callback(data.exists || false);
-            })
-            .catch(error => {
-                console.error('Error checking RIS number:', error);
-                callback(false); // Continue on error
-            });
-    }
 </script>

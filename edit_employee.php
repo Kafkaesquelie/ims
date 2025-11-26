@@ -45,11 +45,12 @@ if (isset($_POST['submit_image'])) {
 
 // ✅ Update employee info
 if (isset($_POST['update_employee'])) {
-    $req_fields = array('first_name','last_name','position','division','office');
+    $req_fields = array('first_name','last_name','employee_id','position','division','office');
     validate_fields($req_fields);
 
     if (empty($errors)) {
         $user_id  = !empty($_POST['user_id']) ? remove_junk($db->escape($_POST['user_id'])) : 'NULL'; // Set to NULL if empty
+        $employee_id = remove_junk($db->escape($_POST['employee_id'])); // New employee_id field
         $first_name  = remove_junk($db->escape($_POST['first_name']));
         $last_name   = remove_junk($db->escape($_POST['last_name']));
         $middle_name = remove_junk($db->escape($_POST['middle_name']));
@@ -63,6 +64,7 @@ if (isset($_POST['update_employee'])) {
                     first_name='{$first_name}', 
                     last_name='{$last_name}', 
                     middle_name='{$middle_name}', 
+                    employee_id='{$employee_id}',
                     position='{$designation}', 
                     division='{$division}', 
                     office='{$office}', 
@@ -153,6 +155,20 @@ if (isset($_POST['update_employee'])) {
         color: #495057;
         margin-bottom: 0.5rem;
     }
+
+    .employee-id-display {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 1.1rem;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+        border: 2px solid transparent;
+        display: inline-block;
+        margin: 0.5rem 0;
+    }
     
     /* Form styling */
     .user-form .form-label {
@@ -230,6 +246,12 @@ if (isset($_POST['update_employee'])) {
         margin-top: 0.5rem;
         font-size: 0.85rem;
     }
+
+    .employee-id-help {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
 </style>
 
 <div class="container-fluid mt-3">
@@ -271,6 +293,14 @@ if (isset($_POST['update_employee'])) {
                     <i class="fa-solid fa-circle"></i>
                     <span><?php echo $edit_emp['status']; ?></span>
                   </div>
+                  
+                  <?php if (!empty($edit_emp['employee_id'])): ?>
+                    <div class="employee-id-display">
+                      <?php echo $edit_emp['employee_id']; ?>
+                    </div>
+                    <p><strong>Employee ID</strong></p>
+                  <?php endif; ?>
+                  
                   <p><strong>User ID:</strong> <?php echo !empty($edit_emp['user_id']) ? $edit_emp['user_id'] : 'Not set'; ?></p>
                   <p><strong>Last Updated:</strong><br><?php echo date('M j, Y g:i A', strtotime($edit_emp['updated_at'])); ?></p>
                 </div>
@@ -323,13 +353,20 @@ if (isset($_POST['update_employee'])) {
                       </div>
                     </div>
                     <div class="col-md-6 mb-3">
+                      <label class="form-label">Employee ID <span class="text-danger">*</span></label>
+                      <input type="text" name="employee_id" class="form-control" id="employee_id_input"
+                             value="<?php echo remove_junk($edit_emp['employee_id']); ?>" required placeholder="Enter employee ID">
+                      <div class="employee-id-help">
+                        Used in RIS numbers (format: YYYY-0112-EmployeeID)
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-md-6 mb-3">
                       <label class="form-label">Designation <span class="text-danger">*</span></label>
                       <input type="text" name="position" class="form-control" 
                              value="<?php echo remove_junk($edit_emp['position']); ?>" required placeholder="Enter designation">
                     </div>
-                  </div>
-                  
-                  <div class="row">
                     <div class="col-md-6 mb-3">
                       <label class="form-label">Division <span class="text-danger">*</span></label><br>
                       <select name="division" class="form-select w-100" id="divisionSelect" required>
@@ -346,6 +383,8 @@ if (isset($_POST['update_employee'])) {
                         <?php endforeach; ?>
                       </select>
                     </div>
+                  </div>
+                  <div class="row">
                     <div class="col-md-6 mb-3">
                       <label class="form-label">Office <span class="text-danger">*</span></label><br>
                       <select name="office" class="form-select w-100" id="officeSelect" required>
@@ -412,6 +451,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const statusCheckbox = document.getElementById('status');
   const statusPreview = document.getElementById('statusPreview');
   const userIdInput = document.getElementById('user_id_input');
+  const employeeIdInput = document.getElementById('employee_id_input');
   const clearUserIdBtn = document.getElementById('clearUserId');
   const resetFormBtn = document.getElementById('resetForm');
 
@@ -437,9 +477,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Reset form functionality
   resetFormBtn.addEventListener('click', function() {
-    // Store the original user_id value for reset
+    // Store the original values for reset
     const originalUserId = "<?php echo remove_junk($edit_emp['user_id']); ?>";
+    const originalEmployeeId = "<?php echo remove_junk($edit_emp['employee_id']); ?>";
+    
     userIdInput.value = originalUserId;
+    employeeIdInput.value = originalEmployeeId;
     
     // Reset status preview to original state
     const originalStatus = "<?php echo $edit_emp['status']; ?>";

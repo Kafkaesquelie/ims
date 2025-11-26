@@ -539,18 +539,23 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                 <p>User Manual</p>
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link">
-                                <i class="fa-solid fa-gear"></i>
-                                <p>Settings</p>
-                            </a>
-                        </li>
+                        
+                        <?php if ($user['user_level'] === '1'): ?>
+                            <!-- Show Settings only for Admin (user level 1) -->
                             <li class="nav-item">
-                                <a href="logout.php" class="nav-link" id="logout">
-                                    <i class="nav-icon fas fa-sign-out-alt"></i>
-                                    <p> Logout</p>
+                                <a href="#" class="nav-link">
+                                    <i class="fa-solid fa-gear"></i>
+                                    <p>Settings</p>
                                 </a>
                             </li>
+                        <?php endif; ?>
+                        
+                        <li class="nav-item">
+                            <a href="logout.php" class="nav-link" id="logout">
+                                <i class="nav-icon fas fa-sign-out-alt"></i>
+                                <p> Logout</p>
+                            </a>
+                        </li>
                         </ul>
                     </nav>
                 </div>
