@@ -37,6 +37,55 @@ function get_base_unit_name($base_unit_id)
     return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : 'Unit';
 }
 
+// Function to get expiry status
+function get_expiry_status($expiry_date) {
+    if (empty($expiry_date) || $expiry_date == '0000-00-00') {
+        return array('status' => 'no_expiry', 'badge' => '', 'class' => '', 'days' => null);
+    }
+    
+    $today = new DateTime();
+    $expiry = new DateTime($expiry_date);
+    $days_until_expiry = $today->diff($expiry)->days;
+    
+    // Check if expired
+    if ($expiry < $today) {
+        return array(
+            'status' => 'expired', 
+            'badge' => 'Expired', 
+            'class' => 'badge-danger',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Check if expiring in 15 days
+    if ($days_until_expiry <= 15) {
+        return array(
+            'status' => 'expiring_15', 
+            'badge' => 'Expiring in ' . $days_until_expiry . ' days', 
+            'class' => 'badge-warning',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Check if expiring in 30 days
+    if ($days_until_expiry <= 30) {
+        return array(
+            'status' => 'expiring_30', 
+            'badge' => 'Expiring in ' . $days_until_expiry . ' days', 
+            'class' => 'badge-info',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Valid expiry date (more than 30 days)
+    return array(
+        'status' => 'valid', 
+        'badge' => 'Expires: ' . date('M d, Y', strtotime($expiry_date)), 
+        'class' => 'badge-success',
+        'days' => $days_until_expiry
+    );
+}
+
 // get logged-in user
 $current_user = current_user();
 $current_user_id = $current_user['id'] ?? null;
@@ -364,6 +413,8 @@ if ($quantity == 0) {
     $item['stock_status'] = 'In Stock';
 }
 
+    // Calculate expiry status
+    $item['expiry_status'] = get_expiry_status($item['expiry_date']);
 }
 
 
@@ -390,6 +441,11 @@ if ($quantity == 0) {
 
     .stock-card-column {
         width: 120px;
+    }
+
+    .expiry-column {
+        width: 150px;
+        text-align: center;
     }
 
     /* DataTables spacing fix */
@@ -603,6 +659,66 @@ if ($quantity == 0) {
         color: #6c757d;
         font-weight: bold;
     }
+
+    /* Expiry badge styles */
+    .expiry-badge {
+        font-size: 0.7rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 12px;
+        display: inline-block;
+        font-weight: 600;
+    }
+
+    .expiry-expired {
+        background: #dc3545;
+        color: white;
+        animation: pulse 2s infinite;
+    }
+
+    .expiry-15-days {
+        background: #ffc107;
+        color: var(--text-dark);
+        animation: pulse 1.5s infinite;
+    }
+
+    .expiry-30-days {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .expiry-valid {
+        background: #28a745;
+        color: white;
+    }
+
+    .expiry-none {
+        background: #6c757d;
+        color: white;
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+        }
+        70% {
+            box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+        }
+    }
+
+    /* Expiry timeline indicator */
+    .expiry-timeline {
+        font-size: 0.75rem;
+        margin-top: 4px;
+    }
+
+    .expiry-date {
+        font-size: 0.7rem;
+        color: #6c757d;
+        margin-top: 2px;
+    }
 </style>
 
 <!-- Header Card -->
@@ -718,6 +834,7 @@ if ($quantity == 0) {
                                 <th>Stock Card</th>
                                 <th>Item Name</th>
                                 <th class="text-center">Available Qty</th>
+                                <th class="text-center">Expiry Status</th>
                                 <th class="text-center">Request Unit</th>
                                 <th class="text-center">Request Qty</th>
                             </tr>
@@ -744,6 +861,9 @@ if ($quantity == 0) {
                                         $indicator_class = 'indicator-good';
                                         $indicator_text = 'In Stock';
                                 }
+
+                                // Expiry status
+                                $expiry_status = $it['expiry_status'];
                             ?>
                                 <tr class="<?= $row_class ?>">
                                     <td>
@@ -756,6 +876,37 @@ if ($quantity == 0) {
                                     </td>
                                     <td class="text-center">
                                         <strong><?= $it['display_quantity']; ?></strong>
+                                    </td>
+                                    <td class="text-center expiry-column">
+                                        <?php if ($expiry_status['status'] !== 'no_expiry'): ?>
+                                            <span class="expiry-badge <?= 
+                                                $expiry_status['status'] === 'expired' ? 'expiry-expired' : 
+                                                ($expiry_status['status'] === 'expiring_15' ? 'expiry-15-days' : 
+                                                ($expiry_status['status'] === 'expiring_30' ? 'expiry-30-days' : 'expiry-valid')) 
+                                            ?>">
+                                                <?= $expiry_status['badge']; ?>
+                                            </span>
+                                            <?php if ($expiry_status['status'] !== 'valid'): ?>
+                                                <div class="expiry-timeline">
+                                                    <small class="text-muted">
+                                                        <?php 
+                                                        if ($expiry_status['status'] === 'expired') {
+                                                            echo 'Expired ' . $expiry_status['days'] . ' days ago';
+                                                        } else {
+                                                            echo $expiry_status['days'] . ' days remaining';
+                                                        }
+                                                        ?>
+                                                    </small>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($it['expiry_date']) && $it['expiry_date'] != '0000-00-00'): ?>
+                                                <div class="expiry-date">
+                                                    <small><?= date('M d, Y', strtotime($it['expiry_date'])) ?></small>
+                                                </div>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="expiry-badge expiry-none">No Expiry</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="text-center">
                                         <select name="unit_type[<?= (int)$it['id']; ?>]"
@@ -1044,7 +1195,7 @@ if ($quantity == 0) {
         // Add RIS number to receipt
         receiptHTML += `<p><strong>RIS Number:</strong> ${fullRIS}</p>`;
 
-        receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Stock Status</th></tr></thead><tbody>';
+        receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Stock Status</th><th>Expiry Status</th></tr></thead><tbody>';
         let hasItem = false;
 
         rows.forEach(row => {
@@ -1057,6 +1208,7 @@ if ($quantity == 0) {
             const available = row.cells[2].innerText.trim();
             const unitSelect = row.querySelector('select[name^="unit_type"]');
             const selectedUnit = unitSelect.selectedOptions[0].text;
+            const expiryStatus = row.cells[3].innerText.trim();
 
             // Get stock status from the row class
             let stockStatus = 'In Stock';
@@ -1078,6 +1230,7 @@ if ($quantity == 0) {
                     <td>${selectedUnit}</td>
                     <td>${available}</td>
                     <td class="${statusClass}"><strong>${stockStatus}</strong></td>
+                    <td>${expiryStatus}</td>
                 </tr>`;
         });
 

@@ -56,6 +56,7 @@ function get_all_items_with_conversions($limit = 10, $page = 1, $category = 'all
             i.unit_cost,
             i.categorie_id,
             i.description,
+            i.expiry_date,
             c.name AS category,
             m.file_name AS image,
             u.name AS unit_name,
@@ -92,6 +93,9 @@ function get_all_items_with_conversions($limit = 10, $page = 1, $category = 'all
     $item['main_unit_display'] = $unit_display;
     $item['base_unit_display'] = '';
     $item['conversion_rate'] = 1;
+
+    // Calculate expiry status
+    $item['expiry_status'] = get_expiry_status($item['expiry_date']);
 
     // Only check for conversions if we have a valid base unit scenario
     if ($item['base_unit_id'] && $item['base_unit_name'] !== 'Not Applicable' && $item['base_unit_id'] != $item['unit_id']) {
@@ -159,6 +163,55 @@ function get_all_items_with_conversions($limit = 10, $page = 1, $category = 'all
   return $items;
 }
 
+// Function to get expiry status
+function get_expiry_status($expiry_date) {
+    if (empty($expiry_date) || $expiry_date == '0000-00-00') {
+        return array('status' => 'no_expiry', 'badge' => '', 'class' => '');
+    }
+    
+    $today = new DateTime();
+    $expiry = new DateTime($expiry_date);
+    $days_until_expiry = $today->diff($expiry)->days;
+    
+    // Check if expired
+    if ($expiry < $today) {
+        return array(
+            'status' => 'expired', 
+            'badge' => 'Expired', 
+            'class' => 'badge-danger',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Check if expiring in 15 days
+    if ($days_until_expiry <= 15) {
+        return array(
+            'status' => 'expiring_15', 
+            'badge' => 'Expiring in ' . $days_until_expiry . ' days', 
+            'class' => 'badge-warning',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Check if expiring in 30 days
+    if ($days_until_expiry <= 30) {
+        return array(
+            'status' => 'expiring_30', 
+            'badge' => 'Expiring in ' . $days_until_expiry . ' days', 
+            'class' => 'badge-info',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Valid expiry date (more than 30 days)
+    return array(
+        'status' => 'valid', 
+        'badge' => 'Expires: ' . date('M d, Y', strtotime($expiry_date)), 
+        'class' => 'badge-success',
+        'days' => $days_until_expiry
+    );
+}
+
 // Handle form submission for adding items
 if (isset($_POST['add_item'])) {
   $errors = array(); // Initialize errors array
@@ -171,6 +224,7 @@ if (isset($_POST['add_item'])) {
   $unit_cost      = $db->escape($_POST['unit_cost']);
   $categorie_id   = (int)$db->escape($_POST['categorie_id']);
   $desc           = $db->escape($_POST['description']);
+  $expiry_date    = $db->escape($_POST['expiry_date']);
   $media_id       = 0;
 
   // New fields for unit conversion
@@ -222,9 +276,9 @@ if (isset($_POST['add_item'])) {
   }
 
   // Insert item into items table
-  $sql = "INSERT INTO items (fund_cluster, stock_card, name, quantity, unit_id, base_unit_id, unit_cost, categorie_id, description, media_id, date_added)
+  $sql = "INSERT INTO items (fund_cluster, stock_card, name, quantity, unit_id, base_unit_id, unit_cost, categorie_id, description, expiry_date, media_id, date_added)
       VALUES ('{$fund_cluster}', '{$stock_card}', '{$name}', '{$quantity}', '{$unit_id}', '{$base_unit_id}', 
-                '{$unit_cost}', '{$categorie_id}', '{$desc}', '{$media_id}', NOW())";
+                '{$unit_cost}', '{$categorie_id}', '{$desc}', '{$expiry_date}', '{$media_id}', NOW())";
 
   if ($db->query($sql)) {
     $item_id = $db->insert_id();
@@ -487,6 +541,16 @@ if (!empty($msg) && is_array($msg)):
   .badge-warning {
     background: rgba(255, 193, 7, 0.15);
     color: #856404;
+  }
+
+  .badge-danger {
+    background: rgba(220, 53, 69, 0.15);
+    color: #721c24;
+  }
+
+  .badge-info {
+    background: rgba(23, 162, 184, 0.15);
+    color: #0c5460;
   }
 
   .actions-column {
@@ -756,6 +820,49 @@ if (!empty($msg) && is_array($msg)):
     }
   }
 
+  /* Expiry badge styles */
+  .expiry-badge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 12px;
+    margin-top: 4px;
+    display: inline-block;
+  }
+
+  .expiry-expired {
+    background: var(--danger);
+    color: white;
+    animation: pulse 2s infinite;
+  }
+
+  .expiry-15-days {
+    background: var(--warning);
+    color: var(--dark);
+    animation: pulse 1.5s infinite;
+  }
+
+  .expiry-30-days {
+    background: #17a2b8;
+    color: white;
+  }
+
+  .expiry-valid {
+    background: var(--primary);
+    color: white;
+  }
+
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+    }
+    70% {
+      box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+  }
+
   @media (max-width: 768px) {
     .card-header-custom {
       padding: 1rem;
@@ -878,9 +985,20 @@ if (!empty($msg) && is_array($msg)):
     <div class="stat-item">
       <div class="stat-value"><?php
                               $low_stock_count = 0;
+                              $expired_count = 0;
+                              $expiring_15_count = 0;
+                              $expiring_30_count = 0;
+                              
                               foreach ($items as $item) {
                                 if ((int)$item['quantity'] < 10) {
                                   $low_stock_count++;
+                                }
+                                if ($item['expiry_status']['status'] === 'expired') {
+                                  $expired_count++;
+                                } elseif ($item['expiry_status']['status'] === 'expiring_15') {
+                                  $expiring_15_count++;
+                                } elseif ($item['expiry_status']['status'] === 'expiring_30') {
+                                  $expiring_30_count++;
                                 }
                               }
                               echo $low_stock_count;
@@ -889,10 +1007,10 @@ if (!empty($msg) && is_array($msg)):
     </div>
     <div class="stat-item">
       <div class="stat-value"><?php
-                              $categories_count = array_unique(array_column($items, 'category'));
-                              echo count($categories_count);
+                              $expiring_soon_count = $expiring_15_count + $expiring_30_count;
+                              echo $expiring_soon_count;
                               ?></div>
-      <div class="stat-label">Active Categories</div>
+      <div class="stat-label">Expiring Soon (≤30 days)</div>
     </div>
   </div>
 
@@ -996,6 +1114,13 @@ if (!empty($msg) && is_array($msg)):
               Please provide a valid unit cost.
             </div>
           </div>
+
+          <div class="col-md-4 mb-3">
+            <label for="expiry_date" class="form-label fw-bold">Expiry Date</label>
+            <input type="date" name="expiry_date" id="expiry_date" class="form-control"
+              value="<?php echo isset($form_data['expiry_date']) ? $form_data['expiry_date'] : ''; ?>">
+            <small class="text-muted">Leave empty if item doesn't expire</small>
+          </div>
         </div>
       </div>
 
@@ -1061,6 +1186,7 @@ if (!empty($msg) && is_array($msg)):
               <th class="text-center" width="150">Category</th>
               <th class="text-center" width="120">Unit Cost</th>
               <th class="text-center" width="150">Stock</th>
+              <th class="text-center" width="150">Expiry Status</th>
               <th class="text-center actions-column" width="120">Actions</th>
             </tr>
           </thead>
@@ -1079,6 +1205,9 @@ if (!empty($msg) && is_array($msg)):
               $conversion_rate = $item['conversion_rate'] ?? 1;
               $main_quantity = $item['main_quantity'] ?? 0;
               $base_quantity = $item['base_quantity'] ?? 0;
+
+              // Expiry status
+              $expiry_status = $item['expiry_status'];
             ?>
               <tr class="<?= $lowStock ? 'table-danger' : ''; ?>" data-category="<?= remove_junk($item_category); ?>">
                 <td class="text-center">
@@ -1152,6 +1281,19 @@ if (!empty($msg) && is_array($msg)):
                       </small>
                     <?php endif; ?>
                   </div>
+                </td>
+                <td class="text-center">
+                  <?php if ($expiry_status['status'] !== 'no_expiry'): ?>
+                    <span class="expiry-badge <?= 
+                      $expiry_status['status'] === 'expired' ? 'expiry-expired' : 
+                      ($expiry_status['status'] === 'expiring_15' ? 'expiry-15-days' : 
+                      ($expiry_status['status'] === 'expiring_30' ? 'expiry-30-days' : 'expiry-valid')) 
+                    ?>">
+                      <?= $expiry_status['badge']; ?>
+                    </span>
+                  <?php else: ?>
+                    <span class="text-muted small">No Expiry</span>
+                  <?php endif; ?>
                 </td>
                 <td class="text-center">
                   <div class="btn-group btn-group-custom">

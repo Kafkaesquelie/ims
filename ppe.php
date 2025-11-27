@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_equipment'])) {
   if (empty($errors)) {
     $fund_cluster   = remove_junk($db->escape($_POST['fund_cluster']));
     $property_no    = remove_junk($db->escape($_POST['property_no']));
+    $serial_no      = !empty($_POST['serial_no']) ? remove_junk($db->escape($_POST['serial_no'])) : NULL; // NEW: Serial No
     $subcategory_id = (int)$_POST['subcategory_id'];
     $article        = remove_junk($db->escape($_POST['article']));
     $description    = remove_junk($db->escape($_POST['description']));
@@ -22,10 +23,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_equipment'])) {
     $date_acquired  = !empty($_POST['date_acquired']) ? $db->escape($_POST['date_acquired']) : NULL;
     $remarks        = remove_junk($db->escape($_POST['remarks']));
 
+    // Check for duplicate serial number (if provided)
+    if (!empty($serial_no)) {
+        $check_serial = $db->query("SELECT id FROM properties WHERE serial_no = '{$serial_no}' LIMIT 1");
+        if ($check_serial && $check_serial->num_rows > 0) {
+            $session->msg("d", "❌ Duplicate detected: Serial No. already exists.");
+            redirect('ppe.php', false);
+        }
+    }
+
     $query = "INSERT INTO properties (
-                    fund_cluster, property_no, subcategory_id, article, description, unit, unit_cost, qty, date_acquired, remarks
+                    fund_cluster, property_no, serial_no, subcategory_id, article, description, unit, unit_cost, qty, date_acquired, remarks
                   ) VALUES (
-                    '{$fund_cluster}', '{$property_no}', '{$subcategory_id}', '{$article}', '{$description}', 
+                    '{$fund_cluster}', '{$property_no}', '{$serial_no}', '{$subcategory_id}', '{$article}', '{$description}', 
                     '{$unit}', '{$unit_cost}', '{$qty}', '{$date_acquired}', '{$remarks}'
                   )";
 
@@ -481,6 +491,23 @@ $total_properties = $equipment_count;
     margin-top: 0.25rem;
   }
 
+  /* Serial No specific styling */
+  .serial-no-input {
+    font-family: monospace;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .serial-no-display {
+    font-family: monospace;
+    font-weight: 600;
+    color: var(--primary-green);
+    background: rgba(40, 167, 69, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid rgba(40, 167, 69, 0.2);
+  }
+
   /* Responsive Design */
   @media (max-width: 768px) {
     .stats-grid {
@@ -571,6 +598,7 @@ $total_properties = $equipment_count;
               <th class="text-center">#</th>
               <th>Fund Cluster</th>
               <th>Property No.</th>
+              <th>Serial No.</th> <!-- NEW: Serial No column -->
               <th>Article</th>
               <th class="custom-desc">Description</th>
               <th class="text-center">Unit Cost</th>
@@ -594,6 +622,16 @@ $total_properties = $equipment_count;
                 </td>
                 <td><?= remove_junk($equipment['fund_cluster']); ?></td>
                 <td><strong><?= remove_junk($equipment['property_no']); ?></strong></td>
+                <!-- NEW: Serial No Display -->
+                <td>
+                  <?php if (!empty($equipment['serial_no'])): ?>
+                    <span class="serial-no-display">
+                      <?= remove_junk($equipment['serial_no']); ?>
+                    </span>
+                  <?php else: ?>
+                    <span class="text-muted">-</span>
+                  <?php endif; ?>
+                </td>
                 <td><?= remove_junk($equipment['article']); ?><br>
                   <small class="text-muted"> <?= remove_junk($equipment['unit']); ?></small>
                 </td>
@@ -673,6 +711,18 @@ $total_properties = $equipment_count;
               <input type="text" class="form-control w-100" id="property_no" name="property_no" required>
               <div class="invalid-feedback">
                 Please provide a property number.
+              </div>
+            </div>
+          </div>
+
+          <!-- NEW: Serial No Field -->
+          <div class="col-md-6 mb-3">
+            <div class="form-group">
+              <label for="serial_no" class="form-label fw-bold">Serial No.</label>
+              <input type="text" class="form-control serial-no-input" id="serial_no" name="serial_no" 
+                     placeholder="Enter serial number">
+              <div class="form-hint">
+                <i class="fas fa-info-circle me-1"></i>Unique serial number for tracking
               </div>
             </div>
           </div>
@@ -871,5 +921,17 @@ $total_properties = $equipment_count;
         });
       });
     });
+
+    // Serial No duplicate check
+    const serialNoInput = document.getElementById('serial_no');
+    if (serialNoInput) {
+      serialNoInput.addEventListener('blur', function() {
+        const serialNo = this.value.trim();
+        if (serialNo) {
+          // You could add AJAX validation here for real-time duplicate checking
+          console.log('Serial No entered:', serialNo);
+        }
+      });
+    }
   });
 </script>

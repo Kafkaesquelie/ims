@@ -1,9 +1,9 @@
 <?php
   // Use environment variables with fallback to default values
-  // define( 'DB_HOST', $_ENV['DB_HOST'] ?? 'localhost:3308' );
-  // define( 'DB_USER', $_ENV['DB_USER'] ?? 'root' );             
-  // define( 'DB_PASS', $_ENV['DB_PASS'] ?? '' );            
-  // define( 'DB_NAME', $_ENV['DB_NAME'] ?? 'inv_system' );        
+  define( 'DB_HOST', $_ENV['DB_HOST'] ?? 'localhost:3308' );
+  define( 'DB_USER', $_ENV['DB_USER'] ?? 'root' );             
+  define( 'DB_PASS', $_ENV['DB_PASS'] ?? '' );            
+  define( 'DB_NAME', $_ENV['DB_NAME'] ?? 'inv_system' );        
 
 
  
@@ -25,10 +25,10 @@
 ?>
 
 <?php
-define('DB_HOST', getenv('MYSQL_ADDON_HOST') . ':' . getenv('MYSQL_ADDON_PORT'));
-define('DB_USER', getenv('MYSQL_ADDON_USER'));
-define('DB_PASS', getenv('MYSQL_ADDON_PASSWORD'));
-define('DB_NAME', getenv('MYSQL_ADDON_DB'));
+// define('DB_HOST', getenv('MYSQL_ADDON_HOST') . ':' . getenv('MYSQL_ADDON_PORT'));
+// define('DB_USER', getenv('MYSQL_ADDON_USER'));
+// define('DB_PASS', getenv('MYSQL_ADDON_PASSWORD'));
+// define('DB_NAME', getenv('MYSQL_ADDON_DB'));
 ?>
 
 

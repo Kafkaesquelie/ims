@@ -32,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
     if (empty($errors)) {
         $fund_cluster   = remove_junk($db->escape($_POST['fund_cluster']));
         $property_no    = remove_junk($db->escape($_POST['property_no']));
+        $serial_no      = !empty($_POST['serial_no']) ? remove_junk($db->escape($_POST['serial_no'])) : NULL; // NEW: Serial No
         $subcategory_id = (int)$_POST['subcategory_id'];
         $article        = remove_junk($db->escape($_POST['article']));
         $description    = remove_junk($db->escape($_POST['description']));
@@ -41,12 +42,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
         $date_acquired  = !empty($_POST['date_acquired']) ? $db->escape($_POST['date_acquired']) : NULL;
         $remarks        = remove_junk($db->escape($_POST['remarks']));
 
+        // Check for duplicate serial number (if provided and changed)
+        if (!empty($serial_no) && $serial_no !== $property['serial_no']) {
+            $check_serial = $db->query("SELECT id FROM properties WHERE serial_no = '{$serial_no}' AND id != '{$property_id}' LIMIT 1");
+            if ($check_serial && $check_serial->num_rows > 0) {
+                $session->msg("d", "❌ Duplicate detected: Serial No. already exists for another property.");
+                redirect('edit_ppe.php?id=' . $property_id, false);
+            }
+        }
+
         // Add current timestamp for last_edited
         $current_time = date('Y-m-d H:i:s');
         
         $query = "UPDATE properties SET 
                     fund_cluster='{$fund_cluster}', 
                     property_no='{$property_no}', 
+                    serial_no='{$serial_no}', -- NEW: Serial No
                     subcategory_id='{$subcategory_id}', 
                     article='{$article}', 
                     description='{$description}', 
@@ -168,6 +179,23 @@ $all_subcategories = find_all('subcategories');
     textarea.form-control-custom {
         min-height: 100px;
         resize: vertical;
+    }
+
+    /* Serial No specific styling */
+    .serial-no-input {
+        font-family: monospace;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .serial-no-display {
+        font-family: monospace;
+        font-weight: 600;
+        color: var(--primary-green);
+        background: rgba(40, 167, 69, 0.1);
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        border: 1px solid rgba(40, 167, 69, 0.2);
     }
 
     /* Buttons */
@@ -354,6 +382,14 @@ $all_subcategories = find_all('subcategories');
     .value-calculation .value-item:last-child {
         margin-bottom: 0;
     }
+
+    /* Form hints */
+    .form-hint {
+        font-size: 0.8rem;
+        color: var(--text-light);
+        margin-top: 0.25rem;
+        font-style: italic;
+    }
 </style>
 
 <div class="container mt-4">
@@ -427,12 +463,17 @@ $all_subcategories = find_all('subcategories');
                             </div>
                         </div>
 
-                        <!-- Section 2: Classification -->
-                        <h6 class="section-header">
-                            <i class="fas fa-tags me-2 p-2"></i> Classification
-                        </h6>
-
+                        <!-- NEW: Serial No Field -->
                         <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Serial No.</label>
+                                <input type="text" name="serial_no" class="form-control-custom serial-no-input"
+                                    value="<?php echo remove_junk($property['serial_no']); ?>"
+                                    placeholder="Enter serial number">
+                                <div class="form-hint">
+                                    <i class="fas fa-info-circle me-1"></i>Unique serial number for tracking
+                                </div>
+                            </div>
                             <div class="col-md-6">
                                 <label class="form-label-custom">Subcategory</label>
                                 <select name="subcategory_id" class="form-select-custom" required>
@@ -445,11 +486,25 @@ $all_subcategories = find_all('subcategories');
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                        </div>
+
+                        <!-- Section 2: Classification -->
+                        <h6 class="section-header">
+                            <i class="fas fa-tags me-2 p-2"></i> Classification
+                        </h6>
+
+                        <div class="row g-3 mb-4">
                             <div class="col-md-6">
                                 <label class="form-label-custom">Article</label>
                                 <input type="text" name="article" class="form-control-custom"
                                     value="<?php echo remove_junk($property['article']); ?>"
                                     placeholder="Enter article name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Unit of Measurement</label><br>
+                                <input type="text" name="unit" class="form-control-custom"
+                                    value="<?php echo remove_junk($property['unit']); ?>"
+                                    placeholder="e.g., pcs, unit, set" required>
                             </div>
                         </div>
 
@@ -471,12 +526,6 @@ $all_subcategories = find_all('subcategories');
                         </h6>
 
                         <div class="row g-3 mb-4">
-                            <div class="col-md-4">
-                                <label class="form-label-custom">Unit of Measurement</label><br>
-                                <input type="text" name="unit" class="form-control-custom"
-                                    value="<?php echo remove_junk($property['unit']); ?>"
-                                    placeholder="e.g., pcs, unit, set" required>
-                            </div>
                             <div class="col-md-4">
                                 <label class="form-label-custom">Quantity</label>
                                 <?php
@@ -506,6 +555,11 @@ $all_subcategories = find_all('subcategories');
                                         placeholder="0.00" required>
                                 </div>
                             </div>
+                            <div class="col-md-4">
+                                <label class="form-label-custom">Date Acquired</label><br>
+                                <input type="date" name="date_acquired" class="form-control-custom"
+                                    value="<?php echo remove_junk($property['date_acquired']); ?>">
+                            </div>
                         </div>
 
                         <!-- Value Calculation -->
@@ -528,16 +582,11 @@ $all_subcategories = find_all('subcategories');
 
                         <!-- Section 5: Additional Information -->
                         <h6 class="section-header">
-                            <i class="fas fa-calendar-alt me-2 p-2"></i> Additional Information
+                            <i class="fas fa-sticky-note me-2 p-2"></i> Additional Information
                         </h6>
 
                         <div class="row g-3 mb-4">
-                            <div class="col-md-4">
-                                <label class="form-label-custom">Date Acquired</label><br>
-                                <input type="date" name="date_acquired" class="form-control-custom"
-                                    value="<?php echo remove_junk($property['date_acquired']); ?>">
-                            </div>
-                            <div class="col-md-8">
+                            <div class="col-12">
                                 <label class="form-label-custom">Remarks</label><br>
                                 <textarea name="remarks" class="form-control-custom w-100"
                                     placeholder="Enter any remarks or notes"><?php echo remove_junk($property['remarks']); ?></textarea>
@@ -585,6 +634,22 @@ $all_subcategories = find_all('subcategories');
                     this.value = 0;
                 }
                 updateTotalValue();
+            });
+        }
+
+        // Serial No duplicate check
+        const serialNoInput = document.querySelector('input[name="serial_no"]');
+        const originalSerialNo = '<?= $property['serial_no'] ?>';
+        
+        if (serialNoInput) {
+            serialNoInput.addEventListener('blur', function() {
+                const currentSerialNo = this.value.trim();
+                
+                // Only check if serial number is provided and different from original
+                if (currentSerialNo && currentSerialNo !== originalSerialNo) {
+                    // You could add AJAX validation here for real-time duplicate checking
+                    console.log('Serial No changed to:', currentSerialNo);
+                }
             });
         }
 

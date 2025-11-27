@@ -37,6 +37,7 @@ if (isset($_POST['update_item'])) {
         $unit_cost    = (float)$db->escape($_POST['unit_cost']);
         $base_unit_id = (int)$db->escape($_POST['base_unit_id']);
         $conversion_rate = isset($_POST['conversion_rate']) ? (float)$db->escape($_POST['conversion_rate']) : 1;
+        $expiry_date  = $db->escape($_POST['expiry_date']);
 
         $user = current_user();
         $media_id = $item['media_id'];
@@ -74,6 +75,7 @@ if (isset($_POST['update_item'])) {
                     base_unit_id = '{$base_unit_id}',
                     quantity = '{$quantity}',
                     unit_cost = '{$unit_cost}',
+                    expiry_date = '{$expiry_date}',
                     media_id = '{$media_id}',
                     last_edited = NOW()
                 WHERE id = '{$item_id}' LIMIT 1";
@@ -310,6 +312,49 @@ if (isset($_POST['update_item'])) {
         border-radius: 20px;
         font-weight: 600;
         font-size: 0.9rem;
+    }
+
+    /* Expiry Status Badges */
+    .expiry-badge {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.8rem;
+        border-radius: 15px;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+
+    .expiry-expired {
+        background: #dc3545;
+        color: white;
+        animation: pulse 2s infinite;
+    }
+
+    .expiry-15-days {
+        background: #ffc107;
+        color: var(--text-dark);
+        animation: pulse 1.5s infinite;
+    }
+
+    .expiry-30-days {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .expiry-valid {
+        background: var(--primary-green);
+        color: white;
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+        }
+        70% {
+            box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+        }
     }
 
     /* Animation */
@@ -563,8 +608,6 @@ if (isset($_POST['update_item'])) {
                                     </div>
                                 </div>
 
-
-
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Category</label><br>
@@ -613,7 +656,6 @@ if (isset($_POST['update_item'])) {
                                     </div>
                                 </div>
 
-
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Quantity</label>
@@ -635,7 +677,6 @@ if (isset($_POST['update_item'])) {
                                             <input type="number" class="form-control-custom w-100" name="quantity"
                                                 value="<?php echo remove_junk($item['quantity']); ?>"
                                                 min="0" required>
-
                                         </div>
                                     </div>
                                     <div class="col-md-6 mb-3">
@@ -646,6 +687,40 @@ if (isset($_POST['update_item'])) {
                                                 value="<?php echo remove_junk($item['unit_cost']); ?>"
                                                 placeholder="0.00" required>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <!-- Expiry Date Field -->
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label-custom">Expiry Date</label>
+                                        <?php
+                                        // Calculate expiry status
+                                        $expiry_status = '';
+                                        if (!empty($item['expiry_date']) && $item['expiry_date'] != '0000-00-00') {
+                                            $today = new DateTime();
+                                            $expiry = new DateTime($item['expiry_date']);
+                                            $days_until_expiry = $today->diff($expiry)->days;
+                                            
+                                            if ($expiry < $today) {
+                                                $expiry_status = '<span class="expiry-badge expiry-expired">Expired</span>';
+                                            } elseif ($days_until_expiry <= 15) {
+                                                $expiry_status = '<span class="expiry-badge expiry-15-days">Expiring in ' . $days_until_expiry . ' days</span>';
+                                            } elseif ($days_until_expiry <= 30) {
+                                                $expiry_status = '<span class="expiry-badge expiry-30-days">Expiring in ' . $days_until_expiry . ' days</span>';
+                                            } else {
+                                                $expiry_status = '<span class="expiry-badge expiry-valid">Valid</span>';
+                                            }
+                                        }
+                                        ?>
+                                        <div class="input-group">
+                                            <input type="date" class="form-control-custom w-100" name="expiry_date"
+                                                value="<?php echo !empty($item['expiry_date']) && $item['expiry_date'] != '0000-00-00' ? $item['expiry_date'] : ''; ?>">
+                                            <?php if ($expiry_status): ?>
+                                                <?php echo $expiry_status; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                        <small class="text-muted">Leave empty if item doesn't expire</small>
                                     </div>
                                 </div>
 
@@ -691,6 +766,35 @@ if (isset($_POST['update_item'])) {
                     this.value = 0;
                 }
             });
+        }
+
+        // Base unit and conversion rate logic
+        const baseUnitSelect = document.querySelector('select[name="base_unit_id"]');
+        const conversionRateInput = document.querySelector('input[name="conversion_rate"]');
+        const unitSelect = document.querySelector('select[name="unit_id"]');
+
+        function toggleConversionRate() {
+            const baseUnitName = baseUnitSelect.options[baseUnitSelect.selectedIndex].text;
+            const baseUnitValue = baseUnitSelect.value;
+            const unitValue = unitSelect.value;
+
+            // Disable conversion rate if:
+            // 1. Base unit is "Not Applicable" OR
+            // 2. Base unit is same as regular unit
+            if (baseUnitName === 'Not Applicable' || baseUnitValue === unitValue) {
+                conversionRateInput.value = '';
+                conversionRateInput.disabled = true;
+                conversionRateInput.placeholder = 'Not needed';
+            } else {
+                conversionRateInput.disabled = false;
+                conversionRateInput.placeholder = 'e.g., 10 (if 1 box = 10 pieces)';
+            }
+        }
+
+        if (baseUnitSelect && conversionRateInput && unitSelect) {
+            baseUnitSelect.addEventListener('change', toggleConversionRate);
+            unitSelect.addEventListener('change', toggleConversionRate);
+            toggleConversionRate(); // run on load
         }
     });
 </script>

@@ -23,6 +23,7 @@ $fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name A
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_item'])) {
     $fund_cluster     = remove_junk($db->escape($_POST['fund_cluster']));
     $inv_item_no      = trim($_POST['inv_item_no']) !== '' ? "'" . $db->escape($_POST['inv_item_no']) . "'" : "NULL";
+    $serial_no        = trim($_POST['serial_no']) !== '' ? "'" . $db->escape($_POST['serial_no']) . "'" : "NULL"; // NEW: Serial No
     $item_name        = remove_junk($db->escape($_POST['item']));
     $item_description = remove_junk($db->escape($_POST['item_description']));
     $unit             = remove_junk($db->escape($_POST['unit']));
@@ -31,9 +32,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_item'])) {
     $status           = remove_junk($db->escape($_POST['status']));
     $semicategory_id  = (int)$_POST['semicategory_id'];
 
+    // Check for duplicate serial number (if provided)
+    if (!empty($_POST['serial_no'])) {
+        $check_serial = $db->query("SELECT id FROM semi_exp_prop WHERE serial_no = '{$_POST['serial_no']}' AND id != '{$id}' LIMIT 1");
+        if ($check_serial && $check_serial->num_rows > 0) {
+            $session->msg("d", "❌ Duplicate detected: Serial No. already exists for another item.");
+            redirect("edit_smp.php?id={$id}", false);
+        }
+    }
+
     $query  = "UPDATE semi_exp_prop SET 
         fund_cluster='{$fund_cluster}',
         inv_item_no={$inv_item_no},
+        serial_no={$serial_no}, -- NEW: Serial No
         item='{$item_name}',
         item_description='{$item_description}',
         unit='{$unit}',
@@ -132,6 +143,23 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
     border-color: var(--primary-green);
     box-shadow: 0 0 0 0.2rem rgba(30, 126, 52, 0.25);
     background-color: #f8fff9;
+}
+
+/* Serial No specific styling */
+.serial-no-input {
+    font-family: monospace;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.serial-no-display {
+    font-family: monospace;
+    font-weight: 600;
+    color: var(--primary-green);
+    background: rgba(40, 167, 69, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid rgba(40, 167, 69, 0.2);
 }
 
 /* Buttons */
@@ -288,6 +316,14 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
     border-left: none;
     border-radius: 0 10px 10px 0;
 }
+
+/* Form hints */
+.form-hint {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 0.25rem;
+    font-style: italic;
+}
 </style>
 
 <div class="container mt-4">
@@ -363,13 +399,18 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                             </div>
                         </div>
 
-                        <!-- Section 2: Item Details -->
-                        <h5 class="section-header">
-                            <i class="fas fa-box me-2"></i>Item Details
-                        </h5>
-
+                        <!-- NEW: Serial No Field -->
                         <div class="row g-3 mb-4">
-                            <div class="col-md-4">
+                            <div class="col-md-6">
+                                <label class="form-label-custom">Serial No.</label>
+                                <input type="text" class="form-control-custom serial-no-input" name="serial_no" 
+                                       value="<?= $item['serial_no'] ?>"
+                                       placeholder="Enter serial number">
+                                <div class="form-hint">
+                                    <i class="fas fa-info-circle me-1"></i>Unique serial number for tracking
+                                </div>
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label-custom"> Semi-Expendable Category</label>
                                 <select class="form-select-custom" name="semicategory_id" required>
                                     <option value="">Select Category</option>
@@ -383,13 +424,21 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                                     <?php endwhile; ?>
                                 </select>
                             </div>
-                            <div class="col-md-4">
+                        </div>
+
+                        <!-- Section 2: Item Details -->
+                        <h5 class="section-header">
+                            <i class="fas fa-box me-2"></i>Item Details
+                        </h5>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
                                 <label class="form-label-custom"> Item Description</label>
                                 <input type="text" class="form-control-custom" name="item_description" 
                                        value="<?= $item['item_description'] ?>" 
                                        placeholder="Enter item description" required>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label class="form-label-custom">Unit</label><br>
                                 <input type="text" class="form-control-custom" name="unit" 
                                        value="<?= $item['unit'] ?>" 
@@ -487,6 +536,22 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Update text
             statusBadge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.6rem;"></i>' + statusText;
+        });
+    }
+
+    // Serial No duplicate check
+    const serialNoInput = document.querySelector('input[name="serial_no"]');
+    const originalSerialNo = '<?= $item['serial_no'] ?>';
+    
+    if (serialNoInput) {
+        serialNoInput.addEventListener('blur', function() {
+            const currentSerialNo = this.value.trim();
+            
+            // Only check if serial number is provided and different from original
+            if (currentSerialNo && currentSerialNo !== originalSerialNo) {
+                // You could add AJAX validation here for real-time duplicate checking
+                console.log('Serial No changed to:', currentSerialNo);
+            }
         });
     }
 });

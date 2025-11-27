@@ -9,7 +9,8 @@ $fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name A
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_item'])) {
     $fund_cluster     = remove_junk($db->escape($_POST['fund_cluster']));
     $inv_item_no      = remove_junk($db->escape($_POST['inv_item_no']));
-    $item              = remove_junk($db->escape($_POST['item']));
+    $serial_no        = remove_junk($db->escape($_POST['serial_no'])); // NEW: Serial No field
+    $item             = remove_junk($db->escape($_POST['item']));
     $item_description = remove_junk($db->escape($_POST['item_description']));
     $unit             = remove_junk($db->escape($_POST['unit']));
     $unit_cost        = (float)$_POST['unit_cost'];
@@ -18,28 +19,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_item'])) {
     $qty_left         = $total_qty; // Initially, qty_left = total_qty
     $estimated_use    = remove_junk($db->escape($_POST['estimated_use']));
 
-     if ($unit_cost > 50000) {
-    $session->msg('d', '❌ Unit cost cannot exceed ₱50,000.');
-    redirect('smp.php', false);
-}
-    // Check duplicates for the filled field
+    if ($unit_cost > 50000) {
+        $session->msg('d', '❌ Unit cost cannot exceed ₱50,000.');
+        redirect('smp.php', false);
+    }
+    
+    // Check duplicates for inventory item no
     if (!empty($inv_item_no)) {
         $check = $db->query("SELECT id FROM semi_exp_prop WHERE inv_item_no = '{$inv_item_no}' LIMIT 1");
         if ($check && $check->num_rows > 0) {
             $session->msg('d', '❌ Duplicate detected: Inventory Item No. already exists.');
             redirect('smp.php', false);
         }
-    } 
+    }
+    
+    // Check duplicates for serial no (if provided)
+    if (!empty($serial_no)) {
+        $check = $db->query("SELECT id FROM semi_exp_prop WHERE serial_no = '{$serial_no}' LIMIT 1");
+        if ($check && $check->num_rows > 0) {
+            $session->msg('d', '❌ Duplicate detected: Serial No. already exists.');
+            redirect('smp.php', false);
+        }
+    }
+    
     $semicategory_id = (int)$_POST['semicategory_id'];
 
-   
-
-// Insert query
-$query = "INSERT INTO semi_exp_prop 
-          (fund_cluster, inv_item_no,item, item_description, unit, semicategory_id,unit_cost, total_qty, qty_left, estimated_use, date_added)
-          VALUES 
-          ('{$fund_cluster}', {$inv_item_no},'{$item}', '{$item_description}', '{$unit}', '{$semicategory_id}','{$unit_cost}', '{$total_qty}', '{$qty_left}', '{$estimated_use}', NOW())";
-
+    // Insert query with serial_no
+    $query = "INSERT INTO semi_exp_prop 
+              (fund_cluster, inv_item_no, serial_no, item, item_description, unit, semicategory_id, unit_cost, total_qty, qty_left, estimated_use, date_added)
+              VALUES 
+              ('{$fund_cluster}', '{$inv_item_no}', '{$serial_no}', '{$item}', '{$item_description}', '{$unit}', '{$semicategory_id}', '{$unit_cost}', '{$total_qty}', '{$qty_left}', '{$estimated_use}', NOW())";
 
     if ($db->query($query)) {
         $session->msg('s', '✅ Semi-expendable property added successfully!');
@@ -50,8 +59,6 @@ $query = "INSERT INTO semi_exp_prop
     }
 }
 
-
-
 // Search logic
 if (isset($_GET['search']) && $_GET['search'] !== '') {
     $search = trim($db->escape($_GET['search']));
@@ -61,13 +68,13 @@ if (isset($_GET['search']) && $_GET['search'] !== '') {
     $semi_props = find_all('semi_exp_prop');
 }
 
-
 if (!empty($search)) {
     $sql = "SELECT s.*, sc.semicategory_name 
             FROM semi_exp_prop s
             LEFT JOIN semicategories sc ON s.semicategory_id = sc.id
             WHERE s.fund_cluster LIKE '%{$search}%'
                OR s.inv_item_no LIKE '%{$search}%'
+               OR s.serial_no LIKE '%{$search}%'  // NEW: Search serial_no
                OR s.item LIKE '%{$search}%'
                OR s.item_description LIKE '%{$search}%'
                OR s.unit LIKE '%{$search}%'
@@ -86,8 +93,6 @@ if (!empty($search)) {
             ORDER BY s.date_added DESC";
     $semi_props = find_by_sql($sql);
 }
-
-
 
 // Automatically update status based on qty_left
 $db->query("UPDATE semi_exp_prop 
@@ -264,12 +269,10 @@ if (!empty($msg) && is_array($msg)):
 
 .btn-group-custom {
   display: flex;
-
 }
 
 .btn-group-custom .btn {
   width: 100%;
-
 }
 
 .empty-state {
@@ -482,7 +485,6 @@ if (!empty($msg) && is_array($msg)):
     max-width: 100%;
   }
 
-  
   .table-responsive {
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
@@ -508,8 +510,6 @@ if (!empty($msg) && is_array($msg)):
     width: 100%;
   }
 }
-
-
 
 .dataTables_wrapper .dataTables_length,
 .dataTables_wrapper .dataTables_filter {
@@ -565,6 +565,22 @@ if (!empty($msg) && is_array($msg)):
 .form-group-custom {
   margin-bottom: 0;
 }
+
+/* Serial No specific styling */
+.serial-no-input {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.serial-no-display {
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--primary-dark);
+  background: rgba(40, 167, 69, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid rgba(40, 167, 69, 0.2);
+}
 </style>
 
 <div class="container-fluid">
@@ -592,8 +608,6 @@ if (!empty($msg) && is_array($msg)):
       </div>
     </div>
   </div>
-
- 
 
   <!-- Statistics Cards -->
   <div class="stats-grid">
@@ -632,7 +646,7 @@ if (!empty($msg) && is_array($msg)):
     </div>
   </div>
 
-   <!-- Bulk Actions Container -->
+  <!-- Bulk Actions Container -->
   <div class="bulk-actions-container" id="bulkActions">
     <div class="bulk-selection-count" id="selectedCount">0 items selected</div>
     <div class="d-flex gap-2">
@@ -640,18 +654,18 @@ if (!empty($msg) && is_array($msg)):
         <i class="fas fa-edit me-1"></i> Edit
       </button>
       <button id="bulkArchive" class="btn btn-danger-custom ml-3" title="Archive Selected">
-                                 <i class="fa-solid fa-file-zipper"></i>  Archive
+        <i class="fa-solid fa-file-zipper"></i> Archive
       </button>
       <button id="clearSelection" class="btn btn-secondary ml-3" title="Clear Selection">
         <i class="fas fa-times me-1"></i> Clear
       </button>
     </div>
   </div>
+
   <!-- Add Item Form (Hidden by Default) -->
   <div class="add-form-container" id="addItemCard" style="display: none;">
-        <div class="add-form-header d-flex justify-content-between align-items-center mb-4 p-3 bg-primary bg-opacity-10 rounded">
+    <div class="add-form-header d-flex justify-content-between align-items-center mb-4 p-3 bg-primary bg-opacity-10 rounded">
       <h5 class="mb-0 text-light"><i class="fas fa-plus-circle me-2"></i>Add New Semi-Expendable Property</h5>
-    
     </div>
     <div class="add-form-body">
       <form method="POST" action="">
@@ -659,25 +673,33 @@ if (!empty($msg) && is_array($msg)):
         
         <!-- Form Rows -->
         <div class="form-row-custom">
-           <div class="form-custom">
-              <label for="fund_cluster" class="form-label fw-bold">
-                Fund Cluster <span class="text-danger">*</span>
-              </label>
-              <select class="form-select w-100 p-2" id="fund_cluster" name="fund_cluster" required>
-                <option value="" selected disabled>Select Fund Cluster</option>
-                <?php foreach ($fund_clusters as $fc): ?>
-                  <option value="<?php echo $fc['id']; ?>">
-                    <?php echo remove_junk(ucwords($fc['name'])); ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-              <div class="invalid-feedback">
-                Please select a fund cluster.
-              </div>
+          <div class="form-custom">
+            <label for="fund_cluster" class="form-label fw-bold">
+              Fund Cluster <span class="text-danger">*</span>
+            </label>
+            <select class="form-select w-100 p-2" id="fund_cluster" name="fund_cluster" required>
+              <option value="" selected disabled>Select Fund Cluster</option>
+              <?php foreach ($fund_clusters as $fc): ?>
+                <option value="<?php echo $fc['id']; ?>">
+                  <?php echo remove_junk(ucwords($fc['name'])); ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+            <div class="invalid-feedback">
+              Please select a fund cluster.
             </div>
+          </div>
           <div class="form-group-custom">
             <label class="form-label">Inventory Item No.</label>
             <input type="text" class="form-control" name="inv_item_no" placeholder="Inventory Item No.">
+          </div>
+          <!-- NEW: Serial No Field -->
+          <div class="form-group-custom">
+            <label class="form-label">Serial No.</label>
+            <input type="text" class="form-control serial-no-input" name="serial_no" placeholder="Serial Number">
+            <div class="form-hint">
+              <i class="fas fa-info-circle me-1"></i>Unique serial number for tracking
+            </div>
           </div>
           <div class="form-group-custom">
             <label class="form-label">Category</label>
@@ -695,7 +717,7 @@ if (!empty($msg) && is_array($msg)):
         </div>
 
         <div class="form-row-custom">
-           <div class="form-group-custom">
+          <div class="form-group-custom">
             <label class="form-label">Item</label>
             <input type="text" class="form-control" name="item" placeholder="Item Name" required>
           </div>
@@ -752,6 +774,7 @@ if (!empty($msg) && is_array($msg)):
             <th>Description</th>
             <th class="text-center">Fund Cluster</th>
             <th class="text-center">Inventory Item No.</th>
+            <th class="text-center">Serial No.</th> <!-- NEW: Serial No column -->
             <th class="text-center">Unit Cost</th>
             <th class="text-center">Quantity</th>
             <th class="text-center">UOM</th>
@@ -767,7 +790,7 @@ if (!empty($msg) && is_array($msg)):
                   <input class="checkbox" type="checkbox" name="selected_ids[]" value="<?= $item['id'] ?>">
                 </td>
                 <td>
-                    <strong><?= highlight($item['item'], $search) ?></strong>
+                  <strong><?= highlight($item['item'], $search) ?></strong>
                 </td>
                 <td>
                   <div class="d-flex flex-column">
@@ -788,6 +811,16 @@ if (!empty($msg) && is_array($msg)):
                 </td>
                 <td class="text-center">
                   <code><?= !empty($item['inv_item_no']) ? $item['inv_item_no'] : '-' ?></code>
+                </td>
+                <!-- NEW: Serial No Display -->
+                <td class="text-center">
+                  <?php if (!empty($item['serial_no'])): ?>
+                    <span class="serial-no-display">
+                      <?= highlight($item['serial_no'], $search) ?>
+                    </span>
+                  <?php else: ?>
+                    <span class="text-muted">-</span>
+                  <?php endif; ?>
                 </td>
                 <td class="text-center">
                   <strong class="text-success">₱<?= number_format($item['unit_cost'], 2) ?></strong>
@@ -840,8 +873,7 @@ if (!empty($msg) && is_array($msg)):
                       <i class="fas fa-edit"></i>
                     </a>
                     <a href="a_script.php?id=<?= $item['id'] ?>" class="btn btn-danger-custom archive-btn" title="Archive" data-id="<?= $item['id'] ?>">
-                                               <i class="fa-solid fa-file-zipper"></i> 
-
+                      <i class="fa-solid fa-file-zipper"></i> 
                     </a>
                   </div>
                 </td>
@@ -849,7 +881,7 @@ if (!empty($msg) && is_array($msg)):
             <?php endforeach; ?>
           <?php else: ?>
             <tr>
-              <td colspan="9">
+              <td colspan="11"> <!-- Updated colspan to 11 -->
                 <div class="empty-state">
                   <div class="empty-state-icon">
                     <i class="fas fa-tools"></i>
@@ -869,7 +901,6 @@ if (!empty($msg) && is_array($msg)):
   </div>
 </div>
 
-
 <?php include_once('layouts/footer.php'); ?>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -879,137 +910,136 @@ if (!empty($msg) && is_array($msg)):
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-
-   $(document).ready(function(){
+  $(document).ready(function(){
     var table = $('#smpTable').DataTable({
-        pageLength: 5,
-        lengthMenu: [5, 10, 25, 50],
-        ordering: true,
-        searching: false,
-        autoWidth: false,
+      pageLength: 5,
+      lengthMenu: [5, 10, 25, 50],
+      ordering: true,
+      searching: false,
+      autoWidth: false,
     });
-     // 🔍 Custom search box function
+    
+    // 🔍 Custom search box function
     $('#searchInput').on('keyup', function() {
       table.search(this.value).draw();
     });
-  // Bulk selection functionality
-  function updateBulkActions() {
-    const selectedCount = $('.checkbox:checked').length;
-    const bulkActions = $('#bulkActions');
-    const selectedCountElement = $('#selectedCount');
     
-    selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
-    
-    if (selectedCount > 0) {
-      bulkActions.addClass('show');
-    } else {
-      bulkActions.removeClass('show');
+    // Bulk selection functionality
+    function updateBulkActions() {
+      const selectedCount = $('.checkbox:checked').length;
+      const bulkActions = $('#bulkActions');
+      const selectedCountElement = $('#selectedCount');
+      
+      selectedCountElement.text(selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected');
+      
+      if (selectedCount > 0) {
+        bulkActions.addClass('show');
+      } else {
+        bulkActions.removeClass('show');
+      }
     }
-  }
 
-  // Select All functionality
-  $('#checkAll').on('change', function() {
-    const checked = $(this).is(':checked');
-    table.rows().nodes().to$().find('.checkbox').prop('checked', checked);
-    updateBulkActions();
-  });
+    // Select All functionality
+    $('#checkAll').on('change', function() {
+      const checked = $(this).is(':checked');
+      table.rows().nodes().to$().find('.checkbox').prop('checked', checked);
+      updateBulkActions();
+    });
 
-  // Individual checkbox change
-  $('#smpTable tbody').on('change', '.checkbox', updateBulkActions);
+    // Individual checkbox change
+    $('#smpTable tbody').on('change', '.checkbox', updateBulkActions);
 
-  // Clear selection
-  $('#clearSelection').on('click', function() {
-    table.rows().nodes().to$().find('.checkbox').prop('checked', false);
-    $('#checkAll').prop('checked', false);
-    updateBulkActions();
-  });
+    // Clear selection
+    $('#clearSelection').on('click', function() {
+      table.rows().nodes().to$().find('.checkbox').prop('checked', false);
+      $('#checkAll').prop('checked', false);
+      updateBulkActions();
+    });
 
-  // Form toggle functionality
-  document.getElementById('addItemBtn').addEventListener('click', function() {
-    document.getElementById('tableCard').style.display = 'none';
-    document.getElementById('addItemCard').style.display = 'block';
-  });
+    // Form toggle functionality
+    document.getElementById('addItemBtn').addEventListener('click', function() {
+      document.getElementById('tableCard').style.display = 'none';
+      document.getElementById('addItemCard').style.display = 'block';
+    });
 
-  document.getElementById('cancelAddBtn').addEventListener('click', function() {
-    document.getElementById('addItemCard').style.display = 'none';
-    document.getElementById('tableCard').style.display = 'block';
-  });
+    document.getElementById('cancelAddBtn').addEventListener('click', function() {
+      document.getElementById('addItemCard').style.display = 'none';
+      document.getElementById('tableCard').style.display = 'block';
+    });
 
-  document.getElementById('addFirstItemBtn')?.addEventListener('click', function() {
-    document.getElementById('tableCard').style.display = 'none';
-    document.getElementById('addItemCard').style.display = 'block';
-  });
+    document.getElementById('addFirstItemBtn')?.addEventListener('click', function() {
+      document.getElementById('tableCard').style.display = 'none';
+      document.getElementById('addItemCard').style.display = 'block';
+    });
 
-  // Archive confirmation
-  document.querySelectorAll('.archive-btn').forEach(function(button) {
-    button.addEventListener('click', function(e) {
-      e.preventDefault();
-      const url = this.getAttribute('href');
-      const id = this.getAttribute('data-id');
+    // Archive confirmation
+    document.querySelectorAll('.archive-btn').forEach(function(button) {
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        const url = this.getAttribute('href');
+        const id = this.getAttribute('data-id');
+
+        Swal.fire({
+          title: 'Archive Property?',
+          text: "This property will be moved to archives. You can restore it later if needed.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#6c757d',
+          confirmButtonText: 'Yes, archive it!',
+          cancelButtonText: 'Cancel'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.href = url;
+          }
+        });
+      });
+    });
+
+    // Bulk Edit
+    $('#bulkEdit').on('click', function() {
+      const ids = table.$('.checkbox:checked').map(function(){
+        return $(this).val();
+      }).get();
+
+      if(ids.length === 0){
+        Swal.fire('No items selected', 'Please select items to edit.', 'info');
+        return;
+      }
+
+      // Redirect to bulk edit page with selected IDs
+      window.location.href = 'bulk_edit_smp.php?ids=' + ids.join(',');
+    });
+
+    // Bulk Archive
+    $('#bulkArchive').on('click', function() {
+      const ids = table.$('.checkbox:checked').map(function(){
+        return $(this).val();
+      }).get();
+
+      if(ids.length === 0){
+        Swal.fire('No items selected', 'Please select items to archive.', 'info');
+        return;
+      }
 
       Swal.fire({
-        title: 'Archive Property?',
-        text: "This property will be moved to archives. You can restore it later if needed.",
+        title: 'Archive Properties?',
+        text: `You are about to archive ${ids.length} property(s). This action can be undone later.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, archive it!',
+        confirmButtonText: 'Yes, archive them!',
         cancelButtonText: 'Cancel'
       }).then((result) => {
-        if (result.isConfirmed) {
-          window.location.href = url;
+        if(result.isConfirmed){
+          // Implement bulk archive logic here
+          console.log('Archive IDs:', ids);
         }
       });
     });
   });
-
-  // Bulk Edit
-$('#bulkEdit').on('click', function() {
-  const ids = table.$('.checkbox:checked').map(function(){
-    return $(this).val();
-  }).get();
-
-  if(ids.length === 0){
-    Swal.fire('No items selected', 'Please select items to edit.', 'info');
-    return;
-  }
-
-  // Redirect to bulk edit page with selected IDs
-  window.location.href = 'bulk_edit_smp.php?ids=' + ids.join(',');
 });
-
-
-  // Bulk Archive (you can implement this similarly to previous examples)
-  $('#bulkArchive').on('click', function() {
-    const ids = table.$('.checkbox:checked').map(function(){
-      return $(this).val();
-    }).get();
-
-    if(ids.length === 0){
-      Swal.fire('No items selected', 'Please select items to archive.', 'info');
-      return;
-    }
-
-    Swal.fire({
-      title: 'Archive Properties?',
-      text: `You are about to archive ${ids.length} property(s). This action can be undone later.`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: 'Yes, archive them!',
-      cancelButtonText: 'Cancel'
-    }).then((result) => {
-      if(result.isConfirmed){
-        // Implement bulk archive logic here
-        console.log('Archive IDs:', ids);
-      }
-    });
-  });
-});
-    });
-
 </script>
 
 <script>

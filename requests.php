@@ -217,17 +217,21 @@ if (isset($_GET['issued'])) {
     exit;
 }
 
-// ✅ MODIFIED: Show all active requests including canceled ones
-// Exclude completed and archived requests
+// ✅ OPTIMIZED QUERY: Show all active requests with proper time-based sorting
 $sql = "
     SELECT 
-        r.*,
+        r.id,
+        r.ris_no,
+        r.status,
+        r.date,
+        r.remarks,
         COALESCE(u.name, CONCAT(e.first_name, ' ', e.last_name)) as req_by,
         COALESCE(u.position, e.position) as position,
         COALESCE(ud.division_name, ed.division_name, u.division, e.division) as division,
         COALESCE(uo.office_name, eo.office_name, u.office, e.office) as office,
         COALESCE(u.image, e.image, 'no_image.png') as image,
-        TIMESTAMPDIFF(MINUTE, r.date, NOW()) as minutes_old
+        TIMESTAMPDIFF(MINUTE, r.date, NOW()) as minutes_old,
+        UNIX_TIMESTAMP(r.date) as timestamp_sort
     FROM requests r
     LEFT JOIN users u ON r.requested_by = u.id
     LEFT JOIN employees e ON r.requested_by = e.id
@@ -240,18 +244,18 @@ $sql = "
     -- Join with offices table for employees
     LEFT JOIN offices eo ON e.office = eo.id
     WHERE r.status != 'archived' 
-    AND r.status != 'completed'  -- ✅ ADDED: Exclude completed requests
-    AND LOWER(r.status) != 'completed'  -- ✅ ADDED: Case-insensitive check
-    AND r.status != 'Declined'  -- ✅ ADDED: Exclude declined requests
+    AND r.status != 'completed' 
+    AND LOWER(r.status) != 'completed' 
+    AND r.status != 'Declined' 
     ORDER BY 
-        CASE 
-            WHEN r.status = 'Canceled' OR r.status = 'Cancelled' THEN 2  -- Show canceled requests at the bottom
-            ELSE 1 
-        END,
-        r.date DESC
+        r.date DESC,  -- Primary sort by date (most recent first)
+        r.id DESC     -- Secondary sort by ID for same timestamp
 ";
 
 $requests = find_by_sql($sql);
+
+// ✅ Count active requests for display
+$active_count = count($requests);
 ?>
 
 <?php include_once('layouts/header.php'); 
@@ -788,6 +792,22 @@ body {
     background: linear-gradient(135deg, #c82333, #a71e2a);
     color: white;
 }
+
+/* Time-based sorting indicators */
+.time-indicator {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.time-recent {
+    color: var(--primary-green);
+    font-weight: 600;
+}
+
+.time-old {
+    color: #6c757d;
+}
 </style>
 
 <div class="card-container">
@@ -798,7 +818,7 @@ body {
                 <i class="fas fa-clipboard-list"></i> Active Stock Requests
             </h5>
             <div class="stats-counter">
-                <i class="fas fa-chart-line me-2"></i>Active: <span id="activeCount"><?php echo count($requests); ?></span> requests
+                <i class="fas fa-chart-line me-2"></i>Active: <span id="activeCount"><?php echo $active_count; ?></span> requests
             </div>
         </div>
         
@@ -812,7 +832,7 @@ body {
                                 <th class="text-center">Profile</th>
                                 <th>Requested By</th>
                                 <th>Office</th>
-                                <th class="text-center">Date</th>
+                                <th class="text-center">Date & Time</th>
                                 <th>Status</th>
                                 <th>Remarks</th>               
                                 <th class="text-center">Actions</th>
@@ -827,10 +847,17 @@ body {
                                 $isExpiringSoon = $isCanceled && $minutesOld >= 25; // Show warning at 25 minutes
                                 $isExpired = $isCanceled && $minutesOld >= 30; // Hide after 30 minutes
                                 $timeLeft = 30 - $minutesOld;
+                                
+                                // Time-based indicators
+                                $isRecent = $minutesOld < 60; // Less than 1 hour
+                                $isVeryRecent = $minutesOld < 10; // Less than 10 minutes
+                                $timeClass = $isVeryRecent ? 'time-recent' : ($isRecent ? '' : 'time-old');
+                                $timeIndicator = $isVeryRecent ? 'Just now' : ($isRecent ? $minutesOld . ' min ago' : date("h:i A", strtotime($req['date'])));
                                 ?>
                                 <tr class="<?php echo $isCanceled ? 'canceled-row' : ''; echo $isExpiringSoon ? ' expiring-soon' : ''; echo $isExpired ? ' expired' : ''; ?>" 
                                     data-canceled="<?php echo $isCanceled ? 'true' : 'false'; ?>"
-                                    data-minutes-old="<?php echo $minutesOld; ?>">
+                                    data-minutes-old="<?php echo $minutesOld; ?>"
+                                    data-timestamp="<?php echo $req['timestamp_sort']; ?>">
                                     <?php if ($isCanceled && $isExpiringSoon && !$isExpired): ?>
                                         <div class="expiry-timer">
                                             <i class="fas fa-clock me-1"></i><?php echo max(0, $timeLeft); ?>m
@@ -857,9 +884,14 @@ body {
                                     </td>
                                     
                                     <td class="text-center">
-                                        <span class="badge rounded-pill px-3 py-2 border <?php echo $isCanceled ? 'bg-light text-muted' : 'bg-light text-dark'; ?>">
-                                            <i class="far fa-calendar-alt me-2"></i><?php echo date("M d, Y", strtotime($req['date'])); ?>
-                                        </span>
+                                        <div class="d-flex flex-column align-items-center">
+                                            <span class="badge rounded-pill px-3 py-2 border <?php echo $isCanceled ? 'bg-light text-muted' : 'bg-light text-dark'; ?>">
+                                                <i class="far fa-calendar-alt me-2"></i><?php echo date("M d, Y", strtotime($req['date'])); ?>
+                                            </span>
+                                            <small class="time-indicator <?php echo $timeClass; ?>">
+                                                <i class="far fa-clock me-1"></i><?php echo $timeIndicator; ?>
+                                            </small>
+                                        </div>
                                     </td>
                                     <td class="text-center">
                                         <?php 
@@ -1153,7 +1185,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize DataTables
+    // Initialize DataTables with time-based sorting
     if (typeof $.fn.DataTable !== 'undefined') {
         $('#reqTable').DataTable({
             pageLength: 10,
@@ -1162,6 +1194,7 @@ document.addEventListener('DOMContentLoaded', function() {
             searching: true,
             autoWidth: false,
             responsive: true,
+            order: [[4, 'desc']], // Sort by date column (4th column) descending by default
             language: {
                 search: "",
                 lengthMenu: "Show _MENU_ entries",

@@ -594,29 +594,10 @@ $is_canceled = strtolower($request['status']) === 'canceled';
                                     <?= $is_ris_missing ? 'RIS-Not-Set' : htmlspecialchars($current_ris_no) ?>
                                 </div>
                                 
-                                <!-- Auto-generation notice -->
-                                <?php if($is_ris_missing): ?>
-                                <div class="ris-notice">
-                                    <i class="fas fa-info-circle"></i>
-                                    RIS Number will be automatically generated upon approval
-                                </div>
-                                <?php endif; ?>
+                        
                             </div>
                             
-                            <!-- RIS Status Display -->
-                            <div class="ris-status" id="risStatus">
-                                <?php if ($is_ris_missing): ?>
-                                    <span class="ris-warning"><i class="fas fa-clock"></i> RIS Number pending generation</span>
-                                <?php elseif ($is_ris_duplicate): ?>
-                                    <span class="ris-invalid"><i class="fas fa-times-circle"></i> Duplicate RIS Number</span>
-                                <?php elseif ($is_ris_default_middle): ?>
-                                    <span class="ris-invalid"><i class="fas fa-exclamation-circle"></i> Invalid middle digits</span>
-                                <?php elseif ($is_middle_duplicate): ?>
-                                    <span class="ris-invalid"><i class="fas fa-times-circle"></i> Middle digits already used</span>
-                                <?php else: ?>
-                                    <span class="ris-valid"><i class="fas fa-check-circle"></i> Valid RIS Number</span>
-                                <?php endif; ?>
-                            </div>
+                          
                         </div>
                     </div>
 
@@ -730,9 +711,6 @@ $is_canceled = strtolower($request['status']) === 'canceled';
     </a>
     <?php endif; ?>
     
-    <button class="action-btn btn-print" onclick="window.print()">
-        <i class="fas fa-print"></i> Print
-    </button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

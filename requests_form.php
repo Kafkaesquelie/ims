@@ -28,6 +28,55 @@ function get_base_unit_name($base_unit_id)
     return ($res && $db->num_rows($res) > 0) ? $db->fetch_assoc($res)['name'] : 'Unit';
 }
 
+// Function to get expiry status
+function get_expiry_status($expiry_date) {
+    if (empty($expiry_date) || $expiry_date == '0000-00-00') {
+        return array('status' => 'no_expiry', 'badge' => '', 'class' => '', 'days' => null);
+    }
+    
+    $today = new DateTime();
+    $expiry = new DateTime($expiry_date);
+    $days_until_expiry = $today->diff($expiry)->days;
+    
+    // Check if expired
+    if ($expiry < $today) {
+        return array(
+            'status' => 'expired', 
+            'badge' => 'Expired', 
+            'class' => 'badge-danger',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Check if expiring in 15 days
+    if ($days_until_expiry <= 15) {
+        return array(
+            'status' => 'expiring_15', 
+            'badge' => 'Expiring in ' . $days_until_expiry . ' days', 
+            'class' => 'badge-warning',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Check if expiring in 30 days
+    if ($days_until_expiry <= 30) {
+        return array(
+            'status' => 'expiring_30', 
+            'badge' => 'Expiring in ' . $days_until_expiry . ' days', 
+            'class' => 'badge-info',
+            'days' => $days_until_expiry
+        );
+    }
+    
+    // Valid expiry date (more than 30 days)
+    return array(
+        'status' => 'valid', 
+        'badge' => 'Expires: ' . date('M d, Y', strtotime($expiry_date)), 
+        'class' => 'badge-success',
+        'days' => $days_until_expiry
+    );
+}
+
 function get_category_name($cat_id)
 {
     global $db;
@@ -258,6 +307,9 @@ foreach ($all_items as &$item) {
     } else {
         $item['stock_status'] = 2; // Good stock - show first
     }
+
+    // Calculate expiry status
+    $item['expiry_status'] = get_expiry_status($item['expiry_date']);
 }
 
 // Sort items: available items first (good stock -> low -> out of stock)
@@ -536,6 +588,73 @@ if (!empty($msg) && is_array($msg)):
         background: var(--primary-green) !important;
         border-color: var(--primary-green) !important;
     }
+
+    /* Expiry badge styles */
+    .expiry-badge {
+        font-size: 0.7rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 12px;
+        display: inline-block;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .expiry-expired {
+        background: #dc3545;
+        color: white;
+        animation: pulse 2s infinite;
+    }
+
+    .expiry-15-days {
+        background: #ffc107;
+        color: var(--text-dark);
+        animation: pulse 1.5s infinite;
+    }
+
+    .expiry-30-days {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .expiry-valid {
+        background: #28a745;
+        color: white;
+    }
+
+    .expiry-none {
+        background: #6c757d;
+        color: white;
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+        }
+        70% {
+            box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+        }
+    }
+
+    /* Expiry timeline indicator */
+    .expiry-timeline {
+        font-size: 0.75rem;
+        margin-top: 4px;
+    }
+
+    .expiry-date {
+        font-size: 0.7rem;
+        color: #6c757d;
+        margin-top: 2px;
+    }
+
+    /* Expiry column specific styles */
+    .expiry-column {
+        width: 150px;
+        text-align: center;
+    }
     
     /* Mobile Responsive Styles */
     @media (max-width: 768px) {
@@ -648,6 +767,16 @@ if (!empty($msg) && is_array($msg)):
         .legend-item {
             font-size: 0.8rem;
         }
+
+        /* Expiry column adjustments for mobile */
+        .expiry-column {
+            width: auto;
+        }
+        
+        .expiry-badge {
+            font-size: 0.65rem;
+            padding: 0.25rem 0.5rem;
+        }
     }
     
     /* Small mobile devices */
@@ -742,6 +871,7 @@ if (!empty($msg) && is_array($msg)):
               <th>Stock Card</th>
               <th>Item Name</th>
               <th class="text-center">Available Qty</th>
+              <th class="text-center expiry-column">Expiry Status</th>
               <th class="text-center">Request Unit</th>
               <th class="text-center">Request Qty</th>
             </tr>
@@ -770,6 +900,9 @@ if (!empty($msg) && is_array($msg)):
                     $stock_badge = '<span class="stock-badge badge-good">Good</span>';
                     $stock_status_text = 'Good Stock';
                 }
+
+                // Expiry status
+                $expiry_status = $it['expiry_status'];
             ?>
             <tr class="<?= $stock_class ?>" data-quantity="<?= $quantity ?>">
               <td data-label="Stock Card"><?= htmlspecialchars($it['stock_card']); ?></td>         
@@ -785,6 +918,37 @@ if (!empty($msg) && is_array($msg)):
                   <span class="stock-indicator <?= $indicator_class ?>"></span>
                   <?= $stock_badge ?>
                 </div>
+              </td>
+              <td class="text-center expiry-column" data-label="Expiry Status">
+                <?php if ($expiry_status['status'] !== 'no_expiry'): ?>
+                    <span class="expiry-badge <?= 
+                        $expiry_status['status'] === 'expired' ? 'expiry-expired' : 
+                        ($expiry_status['status'] === 'expiring_15' ? 'expiry-15-days' : 
+                        ($expiry_status['status'] === 'expiring_30' ? 'expiry-30-days' : 'expiry-valid')) 
+                    ?>">
+                        <?= $expiry_status['badge']; ?>
+                    </span>
+                    <?php if ($expiry_status['status'] !== 'valid'): ?>
+                        <div class="expiry-timeline">
+                            <small class="text-muted">
+                                <?php 
+                                if ($expiry_status['status'] === 'expired') {
+                                    echo 'Expired ' . $expiry_status['days'] . ' days ago';
+                                } else {
+                                    echo $expiry_status['days'] . ' days remaining';
+                                }
+                                ?>
+                            </small>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($it['expiry_date']) && $it['expiry_date'] != '0000-00-00'): ?>
+                        <div class="expiry-date">
+                            <small><?= date('M d, Y', strtotime($it['expiry_date'])) ?></small>
+                        </div>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <span class="expiry-badge expiry-none">No Expiry</span>
+                <?php endif; ?>
               </td>
               <td class="text-center" data-label="Request Unit">
                 <select name="unit_type[<?= (int)$it['id']; ?>]"
@@ -895,12 +1059,13 @@ $(document).ready(function() {
             }
         },
         columnDefs: [
-            { orderable: false, targets: [3, 4] }, // Make action columns non-orderable
+            { orderable: false, targets: [3, 4, 5] }, // Make action columns non-orderable
             { width: "15%", targets: [0] }, // Stock Card column
-            { width: "25%", targets: [1] }, // Item Name column
-            { width: "20%", targets: [2] }, // Available Qty column
-            { width: "20%", targets: [3] }, // Request Unit column
-            { width: "20%", targets: [4] }  // Request Qty column
+            { width: "20%", targets: [1] }, // Item Name column
+            { width: "15%", targets: [2] }, // Available Qty column
+            { width: "15%", targets: [3] }, // Expiry Status column
+            { width: "15%", targets: [4] }, // Request Unit column
+            { width: "15%", targets: [5] }  // Request Qty column
         ],
         // Initial sort by stock status (using the data-quantity attribute)
         order: [[2, 'desc']],
@@ -1009,7 +1174,7 @@ document.getElementById('reviewBtn').addEventListener('click', function() {
     let receiptHTML = '<p><strong>Requestor:</strong> ' +
         document.querySelector('input[readonly]').value + '</p>';
 
-    receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th></tr></thead><tbody>';
+    receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Expiry Status</th></tr></thead><tbody>';
     let hasItem = false;
 
     rows.forEach(row => {
@@ -1020,6 +1185,7 @@ document.getElementById('reviewBtn').addEventListener('click', function() {
         const itemId = input.dataset.itemid;
         const itemName = row.cells[1].innerText.trim();
         const available = row.cells[2].innerText.trim();
+        const expiryStatus = row.cells[3].innerText.trim();
         const unitSelect = row.querySelector('select[name^="unit_type"]');
         const selectedUnit = unitSelect.selectedOptions[0].text;
 
@@ -1031,6 +1197,7 @@ document.getElementById('reviewBtn').addEventListener('click', function() {
                 <td>${qty}</td>
                 <td>${selectedUnit}</td>
                 <td>${available}</td>
+                <td>${expiryStatus}</td>
             </tr>`;
     });
 
