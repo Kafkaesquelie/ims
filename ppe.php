@@ -7,7 +7,7 @@ $fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name A
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_equipment'])) {
-  $req_fields = array('fund_cluster', 'property_no', 'subcategory_id', 'article', 'description', 'unit', 'unit_cost', 'qty', 'date_acquired');
+  $req_fields = array('fund_cluster', 'property_no', 'subcategory_id', 'article', 'description', 'unit', 'unit_cost', 'date_acquired');
   validate_fields($req_fields);
 
   if (empty($errors)) {
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_equipment'])) {
     $description    = remove_junk($db->escape($_POST['description']));
     $unit           = remove_junk($db->escape($_POST['unit']));
     $unit_cost      = floatval($_POST['unit_cost']);
-    $qty            = (int)$_POST['qty'];
+    // $qty            = (int)$_POST['qty'];
     $date_acquired  = !empty($_POST['date_acquired']) ? $db->escape($_POST['date_acquired']) : NULL;
     $remarks        = remove_junk($db->escape($_POST['remarks']));
 
@@ -566,6 +566,8 @@ $total_properties = $equipment_count;
         <button type="button" id="showAddFormBtn" class="btn btn-primary-custom">
           <i class="fas fa-plus me-2"></i> Add Equipment
         </button>
+       
+
       </div>
     </div>
   </div>
@@ -598,12 +600,12 @@ $total_properties = $equipment_count;
               <th class="text-center">#</th>
               <th>Fund Cluster</th>
               <th>Property No.</th>
-              <th>Serial No.</th> <!-- NEW: Serial No column -->
+              <th>Serial No.</th> 
               <th>Article</th>
               <th class="custom-desc">Description</th>
               <th class="text-center">Unit Cost</th>
-              <th class="text-center">Qty</th>
-              <th class="text-center">Total Value</th>
+              <!-- <th class="text-center">Qty</th> -->
+              <!-- <th class="text-center">Total Value</th> -->
               <th class="text-center">Date Acquired</th>
               <th class="text-center actions-column">Actions</th>
             </tr>
@@ -641,9 +643,9 @@ $total_properties = $equipment_count;
                   echo strlen($desc) > 50 ? substr($desc, 0, 50) . '...' : $desc;
                   ?>
                 </td>
-                <td class="text-center"><strong>₱<?= number_format($equipment['unit_cost'], 2); ?></strong></td>
-                <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($equipment['qty']); ?></span></td>
-                <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td>
+                <td class="text-center"><strong class="text-success">₱<?= number_format($equipment['unit_cost'], 2); ?></strong></td>
+                <!-- <td class="text-center"><span class="badge badge-custom badge-primary"><?= remove_junk($equipment['qty']); ?></span></td>
+                <td class="text-center"><strong class="text-success">₱<?= number_format($total_value, 2); ?></strong></td> -->
                 <td class="text-center"><?= $date_acquired; ?></td>
                 <td class="text-center">
                   <div class="btn-group btn-group-custom">
@@ -799,7 +801,7 @@ $total_properties = $equipment_count;
             </div>
           </div>
 
-          <div class="col-md-4 mb-3">
+          <!-- <div class="col-md-4 mb-3">
             <div class="form-group">
               <label for="qty" class="form-label fw-bold">Quantity <span class="text-danger">*</span></label>
               <input type="number" min="1" class="form-control" id="qty" name="qty" required>
@@ -807,7 +809,7 @@ $total_properties = $equipment_count;
                 Please provide a valid quantity.
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
       </div>
 

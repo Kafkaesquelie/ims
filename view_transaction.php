@@ -813,6 +813,12 @@ if ($ics_no) {
                                                 <select name="conditions[]" class="form-select form-select-sm p-2">
                                                     <option value="Functional">Functional</option>
                                                     <option value="Damaged">Damaged</option>
+                                                    <option value="Lost" >Lost</option>
+                                                    <option value="Missing" >Missing</option>
+                                                    <option value="Damaged">Damaged</option>
+                                                    <option value="Destroyed">Destroyed</option>
+                                                    <option value="Stolen">Stolen</option>
+                                                    <option value="Disposed">Disposed</option>
                                                 </select>
                                             </td>
                                         </tr>
@@ -869,6 +875,12 @@ if ($ics_no) {
                             <option value="">Select Condition</option>
                             <option value="Functional">Functional</option>
                             <option value="Damaged">Damaged</option>
+                            <option value="Lost" >Lost</option>
+                            <option value="Missing" >Missing</option>
+                            <option value="Damaged">Damaged</option>
+                            <option value="Destroyed">Destroyed</option>
+                            <option value="Stolen">Stolen</option>
+                            <option value="Disposed">Disposed</option>
                         </select>
                     </div>
 

@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_item'])) {
         $session->msg("s", "✅ Item updated successfully!");
         redirect('smp.php', false);
     } else {
-        $session->msg("d", "❌ Update failed: " . $db->error);
+        $session->msg("d", "❌ Update failed: " . error_get_last()); // $db->error
         redirect("edit_smp.php?id={$id}", false);
     }
 }
@@ -433,14 +433,14 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
 
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
-                                <label class="form-label-custom"> Item Description</label>
-                                <input type="text" class="form-control-custom" name="item_description" 
+                                <label class="form-label-custom"> Item Description</label><br>
+                                <input type="text" class="form-control-custom w-100" name="item_description" 
                                        value="<?= $item['item_description'] ?>" 
                                        placeholder="Enter item description" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label-custom">Unit</label><br>
-                                <input type="text" class="form-control-custom" name="unit" 
+                                <input type="text" class="form-control-custom w-100" name="unit" 
                                        value="<?= $item['unit'] ?>" 
                                        placeholder="e.g., pcs, box, unit" required>
                             </div>
@@ -481,9 +481,7 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                                 <select class="form-select-custom w-100 mt-1" name="status">
                                     <option value="available" <?= $item['status']=='available'?'selected':''; ?>>Available</option>
                                     <option value="issued" <?= $item['status']=='issued'?'selected':''; ?>>Issued</option>
-                                    <option value="returned" <?= $item['status']=='returned'?'selected':''; ?>>Returned</option>
-                                    <option value="lost" <?= $item['status']=='lost'?'selected':''; ?>>Lost</option>
-                                    <option value="disposed" <?= $item['status']=='disposed'?'selected':''; ?>>Disposed</option>
+                                    
                                     <option value="archived" <?= $item['status']=='archived'?'selected':''; ?>>Archived</option>
                                 </select>
                             </div>

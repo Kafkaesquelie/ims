@@ -20,7 +20,7 @@ if (!$property) {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
-    $req_fields = array('fund_cluster', 'property_no', 'subcategory_id', 'article', 'description', 'unit', 'unit_cost', 'qty');
+    $req_fields = array('fund_cluster', 'property_no', 'subcategory_id', 'article', 'description', 'unit', 'unit_cost');
     validate_fields($req_fields);
 
     // Check for errors
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
         $description    = remove_junk($db->escape($_POST['description']));
         $unit           = remove_junk($db->escape($_POST['unit']));
         $unit_cost      = floatval($_POST['unit_cost']);
-        $qty            = (int)$_POST['qty'];
+        // $qty            = (int)$_POST['qty'];
         $date_acquired  = !empty($_POST['date_acquired']) ? $db->escape($_POST['date_acquired']) : NULL;
         $remarks        = remove_junk($db->escape($_POST['remarks']));
 
@@ -62,8 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
                     article='{$article}', 
                     description='{$description}', 
                     unit='{$unit}', 
-                    unit_cost='{$unit_cost}', 
-                    qty='{$qty}', 
+                    unit_cost='{$unit_cost}',  
                     date_acquired='{$date_acquired}', 
                     remarks='{$remarks}',
                     date_updated='{$current_time}'
@@ -73,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_property'])) {
             $session->msg("s", "Property updated successfully.");
             redirect('ppe.php', false);
         } else {
-            $session->msg("d", "Sorry, failed to update property: " . $db->get_last_error());
+            $session->msg("d", "Sorry, failed to update property: " . error_get_last()); // $db->error
             redirect('edit_ppe.php?id=' . $property_id, false);
         }
     }
@@ -495,14 +494,14 @@ $all_subcategories = find_all('subcategories');
 
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
-                                <label class="form-label-custom">Article</label>
-                                <input type="text" name="article" class="form-control-custom"
+                                <label class="form-label-custom">Article</label><br>
+                                <input type="text" name="article" class="form-control-custom w-100"
                                     value="<?php echo remove_junk($property['article']); ?>"
                                     placeholder="Enter article name" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label-custom">Unit of Measurement</label><br>
-                                <input type="text" name="unit" class="form-control-custom"
+                                <input type="text" name="unit" class="form-control-custom w-100"
                                     value="<?php echo remove_junk($property['unit']); ?>"
                                     placeholder="e.g., pcs, unit, set" required>
                             </div>
@@ -526,27 +525,8 @@ $all_subcategories = find_all('subcategories');
                         </h6>
 
                         <div class="row g-3 mb-4">
-                            <div class="col-md-4">
-                                <label class="form-label-custom">Quantity</label>
-                                <?php
-                                $status_class = 'status-good';
-                                if ($property['qty'] == 0) $status_class = 'status-low';
-                                elseif ($property['qty'] <= 10) $status_class = 'status-warning';
-                                ?>
-                                <span class="quantity-status <?php echo $status_class; ?>">
-                                    <?php
-                                    if ($property['qty'] == 0) echo 'Out of Stock';
-                                    elseif ($property['qty'] <= 10) echo 'Low Stock';
-                                    else echo 'In Stock';
-                                    ?>
-                                </span>
-                                <div class="input-group">
-                                    <input type="number" name="qty" class="form-control-custom"
-                                        value="<?php echo remove_junk($property['qty']); ?>"
-                                        min="0" required>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
+                            
+                            <div class="col-md-6">
                                 <label class="form-label-custom">Unit Cost</label>
                                 <div class="input-group input-group-custom">
                                     <span class="input-group-text">₱</span>
@@ -555,7 +535,7 @@ $all_subcategories = find_all('subcategories');
                                         placeholder="0.00" required>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label class="form-label-custom">Date Acquired</label><br>
                                 <input type="date" name="date_acquired" class="form-control-custom"
                                     value="<?php echo remove_junk($property['date_acquired']); ?>">
@@ -563,7 +543,7 @@ $all_subcategories = find_all('subcategories');
                         </div>
 
                         <!-- Value Calculation -->
-                        <div class="value-calculation">
+                        <!-- <div class="value-calculation">
                             <div class="row text-center">
                                 <div class="col-md-4">
                                     <small class="text-muted d-block">Unit Cost</small>
@@ -578,7 +558,7 @@ $all_subcategories = find_all('subcategories');
                                     <div class="cost-display">₱<?php echo number_format($property['unit_cost'] * $property['qty'], 2); ?></div>
                                 </div>
                             </div>
-                        </div>
+                        </div> -->
 
                         <!-- Section 5: Additional Information -->
                         <h6 class="section-header">

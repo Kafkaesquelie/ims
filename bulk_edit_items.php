@@ -30,7 +30,7 @@ if (isset($_POST['update_bulk_items'])) {
         $unit_cost    = (float)$_POST["unit_cost_$id"];
         $base_unit_id    = !empty($_POST["base_unit_id_$id"]) ? (int)$_POST["base_unit_id_$id"] : "NULL";
         $conversion_rate = !empty($_POST["conversion_rate_$id"]) ? (float)$_POST["conversion_rate_$id"] : 1;
-
+        $expiry_date  = $db->escape($_POST["expiry_date_$id"]); // ✅ Added expiry date
 
         // Keep existing media_id
         $media_id = $_POST["existing_media_$id"];
@@ -69,7 +69,7 @@ if (isset($_POST['update_bulk_items'])) {
         $prev_qty_row = $prev_qty_result->fetch_assoc();
         $previous_qty = (int)$prev_qty_row['quantity'];
 
-        // ✅ Update main items table
+        // ✅ Update main items table - Added expiry_date field
         $sql = "UPDATE items SET 
             name='{$name}',
             fund_cluster='{$fund_cluster}',
@@ -80,6 +80,7 @@ if (isset($_POST['update_bulk_items'])) {
             conversion_rate='{$conversion_rate}',
             quantity='{$quantity}',
             unit_cost='{$unit_cost}',
+            expiry_date='{$expiry_date}', -- ✅ Added expiry date
             media_id='{$media_id}'
         WHERE id='{$id}' LIMIT 1";
 
@@ -330,6 +331,49 @@ if (isset($_POST['update_bulk_items'])) {
         max-width: 25%;
     }
 
+    /* Expiry Date Status Styles */
+    .expiry-status {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.8rem;
+        border-radius: 15px;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+
+    .expiry-expired {
+        background: #dc3545;
+        color: white;
+        animation: pulse 2s infinite;
+    }
+
+    .expiry-15-days {
+        background: #ffc107;
+        color: var(--text-dark);
+        animation: pulse 1.5s infinite;
+    }
+
+    .expiry-30-days {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .expiry-valid {
+        background: var(--primary);
+        color: white;
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+        }
+        70% {
+            box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+        }
+    }
+
     /* Floating Action Buttons */
     .floating-buttons {
         position: fixed;
@@ -474,7 +518,28 @@ if (isset($_POST['update_bulk_items'])) {
     </div>
 
     <form method="post" action="" enctype="multipart/form-data" id="bulkEditForm">
-        <?php foreach ($items as $index => $item): ?>
+        <?php foreach ($items as $index => $item): 
+            // Calculate expiry status for each item
+            $expiry_status = '';
+            $expiry_date_value = '';
+            
+            if (!empty($item['expiry_date']) && $item['expiry_date'] != '0000-00-00') {
+                $expiry_date_value = $item['expiry_date'];
+                $today = new DateTime();
+                $expiry = new DateTime($item['expiry_date']);
+                $days_until_expiry = $today->diff($expiry)->days;
+                
+                if ($expiry < $today) {
+                    $expiry_status = '<span class="expiry-status expiry-expired">Expired</span>';
+                } elseif ($days_until_expiry <= 15) {
+                    $expiry_status = '<span class="expiry-status expiry-15-days">Expiring in ' . $days_until_expiry . ' days</span>';
+                } elseif ($days_until_expiry <= 30) {
+                    $expiry_status = '<span class="expiry-status expiry-30-days">Expiring in ' . $days_until_expiry . ' days</span>';
+                } else {
+                    $expiry_status = '<span class="expiry-status expiry-valid">Valid</span>';
+                }
+            }
+        ?>
             <div class="item-card">
                 <div class="card-header-custom d-flex justify-content-between align-items-center">
                     <div>
@@ -554,8 +619,7 @@ if (isset($_POST['update_bulk_items'])) {
                                 </div>
                             </div>
 
-                            <!-- Row 3: Unit of Measure, Quantity & Unit Cost -->
-                            <!-- Row 3: Unit of Measure, Base Unit, Conversion Rate, Quantity & Unit Cost -->
+                            <!-- Row 3: Unit of Measure, Base Unit, Conversion Rate -->
                             <div class="form-col form-col-quarter">
                                 <div class="form-group-custom">
                                     <label class="form-label required-field">Unit of Measure</label>
@@ -600,7 +664,8 @@ if (isset($_POST['update_bulk_items'])) {
                                 </div>
                             </div>
 
-                            <div class="form-col form-col-quarter">
+                            <!-- Row 4: Quantity, Unit Cost & Expiry Date -->
+                            <div class="form-col form-col-third">
                                 <div class="form-group-custom">
                                     <label class="form-label required-field">Quantity</label>
                                     <input type="number" class="form-control-custom" name="quantity_<?= $item['id']; ?>"
@@ -608,7 +673,7 @@ if (isset($_POST['update_bulk_items'])) {
                                 </div>
                             </div>
 
-                            <div class="form-col form-col-quarter">
+                            <div class="form-col form-col-third">
                                 <div class="form-group-custom">
                                     <label class="form-label required-field">Unit Cost</label>
                                     <input type="number" step="0.01" class="form-control-custom" name="unit_cost_<?= $item['id']; ?>"
@@ -618,16 +683,17 @@ if (isset($_POST['update_bulk_items'])) {
 
                             <div class="form-col form-col-third">
                                 <div class="form-group-custom">
-                                    <label class="form-label required-field">Quantity</label>
-                                    <input type="number" class="form-control-custom" name="quantity_<?= $item['id']; ?>"
-                                        value="<?= remove_junk($item['quantity']); ?>" required min="0">
-                                </div>
-                            </div>
-                            <div class="form-col form-col-third">
-                                <div class="form-group-custom">
-                                    <label class="form-label required-field">Unit Cost</label>
-                                    <input type="number" step="0.01" class="form-control-custom" name="unit_cost_<?= $item['id']; ?>"
-                                        value="<?= remove_junk($item['unit_cost']); ?>" required min="0">
+                                    <label class="form-label">Expiry Date</label>
+                                    <div class="d-flex align-items-center">
+                                        <input type="date" class="form-control-custom" name="expiry_date_<?= $item['id']; ?>"
+                                            value="<?= $expiry_date_value; ?>">
+                                        <?php if ($expiry_status): ?>
+                                            <?= $expiry_status; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                    <small class="text-muted mt-1 d-block">
+                                        <i class="fas fa-info-circle me-1"></i>Leave empty if item doesn't expire
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -698,6 +764,22 @@ if (isset($_POST['update_bulk_items'])) {
                 e.preventDefault();
                 alert('Please fill in all required fields (marked with *) before saving.');
             }
+        });
+
+        // Expiry date validation
+        const expiryInputs = form.querySelectorAll('input[type="date"][name^="expiry_date_"]');
+        expiryInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                const selectedDate = new Date(this.value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                if (this.value && selectedDate < today) {
+                    this.style.borderColor = '#dc3545';
+                } else {
+                    this.style.borderColor = '#e9ecef';
+                }
+            });
         });
     });
 </script>

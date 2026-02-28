@@ -373,7 +373,8 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                         <p>Transactions</p>
                                     </a>
                                 </li>
-                                <li class="nav-item">
+                                
+                                <!-- <li class="nav-item">
                                     <a href="stock_card.php" class="nav-link">
                                         <i class="nav-icon fas fa-clipboard-list"></i>
                                         <p>Stock & Property Card</p>
@@ -384,7 +385,7 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                         <i class="nav-icon fas fa-file-invoice"></i>
                                         <p>Registry OF SPI's</p>
                                     </a>
-                                </li>
+                                </li> -->
                                 <li class="nav-item">
                                     <a href="rsmi.php" class="nav-link">
                                         <i class="nav-icon fas fa-file-invoice"></i>
@@ -415,7 +416,7 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                                 <li class="nav-item">
                                     <a href="ppe.php" class="nav-link">
                                         <i class="nav-icon fa-solid fa-building"></i>
-                                        <p> Equipments</p>
+                                        <p> Equipment</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">

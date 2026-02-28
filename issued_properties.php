@@ -61,7 +61,7 @@ $sql_ics_items = "
     ORDER BY t.ICS_No, t.transaction_date DESC
 ";
 
-// Fetch Returned Semi-Expendable (ICS) items
+// ✅ FIXED: Fetch ONLY Returned Functional Semi-Expendable (ICS) items available for re-issue
 $sql_returned_ics = "
     SELECT 
         ri.id as return_id,
@@ -96,7 +96,8 @@ $sql_returned_ics = "
     LEFT JOIN offices o ON e.office = o.id
     LEFT JOIN semi_exp_prop p ON t.item_id = p.id
     WHERE t.ICS_No IS NOT NULL 
-      AND t.qty_re_issued < t.qty_returned
+      AND ri.conditions = 'Functional'  -- ✅ ONLY functional items
+      AND (t.qty_re_issued IS NULL OR t.qty_re_issued < t.qty_returned) -- ✅ Still has available quantity
     ORDER BY ri.return_date DESC, ri.RRSP_No DESC
 ";
 
@@ -497,7 +498,7 @@ foreach ($ics_items as $item) {
                             <th class="text-center">ICS No.</th>
                             <th>Issued To</th>
                             <th>Items</th>
-                            <th class="text-center">Total Qty Issued</th>
+                            <!-- <th class="text-center">Total Qty Issued</th> -->
                             <th class="text-center">Returned</th>
                             <th class="text-center">Re-Issued</th>
                             <th class="text-center">Status</th>
@@ -535,11 +536,11 @@ foreach ($ics_items as $item) {
                                         </div>
                                     </div>
                                 </td>
-                                <td class="text-center">
+                                <!-- <td class="text-center">
                                     <span class="badge badge-custom badge-issued">
                                         <?= $group['total_quantity'] ?> units
                                     </span>
-                                </td>
+                                </td> -->
                                 <td class="text-center">
                                     <span class="badge badge-custom badge-returned">
                                         <?= $group['total_returned'] ?> units
@@ -575,17 +576,6 @@ foreach ($ics_items as $item) {
                                             title="View All Items">
                                             <i class="fas fa-list"></i>
                                         </a>
-
-                                        <!-- <?php if (strtolower(trim($group['status'])) !== 'returned' && strtolower(trim($group['status'])) !== 'damaged'): ?>
-                                            <button class="btn btn-return btn-sm return-ics-btn"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#returnModal"
-                                                data-ics-no="<?= $group['ICS_No']; ?>"
-                                                data-items-count="<?= $group['transaction_count']; ?>"
-                                                title="Return Items">
-                                                <i class="fas fa-undo"></i>
-                                            </button>
-                                        <?php endif; ?> -->
                                     </div>
                                 </td>
                             </tr>
@@ -605,14 +595,11 @@ foreach ($ics_items as $item) {
     </div>
 </div>
 
-
-
-
-    <!-- Returned Semi-Expendable (ICS) Table -->
+    <!-- Returned Semi-Expendable (ICS) Table - NOW ONLY FUNCTIONAL ITEMS -->
     <div class="card-custom">
         <div class="card-header-custom d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="fas fa-undo me-2"></i> Returned Semi-Expendable Properties (Available for Re-Issue)</h5>
-            <span class="badge bg-light text-dark"><?= count($returned_ics); ?> items</span>
+            <h5 class="mb-0"><i class="fas fa-undo me-2"></i> Returned Functional Semi-Expendable Properties (Available for Re-Issue)</h5>
+            <span class="badge bg-light text-dark"><?= count($returned_ics); ?> functional items</span>
         </div>
         <div class="card-body p-0">
             <?php if (!empty($returned_ics)): ?>
@@ -625,8 +612,8 @@ foreach ($ics_items as $item) {
                                 <th class="text-center">RRSP No.</th>
                                 <th>Returned By</th>
                                 <th>Item Details</th>
-                                <th class="text-center">Qty Returned</th>
-                                <th class="text-center">Qty Available</th>
+                                <!-- <th class="text-center">Qty Returned</th> -->
+                                <!-- <th class="text-center">Qty Available</th> -->
                                 <th class="text-center">Condition</th>
                                 <th class="text-center">Return Date</th>
                                 <th class="text-center">Actions</th>
@@ -636,7 +623,7 @@ foreach ($ics_items as $item) {
                             <?php $count = 1;
                             foreach ($returned_ics as $r):
                                 // Calculate available quantity for re-issue
-                                $available_qty = $r['qty_returned'] - $r['qty_re_issued'];
+                                $available_qty = $r['qty'] - $r['qty_re_issued'];
                             ?>
                                 <tr>
                                     <td class="text-center">
@@ -658,30 +645,20 @@ foreach ($ics_items as $item) {
                                             <div class="item-description"><?= htmlspecialchars($r['item_description']); ?></div>
                                         </div>
                                     </td>
-                                    <td class="text-center">
+                                    <!-- <td class="text-center">
                                         <span class="badge badge-custom badge-returned"><?= $r['qty'] ?> <?= $r['unit']; ?></span>
                                     </td>
                                     <td class="text-center">
                                         <span class="badge badge-custom badge-issued" style="background: rgba(40, 167, 69, 0.2); color: #1e7e34;">
                                             <?= $available_qty ?> <?= $r['unit']; ?>
                                         </span>
-                                    </td>
+                                    </td> -->
                                     <td class="text-center">
                                         <?php
-                                        $condition = $r['conditions'];
-                                        if ($condition == 'Functional') {
-                                            echo '<span class="badge badge-success">
-                                                    <i class="fas fa-check-circle me-1"></i> Functional
-                                                </span>';
-                                        } elseif ($condition == 'Damaged') {
-                                            echo '<span class="badge badge-danger">
-                                                    <i class="fas fa-times-circle me-1"></i> Damaged
-                                                </span>';
-                                        } else {
-                                            echo '<span class="badge badge-secondary">
-                                                    <i class="fas fa-info-circle me-1"></i> ' . ($condition ?: 'Unknown') . '
-                                                </span>';
-                                        }
+                                        // ✅ Since we filtered in SQL, all items here will be functional
+                                        echo '<span class="badge badge-success">
+                                                <i class="fas fa-check-circle me-1"></i> Functional
+                                            </span>';
                                         ?>
                                     </td>
                                     <td class="text-center">
@@ -695,16 +672,13 @@ foreach ($ics_items as $item) {
                                                 <i class="fas fa-eye"></i>
                                             </a>
 
-                                            <?php
-                                            $condition = $r['conditions'];
-                                            // Show re-issue button only for functional items
-                                            if ($condition != 'Damaged' && $available_qty > 0): ?>
+                                            <?php if ($available_qty > 0): ?>
                                                 <button class="btn btn-primary-custom btn-sm reissue-btn"
                                                     data-bs-toggle="modal"
                                                     data-bs-target="#reissueModal"
                                                     data-id="<?= $r['transaction_id']; ?>"
                                                     data-item="<?= htmlspecialchars($r['item']); ?>"
-                                                    data-returned="<?= $r['qty_returned']; ?>"
+                                                    data-returned="<?= $r['qty']; ?>"
                                                     data-reissued="<?= $r['qty_re_issued'] ?? 0; ?>"
                                                     title="Re-Issue Item">
                                                     <i class="fas fa-redo"></i>
@@ -720,8 +694,8 @@ foreach ($ics_items as $item) {
             <?php else: ?>
                 <div class="empty-state">
                     <div class="empty-state-icon"><i class="fas fa-box"></i></div>
-                    <h4>No Items Available for Re-Issue</h4>
-                    <p>All returned items have been re-issued or there are no returned items yet.</p>
+                    <h4>No Functional Items Available for Re-Issue</h4>
+                    <p>All returned functional items have been re-issued or there are no returned functional items available.</p>
                 </div>
             <?php endif; ?>
         </div>
@@ -737,8 +711,8 @@ foreach ($ics_items as $item) {
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <input type="hidden" name="transaction_id" id="reissue_transaction_id">
-                        <input type="hidden" id="functional_qty_available">
+                        <!-- <input type="hidden" name="transaction_id" id="reissue_transaction_id">
+                        <input type="hidden" id="functional_qty_available"> -->
 
                         <p class="text-success fw-bold mb-3" id="reissue_item_name"></p>
 
@@ -843,113 +817,12 @@ foreach ($ics_items as $item) {
 <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const returnModalEl = document.getElementById('returnModal');
-        const returnForm = document.getElementById('returnForm');
-        const returnQtyInput = returnForm.querySelector('input[name="return_qty"]');
-
-        returnModalEl.addEventListener('show.bs.modal', event => {
-            const button = event.relatedTarget;
-            if (!button) return;
-
-            const transId = button.dataset.id;
-            const itemName = button.dataset.item;
-            const issuedQty = parseInt(button.dataset.quantity || 0);
-            const returnedQty = parseInt(button.dataset.returned || 0);
-            const remainingQty = issuedQty - returnedQty;
-
-            document.getElementById('return_transaction_id').value = transId;
-            document.getElementById('return_item_name').textContent = `Return: ${itemName}`;
-
-            returnQtyInput.value = '';
-            returnQtyInput.max = remainingQty;
-            returnQtyInput.min = 1;
-            returnQtyInput.placeholder = `Max: ${remainingQty}`;
-            returnQtyInput.dataset.remaining = remainingQty;
-
-            if (remainingQty <= 0) {
-                returnQtyInput.disabled = true;
-                returnQtyInput.placeholder = 'No quantity left to return';
-            } else {
-                returnQtyInput.disabled = false;
-            }
-        });
-
-        returnQtyInput.addEventListener('input', () => {
-            const entered = parseInt(returnQtyInput.value || 0);
-            const max = parseInt(returnQtyInput.dataset.remaining || 0);
-            if (entered > max) {
-                returnQtyInput.value = max;
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Quantity Limit Exceeded',
-                    text: `You can only return up to ${max} item(s).`,
-                    timer: 1500,
-                    showConfirmButton: false
-                });
-            }
-        });
-
-        returnForm.addEventListener('submit', async e => {
-            e.preventDefault();
-
-            const formData = new FormData(returnForm);
-            const submitBtn = returnForm.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
-            submitBtn.disabled = true;
-
-            try {
-                const response = await fetch('process_returned.php', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    await Swal.fire({
-                        icon: 'success',
-                        title: 'Item Returned Successfully',
-                        text: data.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-
-                    const modal = bootstrap.Modal.getInstance(returnModalEl);
-                    modal.hide();
-
-                    setTimeout(() => {
-                        location.reload();
-                    }, 500);
-
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Return Failed',
-                        text: data.message,
-                        confirmButtonColor: '#3085d6'
-                    });
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Request Failed',
-                    text: 'An unexpected error occurred while processing your request.'
-                });
-            } finally {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }
-        });
-
         // Handle Re-Issue Modal
         const reissueModalEl = document.getElementById('reissueModal');
         const reissueForm = document.getElementById('reissueForm');
         const reissueQtyInput = reissueForm.querySelector('input[name="reissue_qty"]');
-        const functionalQtyAvailable = document.getElementById('functional_qty_available');
-        const functionalQtyInfo = document.getElementById('functionalQtyInfo');
+        // const functionalQtyAvailable = document.getElementById('functional_qty_available');
+        // const functionalQtyInfo = document.getElementById('functionalQtyInfo');
         const functionalQtyText = document.getElementById('functionalQtyText');
         const conditionAlert = document.getElementById('conditionAlert');
         const conditionMessage = document.getElementById('conditionMessage');
@@ -963,85 +836,42 @@ foreach ($ics_items as $item) {
             const itemName = button.dataset.item;
             const returnedQty = parseInt(button.dataset.returned || 0);
             const reissuedQty = parseInt(button.dataset.reissued || 0);
+            const availableQty = returnedQty - reissuedQty;
 
             document.getElementById('reissue_transaction_id').value = transId;
             document.getElementById('reissue_item_name').textContent = `Re-Issue: ${itemName}`;
 
-            // Reset UI elements
-            functionalQtyInfo.style.display = 'none';
-            conditionAlert.style.display = 'none';
-            reissueQtyInput.disabled = true;
-            reissueSubmitBtn.disabled = true;
-            reissueQtyInput.value = '';
-            reissueQtyInput.placeholder = 'Checking item conditions...';
-
-            try {
-                // Fetch functional quantity from server - use process_reissue.php without reissue_qty
-                const response = await fetch('process_reissue.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `transaction_id=${transId}` // No reissue_qty parameter = functional check
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    const functionalQty = parseInt(data.functional_qty);
-                    const availableFunctional = functionalQty - reissuedQty;
-
-                    // Update the hidden field
-                    functionalQtyAvailable.value = availableFunctional;
-
-                    if (availableFunctional <= 0) {
-                        // No functional items available
-                        reissueQtyInput.disabled = true;
-                        reissueQtyInput.placeholder = 'No functional items available';
-                        conditionAlert.style.display = 'block';
-                        conditionMessage.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> No functional items available for re-issue.';
-                        conditionAlert.className = 'alert alert-warning';
-                        reissueSubmitBtn.disabled = true;
-                    } else {
-                        // Functional items available
-                        reissueQtyInput.disabled = false;
-                        reissueQtyInput.max = availableFunctional;
-                        reissueQtyInput.min = 1;
-                        reissueQtyInput.placeholder = `Max: ${availableFunctional}`;
-                        reissueQtyInput.dataset.remaining = availableFunctional;
-
-                        // Show functional quantity info
-                        functionalQtyInfo.style.display = 'block';
-                        functionalQtyText.textContent = `${availableFunctional}`;
-
-                        // Show condition status
-                        conditionAlert.style.display = 'block';
-                        if (functionalQty < returnedQty) {
-                            const damagedQty = returnedQty - functionalQty;
-                            conditionMessage.innerHTML = `<i class="fas fa-info-circle me-1"></i> ${damagedQty} item(s) are damaged and cannot be re-issued.`;
-                            conditionAlert.className = 'alert alert-info';
-                        } else {
-                            conditionMessage.innerHTML = '<i class="fas fa-check-circle me-1"></i> All returned items are functional and available for re-issue.';
-                            conditionAlert.className = 'alert alert-success';
-                        }
-
-                        reissueSubmitBtn.disabled = false;
-                    }
-                } else {
-                    throw new Error(data.message || 'Failed to fetch item conditions');
-                }
-            } catch (error) {
-                console.error('Error:', error);
+            // ✅ Since we only show functional items, we can directly use available quantity
+            functionalQtyAvailable.value = availableQty;
+            
+            if (availableQty <= 0) {
                 reissueQtyInput.disabled = true;
-                reissueQtyInput.placeholder = 'Error checking conditions';
+                reissueQtyInput.placeholder = 'No items available';
                 conditionAlert.style.display = 'block';
-                conditionMessage.textContent = 'Error checking item conditions. Please try again.';
-                conditionAlert.className = 'alert alert-danger';
+                conditionMessage.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> No items available for re-issue.';
+                conditionAlert.className = 'alert alert-warning';
                 reissueSubmitBtn.disabled = true;
+            } else {
+                reissueQtyInput.disabled = false;
+                reissueQtyInput.max = availableQty;
+                reissueQtyInput.min = 1;
+                reissueQtyInput.placeholder = `Max: ${availableQty}`;
+                reissueQtyInput.dataset.remaining = availableQty;
+
+                // Show functional quantity info
+                functionalQtyInfo.style.display = 'block';
+                functionalQtyText.textContent = `${availableQty}`;
+
+                // Show condition status
+                conditionAlert.style.display = 'block';
+                conditionMessage.innerHTML = '<i class="fas fa-check-circle me-1"></i> This item is functional and ready for re-issue.';
+                conditionAlert.className = 'alert alert-success';
+
+                reissueSubmitBtn.disabled = false;
             }
         });
 
-        // Prevent exceeding functional quantity
+        // Prevent exceeding available quantity
         reissueQtyInput.addEventListener('input', () => {
             const entered = parseInt(reissueQtyInput.value || 0);
             const max = parseInt(reissueQtyInput.dataset.remaining || 0);
@@ -1050,7 +880,7 @@ foreach ($ics_items as $item) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Quantity Limit Exceeded',
-                    text: `You can only re-issue up to ${max} functional item(s).`,
+                    text: `You can only re-issue up to ${max} item(s).`,
                     timer: 1500,
                     showConfirmButton: false
                 });
@@ -1128,7 +958,7 @@ foreach ($ics_items as $item) {
                 autoWidth: false,
                 columnDefs: [{
                     orderable: false,
-                    targets: [9], // Actions column
+                    targets: [7], // Actions column
                 }],
             });
         });

@@ -23,6 +23,24 @@ $units = find_all('units');
 $categories = find_all('categories');
 $fund_clusters = find_by_sql("SELECT id, name FROM fund_clusters ORDER BY name ASC");
 
+// ✅ Get unit names for display
+$current_unit = find_by_id('units', $item['unit_id']);
+$current_base_unit = find_by_id('base_units', $item['base_unit_id']);
+
+// ✅ Calculate base unit quantity
+$conversion_rate = 1;
+if ($item['base_unit_id'] && $item['base_unit_id'] != $item['unit_id']) {
+    $conv_result = find_by_sql("SELECT conversion_rate FROM unit_conversions 
+                               WHERE item_id = '{$item_id}' 
+                               AND from_unit_id = '{$item['unit_id']}' 
+                               AND to_unit_id = '{$item['base_unit_id']}' LIMIT 1");
+    if ($conv_result && count($conv_result) > 0) {
+        $conversion_rate = (float)$conv_result[0]['conversion_rate'];
+    }
+}
+
+$quantity_in_base_unit = $item['quantity'] * $conversion_rate;
+
 if (isset($_POST['update_item'])) {
     $req_fields = ['name', 'categorie_id', 'unit_id', 'quantity', 'unit_cost'];
     validate_fields($req_fields);
@@ -483,6 +501,44 @@ if (isset($_POST['update_item'])) {
         font-size: 0.9rem;
         color: var(--text-dark);
     }
+
+    /* Quantity Display Styles */
+    .quantity-display-container {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid var(--primary-green);
+    }
+
+    .quantity-display-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .quantity-display-item:last-child {
+        border-bottom: none;
+    }
+
+    .quantity-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--dark-green);
+    }
+
+    .quantity-label {
+        font-weight: 600;
+        color: var(--text-dark);
+    }
+
+    .quantity-unit {
+        font-size: 0.9rem;
+        color: var(--text-light);
+        font-style: italic;
+    }
 </style>
 
 <div class="container mt-4">
@@ -506,7 +562,6 @@ if (isset($_POST['update_item'])) {
             <div class="edit-card">
                 <div class="card-header-custom">
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
-
                         <div class="col-md-6">
                             <div class="metadata-item">
                                 <i class="fas fa-calendar-plus"></i>
@@ -552,6 +607,50 @@ if (isset($_POST['update_item'])) {
                                         <i class="fa-solid fa-info-circle me-1"></i>
                                         Supported: JPG, PNG, GIF (Max: 2MB)
                                     </small>
+                                </div>
+
+                                <!-- Current Stock Display -->
+                                <div class="quantity-display-container mt-4">
+                                    <h6 class="text-success mb-3"><i class="fa-solid fa-boxes-stacked me-2"></i>Current Stock</h6>
+                                    
+                                    <!-- Main Unit Quantity -->
+                                    <div class="quantity-display-item">
+                                        <div>
+                                            <div class="quantity-label">In Main Unit</div>
+                                            <div class="quantity-unit">
+                                                <?php echo remove_junk($current_unit ? $current_unit['name'] : 'Unit'); ?>
+                                            </div>
+                                        </div>
+                                        <div class="quantity-value">
+                                            <?php echo (int)$item['quantity']; ?>
+                                        </div>
+                                    </div>
+
+                                    <!-- Base Unit Quantity -->
+                                    <?php if ($current_base_unit && $current_base_unit['name'] != 'Not Applicable' && $item['base_unit_id'] != $item['unit_id']): ?>
+                                    <div class="quantity-display-item">
+                                        <div>
+                                            <div class="quantity-label">In Base Unit</div>
+                                            <div class="quantity-unit">
+                                                <?php echo remove_junk($current_base_unit['name']); ?>
+                                            </div>
+                                        </div>
+                                        <div class="quantity-value">
+                                            <?php echo (int)$quantity_in_base_unit; ?>
+                                        </div>
+                                    </div>
+                                    <?php endif; ?>
+
+                                    <!-- Total Value -->
+                                    <div class="quantity-display-item">
+                                        <div>
+                                            <div class="quantity-label">Total Value</div>
+                                            <div class="quantity-unit">At current unit cost</div>
+                                        </div>
+                                        <div class="quantity-value text-success">
+                                            ₱<?php echo number_format($item['quantity'] * $item['unit_cost'], 2); ?>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Quick Stats -->
@@ -651,7 +750,9 @@ if (isset($_POST['update_item'])) {
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label-custom">Conversion Rate</label>
                                         <input type="number" step="0.0001" min="0" class="form-control-custom w-100"
-                                            name="conversion_rate" placeholder="e.g., 12 (items per box)">
+                                            name="conversion_rate" 
+                                            value="<?php echo $conversion_rate != 1 ? $conversion_rate : ''; ?>"
+                                            placeholder="e.g., 12 (items per box)">
                                         <small class="text-muted">Enter how many base units are in one unit (leave 1 if not applicable).</small>
                                     </div>
                                 </div>
@@ -677,6 +778,9 @@ if (isset($_POST['update_item'])) {
                                             <input type="number" class="form-control-custom w-100" name="quantity"
                                                 value="<?php echo remove_junk($item['quantity']); ?>"
                                                 min="0" required>
+                                            <span class="input-group-text bg-light">
+                                                <?php echo remove_junk($current_unit ? $current_unit['name'] : 'units'); ?>
+                                            </span>
                                         </div>
                                     </div>
                                     <div class="col-md-6 mb-3">

@@ -31,7 +31,7 @@ $employees = find_by_sql("
 // Handle Add Employee form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     $user_id     = $db->escape($_POST['user_id']);
-    $employee_id = $db->escape($_POST['employee_id']); 
+    $employee_id = $db->escape($_POST['employees_id']); 
     $first_name  = $db->escape($_POST['first_name']);
     $last_name   = $db->escape($_POST['last_name']);
     $middle_name = $db->escape($_POST['middle_name']);
@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['first_name'])) {
     }
 
     $query  = "INSERT INTO employees 
-    (user_id, employee_id, first_name, last_name, middle_name, position, division, office, status, image, created_at, updated_at) 
+    (user_id, employees_id, first_name, last_name, middle_name, position, division, office, status, image, created_at, updated_at) 
     VALUES 
     ('{$user_id}', '{$employee_id}', '{$first_name}', '{$last_name}', '{$middle_name}', '{$position}', '{$division}', '{$office}', '{$status}', '{$image_name}', NOW(), NOW())";
 
@@ -294,8 +294,8 @@ if (!empty($msg) && is_array($msg)):
             <tr>
               <td><?php echo $emp['user_id']; ?></td>
               <td>
-                <?php if (!empty($emp['employee_id'])): ?>
-                  <span class="employee-id-badge"><?php echo $emp['employee_id']; ?></span>
+                <?php if (!empty($emp['employees_id'])): ?>
+                  <span class="employee-id-badge"><?php echo $emp['employees_id']; ?></span>
                 <?php else: ?>
                   <span class="text-muted">-</span>
                 <?php endif; ?>
@@ -404,7 +404,7 @@ if (!empty($msg) && is_array($msg)):
               </div>
               <div class="col-md-6 mb-3">
                 <label class="form-label">Employee ID <span class="text-danger">*</span></label>
-                <input type="text" name="employee_id" class="form-control" required placeholder="Enter employee ID">
+                <input type="text" name="employees_id" class="form-control" required placeholder="Enter employee ID">
                 <small class="text-muted">This will be used in RIS numbers (format: YYYY-0112-EmployeeID)</small>
               </div>
             </div>

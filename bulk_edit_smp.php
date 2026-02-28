@@ -34,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['bulk_update'])) {
             $unit             = remove_junk($db->escape($data['unit']));
             $unit_cost        = (float)$data['unit_cost'];
             $estimated_use    = remove_junk($db->escape($data['estimated_use']));
+            $lifespan         = !empty($data['lifespan']) ? (int)$data['lifespan'] : "NULL"; // ✅ Added lifespan
             $status           = remove_junk($db->escape($data['status']));
             $semicategory_id  = (int)$data['semicategory_id'];
 
@@ -44,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['bulk_update'])) {
                 unit='{$unit}',
                 unit_cost='{$unit_cost}',
                 estimated_use='{$estimated_use}',
+                lifespan={$lifespan}, -- ✅ Added lifespan
                 status='{$status}',
                 semicategory_id='{$semicategory_id}',
                 last_edited = NOW()
@@ -289,6 +291,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['bulk_update'])) {
         flex-shrink: 0;
     }
 
+    /* Lifespan Status Styles */
+    .lifespan-status {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.8rem;
+        border-radius: 15px;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+
+    .lifespan-short {
+        background: #dc3545;
+        color: white;
+    }
+
+    .lifespan-medium {
+        background: #ffc107;
+        color: var(--text-dark);
+    }
+
+    .lifespan-long {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .lifespan-very-long {
+        background: var(--primary);
+        color: white;
+    }
+
     /* Floating Action Buttons */
     .floating-buttons {
         position: fixed;
@@ -444,6 +475,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['bulk_update'])) {
         $item_count = 0;
         while ($row = $items->fetch_assoc()): 
             $item_count++;
+            
+            // Calculate lifespan status
+            $lifespan_status = '';
+            $lifespan_value = !empty($row['lifespan']) ? (int)$row['lifespan'] : '';
+            
+            if ($lifespan_value !== '') {
+                if ($lifespan_value <= 1) {
+                    $lifespan_status = '<span class="lifespan-status lifespan-short">Short-term</span>';
+                } elseif ($lifespan_value <= 3) {
+                    $lifespan_status = '<span class="lifespan-status lifespan-medium">Medium-term</span>';
+                } elseif ($lifespan_value <= 5) {
+                    $lifespan_status = '<span class="lifespan-status lifespan-long">Long-term</span>';
+                } else {
+                    $lifespan_status = '<span class="lifespan-status lifespan-very-long">Very Long-term</span>';
+                }
+            }
         ?>
             <div class="item-card">
                 <!-- Fixed Header -->
@@ -515,7 +562,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['bulk_update'])) {
                     </div>
 
                     <div class="form-row">
-                        <!-- Row 3: Unit Cost, Estimated Use & Status -->
+                        <!-- Row 3: Unit Cost, Estimated Use & Lifespan -->
                         <div class="form-col form-col-third">
                             <div class="form-group-custom">
                                 <label class="form-label required-field">Unit Cost</label>
@@ -530,6 +577,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['bulk_update'])) {
                                     value="<?= $row['estimated_use']; ?>">
                             </div>
                         </div>
+                        <div class="form-col form-col-third">
+                            <div class="form-group-custom">
+                                <label class="form-label">Lifespan (Years)</label>
+                                <div class="d-flex align-items-center">
+                                    <input type="number" class="form-control-custom" name="items[<?= $row['id']; ?>][lifespan]" 
+                                        value="<?= $lifespan_value; ?>" min="0" max="50" placeholder="Enter years">
+                                    <?php if ($lifespan_status): ?>
+                                        <?= $lifespan_status; ?>
+                                    <?php endif; ?>
+                                </div>
+                                <small class="text-muted mt-1 d-block">
+                                    <i class="fas fa-info-circle me-1"></i>Expected lifespan in years (optional)
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <!-- Row 4: Status -->
                         <div class="form-col form-col-third">
                             <div class="form-group-custom">
                                 <label class="form-label">Status</label>
@@ -610,6 +676,53 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             alert('Please fill in all required fields (marked with *) before saving.');
         }
+    });
+
+    // Lifespan validation and status update
+    const lifespanInputs = form.querySelectorAll('input[name*="lifespan"]');
+    lifespanInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            const value = parseInt(this.value) || 0;
+            let statusClass = '';
+            let statusText = '';
+            
+            if (value <= 1) {
+                statusClass = 'lifespan-short';
+                statusText = 'Short-term';
+            } else if (value <= 3) {
+                statusClass = 'lifespan-medium';
+                statusText = 'Medium-term';
+            } else if (value <= 5) {
+                statusClass = 'lifespan-long';
+                statusText = 'Long-term';
+            } else if (value > 5) {
+                statusClass = 'lifespan-very-long';
+                statusText = 'Very Long-term';
+            }
+            
+            // Update or create status badge
+            let statusBadge = this.nextElementSibling;
+            if (statusBadge && statusBadge.classList.contains('lifespan-status')) {
+                if (value === 0 || isNaN(value)) {
+                    statusBadge.remove();
+                } else {
+                    statusBadge.className = 'lifespan-status ' + statusClass;
+                    statusBadge.textContent = statusText;
+                }
+            } else if (value > 0) {
+                statusBadge = document.createElement('span');
+                statusBadge.className = 'lifespan-status ' + statusClass;
+                statusBadge.textContent = statusText;
+                this.parentNode.insertBefore(statusBadge, this.nextSibling);
+            }
+            
+            // Validate range
+            if (value < 0) {
+                this.value = 0;
+            } else if (value > 50) {
+                this.value = 50;
+            }
+        });
     });
 });
 </script>
