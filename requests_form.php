@@ -1115,17 +1115,9 @@ $(document).ready(function() {
                     const fullMainUnits = Math.floor(availableMain);
                     const remainingBaseUnits = Math.floor((availableMain - fullMainUnits) * conversion);
                     
-                    let availableText = '';
-                    if (fullMainUnits > 0 && remainingBaseUnits > 0) {
-                        availableText = `${fullMainUnits} ${mainUnit} | ${remainingBaseUnits} ${baseUnit}`;
-                    } else if (fullMainUnits > 0) {
-                        availableText = `${fullMainUnits} ${mainUnit}`;
-                    } else {
-                        availableText = `${remainingBaseUnits} ${baseUnit}`;
-                    }
+                 
                     
                     qtyInput.max = availableMain;
-                    qtyInput.title = `Available: ${availableText}`;
                 }
             });
 
@@ -1174,7 +1166,7 @@ document.getElementById('reviewBtn').addEventListener('click', function() {
     let receiptHTML = '<p><strong>Requestor:</strong> ' +
         document.querySelector('input[readonly]').value + '</p>';
 
-    receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Available Stock</th><th>Expiry Status</th></tr></thead><tbody>';
+    receiptHTML += '<table class="table table-bordered align-middle"><thead><tr><th>Item Name</th><th>Requested Qty</th><th>Unit</th><th>Expiry Status</th></tr></thead><tbody>';
     let hasItem = false;
 
     rows.forEach(row => {
@@ -1184,7 +1176,6 @@ document.getElementById('reviewBtn').addEventListener('click', function() {
 
         const itemId = input.dataset.itemid;
         const itemName = row.cells[1].innerText.trim();
-        const available = row.cells[2].innerText.trim();
         const expiryStatus = row.cells[3].innerText.trim();
         const unitSelect = row.querySelector('select[name^="unit_type"]');
         const selectedUnit = unitSelect.selectedOptions[0].text;
@@ -1196,7 +1187,6 @@ document.getElementById('reviewBtn').addEventListener('click', function() {
                 <td>${itemName}</td>
                 <td>${qty}</td>
                 <td>${selectedUnit}</td>
-                <td>${available}</td>
                 <td>${expiryStatus}</td>
             </tr>`;
     });

@@ -481,8 +481,8 @@ $semi_categories = $db->query("SELECT * FROM semicategories ORDER BY semicategor
                                 <select class="form-select-custom w-100 mt-1" name="status">
                                     <option value="available" <?= $item['status']=='available'?'selected':''; ?>>Available</option>
                                     <option value="issued" <?= $item['status']=='issued'?'selected':''; ?>>Issued</option>
-                                    
-                                    <option value="archived" <?= $item['status']=='archived'?'selected':''; ?>>Archived</option>
+                                    <option value="returned" <?= $item['status']=='returned'?'selected':''; ?>>Returned</option>
+                                    <!-- <option value="archived" <?= $item['status']=='archived'?'selected':''; ?>>Archived</option> -->
                                 </select>
                             </div>
                         </div>

@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_item'])) {
         $session->msg('s', '✅ Semi-expendable property added successfully!');
         redirect('smp.php', false);
     } else {
-        $session->msg('d', '❌ Failed to add item: ' . $db->con->error);
+        $session->msg('d', '❌ Failed to add item: ' . $db->error());
         redirect('smp.php', false);
     }
 }

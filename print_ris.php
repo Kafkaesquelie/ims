@@ -21,13 +21,20 @@ if (!$request) {
 // Fetch requestor info from users & employees table
 $user = find_by_id('users', $request['requested_by']);
 
-$employee = find_by_sql("SELECT * FROM employees WHERE user_id = '{$request['requested_by']}' LIMIT 1");
+$employee = find_by_sql("
+    SELECT e.*, d.division_name, o.office_name
+    FROM employees e
+    LEFT JOIN divisions d ON e.division = d.id
+    LEFT JOIN offices o ON e.office = o.id
+    WHERE e.user_id = '{$request['requested_by']}'
+    LIMIT 1
+");
 $employee = !empty($employee) ? $employee[0] : null;
 
 $requestor_name = $user ? $user['name'] : 'Unknown';
 $requestor_position = $employee ? $employee['position'] ?? $employee['position'] : ($user['position'] ?? '');
-$requestor_division = $employee ? $employee['division'] ?? '________________' : '________________';
-$requestor_office   = $employee ? $employee['office'] ?? '________________' : '________________';
+$requestor_division = $employee ? $employee['division_name'] ?? $employee['division_name'] : '________________';
+$requestor_office   = $employee ? $employee['office_name'] ?? $employee['office_name'] : '________________';
 
 // Fetch requested items with availability status based on request status
 $items = find_by_sql("
@@ -78,9 +85,7 @@ $all_items_available = ($request_status == 'Completed');
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     
     <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
+        
 
         .ris-container {
             width: 100%;
@@ -89,15 +94,15 @@ $all_items_available = ($request_status == 'Completed');
 
         .ris-copy {
             width: 100%;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             page-break-inside: avoid;
         }
 
         .ris-header {
             text-align: center;
-            margin-bottom: 10px;
+            margin-bottom: 7px;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 14px;
         }
 
         .entity-info {
@@ -109,14 +114,14 @@ $all_items_available = ($request_status == 'Completed');
         .ris-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
 
         .ris-table th,
         .ris-table td {
             border: 1px solid #000;
-            padding: 5px;
-            font-size: 12px;
+            padding: 3px;
+            font-size: 10px;
         }
 
         .ris-table th {
@@ -124,7 +129,7 @@ $all_items_available = ($request_status == 'Completed');
         }
 
         .empty-row td {
-            height: 15px;
+            height: 10px;
             border: 1px solid #000;
         }
 
@@ -134,20 +139,14 @@ $all_items_available = ($request_status == 'Completed');
         }
 
         .entity-info {
-            font-size: 13px;
+            font-size: 12px;
         }
 
         @page {
             size: 8.5in 13in;
-            margin: 0.5in;
         }
 
-        body {
-            font-family: Arial, sans-serif;
-            background: white;
-            margin: 0;
-            padding: 0;
-        }
+     
 
         .ris-container {
             width: 100%;
@@ -158,20 +157,20 @@ $all_items_available = ($request_status == 'Completed');
             width: 8.5in;
             min-height: 13in;
             margin: auto;
-            padding: 0.5in;
+            /* padding: 0.5in; */
             box-sizing: border-box;
             border: 1px solid #000;
         }
 
         .ris-copy {
             width: 100%;
-            page-break-after: always;
+            page-break-after: avoid;
         }
 
         .ris-table th,
         .ris-table td {
-            padding: 4px;
-            font-size: 11px;
+            padding: 3px;
+            font-size: 10px;
             border: 1px solid #000;
         }
 
@@ -183,8 +182,8 @@ $all_items_available = ($request_status == 'Completed');
         .ris-header {
             text-align: center;
             font-weight: bold;
-            font-size: 16px;
-            margin-bottom: 10px;
+            font-size: 14px;
+            margin-bottom: 7px;
         }
 
         .entity-info {
@@ -221,12 +220,12 @@ $all_items_available = ($request_status == 'Completed');
         }
 
         .signatory-section td {
-            height: 25px;
+            height: 12px;
             vertical-align: middle !important;
         }
 
         .signatory-section strong {
-            font-size: 11px;
+            font-size: 10px;
         }
 
         .signatory-section td:nth-child(3),
@@ -256,11 +255,6 @@ $all_items_available = ($request_status == 'Completed');
         }
 
         @media print {
-            body {
-                margin: 0;
-                padding: 0;
-                font-size: 10px;
-            }
 
             .no-print {
                 display: none;
@@ -275,7 +269,7 @@ $all_items_available = ($request_status == 'Completed');
             }
 
             .ris-copy {
-                page-break-after: always;
+                page-break-after: avoid;
             }
 
             .no-print {
@@ -328,14 +322,6 @@ $all_items_available = ($request_status == 'Completed');
     <i class="fa-solid fa-file-excel"></i>
 </a>
 
-
-    <!-- Word Export Button -->
-    <!-- <button onclick="exportToWord()"
-        class="btn btn-outline-info rounded-circle shadow-sm"
-        title="Export to Word">
-        <i class="fa-solid fa-file-word"></i>
-    </button> -->
-
     <!-- Back Button -->
     <a href="logs.php"
         class="btn btn-secondary rounded-circle shadow-sm"
@@ -345,9 +331,8 @@ $all_items_available = ($request_status == 'Completed');
 </div>
 
 <!-- Main Form -->
-<div class="container-fluid my-2">
-    <div class="row justify-content-center">
-        <div class="col-md-10">
+ <div class="container-fluid">
+   
 
             <div class="card shadow-sm border-light 
                   <?php echo $is_dark ? 'bg-dark text-light' : 'bg-white text-dark'; ?>">
@@ -480,8 +465,7 @@ $all_items_available = ($request_status == 'Completed');
                 </div>
             </div>
         </div>
-    </div>
-</div>
+     
 
 
 

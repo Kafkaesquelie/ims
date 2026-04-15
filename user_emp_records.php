@@ -337,7 +337,8 @@ $activity_dates = find_by_sql("
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="print_ris.php?id=<?php echo (int)$request['id']; ?>" 
+                                        <!-- <a href="print_ris.php?id=<?php echo (int)$request['id']; ?>"  -->
+                    <a href="par_view.php?par_no=<?php echo urlencode($par['par_no']); ?>"
                                            class="btn btn-sm btn-outline-success">
                                             <i class="fas fa-eye"></i> View
                                         </a>

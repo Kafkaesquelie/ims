@@ -364,30 +364,19 @@ $user_levels = [
             </div>
             <div class="card-body">
                 <div class="row quick-actions">
-                    <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="col-md-6 col-sm-6 mb-3">
                         <a href="users.php" class="btn btn-success w-100 py-3">
                             <i class="fa-solid fa-user-plus fa-2x mb-2"></i><br>
-                            Add New User
+                            Manage Users
                         </a>
                     </div>
-                    <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="col-md-6 col-sm-6 mb-3">
                         <a href="emps.php" class="btn btn-warning w-100 py-3 text-dark">
                             <i class="fa-solid fa-id-card-clip fa-2x mb-2"></i><br>
                             Manage Employees
                         </a>
                     </div>
-                    <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="user_reports.php" class="btn btn-info w-100 py-3">
-                            <i class="fa-solid fa-chart-bar fa-2x mb-2"></i><br>
-                            User Reports
-                        </a>
-                    </div>
-                    <div class="col-md-3 col-sm-6 mb-3">
-                        <a href="system_logs.php" class="btn btn-secondary w-100 py-3">
-                            <i class="fa-solid fa-server fa-2x mb-2"></i><br>
-                            System Logs
-                        </a>
-                    </div>
+                    
                 </div>
             </div>
         </div>

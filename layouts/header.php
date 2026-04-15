@@ -8,6 +8,7 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- <meta http-equiv="refresh" content="5"> -->
     <title>BSU - BOKOD | IMS</title>
     <link rel="icon" type="image/png" href="uploads/other/imslogo.png">
     <link rel="shortcut icon" type="image/png" href="uploads/other/imslogo.png">
@@ -534,12 +535,7 @@ date_default_timezone_set('Asia/Manila'); // Set your timezone
                             <?php endif; ?>
 
                             <li class="nav-header">ACCOUNT</li>
-                        <li class="nav-item">
-                            <a href="user_manual.php" class="nav-link">
-                                <i class="fa-solid fa-book-bookmark"></i>
-                                <p>User Manual</p>
-                            </a>
-                        </li>
+                       
                         
                         <?php if ($user['user_level'] === '1'): ?>
                             <!-- Show Settings only for Admin (user level 1) -->

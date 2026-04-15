@@ -44,6 +44,21 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.min.js" ></script>
 
 
+<script>
+function loadRequests() {
+    fetch('fetch_requests.php')
+        .then(response => response.text())
+        .then(data => {
+            document.getElementById('requestTable').innerHTML = data;
+        });
+}
+
+// Load immediately
+loadRequests();
+
+// Refresh every 5 seconds
+setInterval(loadRequests, 5000);
+</script>
 
 </body><!--end::Body-->
 </html>
